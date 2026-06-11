@@ -6,7 +6,7 @@ intelligence workflows.
 
 ## Project Files
 
-- `muta_lambda.py`: main MutaLambda agent implementation with CLI and integrated tests.
+- `muta_lambda.py`: main MutaLambda agent implementation with Core Evolution Engine, CLI, and integrated tests.
 - `mutalambda_v2_patched.py`: patched standalone MutaLambda agent variant.
 - `document_intelligence.py`: document parsing and MASSIVE parameter extraction helpers.
 - `app.py`: Inferless-style Hugging Face text-generation model wrapper.

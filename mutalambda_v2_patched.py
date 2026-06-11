@@ -105,9 +105,129 @@ logging.basicConfig(
 logger = logging.getLogger("MutaLambda")
 
 
+# ─── LLM BACKEND AGNOSTICO (core) ────────────────────────────────────────────
+
+class LLMBackend:
+    """Generación de texto para backends locales o remotos.
+
+    Contrato: expone generate(prompt: str) -> str.
+
+    Backends soportados:
+      - ollama: http://localhost:11434/api/generate
+      - microsoft_cpp: ejecuta binario `microsoft.cpp -m <model>` (en PATH)
+      - huggingface_cli: ejecuta `huggingface-cli text-generation --model <model>` (en PATH)
+      - openai_compatible_http: usa endpoint compatible con OpenAI (env: MUTALAMBDA_OPENAI_BASE_URL)
+
+    Si se solicita un backend no soportado, levanta ValueError.
+    """
+
+    def __init__(self, backend: str, model: str) -> None:
+        self.backend = backend.lower()
+        self.model = model
+        self._init_backend()
+
+    def _init_backend(self) -> None:
+        if self.backend == "ollama":
+            import requests
+            self._session = requests.Session()
+            self._url = os.getenv(
+                "MUTALAMBDA_OLLAMA_URL", "http://localhost:11434/api/generate"
+            )
+        elif self.backend == "microsoft_cpp":
+            self._cmd = ["microsoft.cpp", "-m", self.model]
+        elif self.backend == "huggingface_cli":
+            self._cmd = ["huggingface-cli", "text-generation", "--model", self.model]
+        elif self.backend == "openai_compatible_http":
+            import requests
+            self._session = requests.Session()
+            self._base_url = os.getenv("MUTALAMBDA_OPENAI_BASE_URL", "http://localhost:8000/v1")
+            self._api_key = os.getenv("MUTALAMBDA_OPENAI_API_KEY", "")
+            self._endpoint = self._base_url.rstrip("/") + "/chat/completions"
+        else:
+            raise ValueError(f"Unsupported LLM backend: {self.backend}")
+
+    def generate(self, prompt: str) -> str:
+        try:
+            if self.backend == "ollama":
+                payload = {"model": self.model, "prompt": prompt, "stream": False}
+                resp = self._session.post(self._url, json=payload, timeout=30)
+                resp.raise_for_status()
+                return resp.json().get("response", "")
+
+            if self.backend == "microsoft_cpp":
+                proc = subprocess.run(
+                    self._cmd,
+                    input=prompt.encode("utf-8"),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=30,
+                )
+                if proc.returncode != 0:
+                    raise RuntimeError(proc.stderr.decode("utf-8", errors="ignore"))
+                return proc.stdout.decode("utf-8", errors="ignore")
+
+            if self.backend == "huggingface_cli":
+                proc = subprocess.run(
+                    self._cmd,
+                    input=prompt.encode("utf-8"),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=30,
+                )
+                if proc.returncode != 0:
+                    raise RuntimeError(proc.stderr.decode("utf-8", errors="ignore"))
+                return proc.stdout.decode("utf-8", errors="ignore")
+
+            if self.backend == "openai_compatible_http":
+                import requests
+                headers: dict[str, str] = {"Content-Type": "application/json"}
+                if self._api_key:
+                    headers["Authorization"] = f"Bearer {self._api_key}"
+
+                payload = {
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": "You are a coding assistant."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": float(os.getenv("MUTALAMBDA_LLM_TEMPERATURE", "0.2")),
+                }
+                # permitir max_tokens si se desea
+                if os.getenv("MUTALAMBDA_LLM_MAX_TOKENS"):
+                    payload["max_tokens"] = int(os.getenv("MUTALAMBDA_LLM_MAX_TOKENS"))
+
+                resp = self._session.post(self._endpoint, headers=headers, json=payload, timeout=60)
+                resp.raise_for_status()
+                data = resp.json()
+                return (
+                    data.get("choices", [{}])[0]
+                        .get("message", {})
+                        .get("content", "")
+                )
+
+            return ""
+        except Exception as exc:
+            logger.error("LLMBackend (%s) generation failed: %s", self.backend, exc)
+            return ""
+
+
+def _resolve_llm_backend() -> Callable[[str], str]:
+    """Factory de generación basada en env vars.
+
+    Env vars relevantes:
+      - MUTALAMBDA_LLM_BACKEND (default: ollama)
+      - MUTALAMBDA_LLM_MODEL   (default: llama3.2:3b)
+    """
+    backend = os.getenv("MUTALAMBDA_LLM_BACKEND", "ollama")
+    model = os.getenv("MUTALAMBDA_LLM_MODEL", "llama3.2:3b")
+    llm = LLMBackend(backend=backend, model=model)
+    return llm.generate
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 1. ESTRUCTURAS DE DATOS CORE
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 
 @dataclass
@@ -793,7 +913,15 @@ class SandboxEvaluator:
             multiprocessing.cpu_count(),
         )
         # Pool persistente: evita overhead de crear/destruir procesos por batch
-        self._pool = ProcessPoolExecutor(max_workers=self.parallelism)
+        # En algunos entornos/CI con recursos limitados, levantar un pool
+        # con multiprocessing puede fallar (p.ej. forkserver). Para mantener
+        # E2E estable, permitimos usar serial cuando parallelism <= 1.
+        self._pool = (
+            ProcessPoolExecutor(max_workers=self.parallelism)
+            if self.parallelism and self.parallelism > 1
+            else None
+        )
+
 
     def evaluate_batch(self, codes: List[str]) -> List[EvalResult]:
         """Evaluación paralela con pool persistente."""
@@ -803,12 +931,30 @@ class SandboxEvaluator:
         args_list = [(code, self.test_cases, self.timeout_sec) for code in codes]
         results: List[EvalResult] = [None] * len(codes)  # type: ignore[list-item]
 
+        # Si no hay pool (modo serial), ejecutamos directamente.
+        if self._pool is None:
+            for idx, args in enumerate(args_list):
+                try:
+                    results[idx] = _eval_worker(args)
+                except Exception as exc:
+                    logger.warning("Eval worker (serial) %d raised: %s", idx, exc)
+                    results[idx] = EvalResult(
+                        score=-200.0,
+                        passed=False,
+                        metrics={},
+                        stdout="",
+                        stderr=str(exc)[:2000],
+                        timed_out=False,
+                    )
+            return results  # type: ignore[return-value]
+
         future_to_idx = {
             self._pool.submit(_eval_worker, args): idx
             for idx, args in enumerate(args_list)
         }
         for future in as_completed(future_to_idx):
             idx = future_to_idx[future]
+
             try:
                 results[idx] = future.result()
             except Exception as exc:
@@ -822,7 +968,11 @@ class SandboxEvaluator:
 
     def shutdown(self, wait: bool = True) -> None:
         """Apaga el pool de procesos de forma controlada."""
-        self._pool.shutdown(wait=wait)
+        pool = getattr(self, "_pool", None)
+        if pool is not None:
+            pool.shutdown(wait=wait)
+
+
 
     def __del__(self) -> None:
         try:
@@ -939,11 +1089,13 @@ class PromptEvolver:
 
 
 class SolutionArchive:
+
     """
     Memoria a largo plazo con búsqueda semántica por embeddings.
 
     Optimizaciones vs skeleton:
       - collections.deque O(1) pop izquierdo vs lista O(n)
+
       - Batch pruning: solo rebuild cuando se acumulan N eliminaciones
       - Embedding cache con LRU para códigos repetidos
       - encode() en batch cuando se añaden múltiples soluciones
@@ -1057,9 +1209,39 @@ class SolutionArchive:
             solution_list = list(self.solutions)
             return [solution_list[i] for i in indices[0] if 0 <= i < len(solution_list)]
 
+    def novelty_score(self, code: str, k: int = 5) -> float:
+        """Novelty semántica basada en similitud FAISS.
+
+        Retorna un valor en [0,1] aproximado donde valores más altos
+        significan *más novedad* (menos similitud con el archivo).
+
+        Nota: si el archive está vacío o FAISS no devuelve vecinos,
+        retorna 1.0.
+        """
+        with self._lock:
+            if not self.solutions:
+                return 1.0
+
+            # Sincronizar FAISS si hay prunes pendientes
+            if self._pending_prunes > 0:
+                self._rebuild_index()
+                self._pending_prunes = 0
+
+            emb = self._encode_normalized([code])
+            k = min(max(1, k), len(self.solutions))
+            distances, _indices = self.index.search(emb, k)
+
+            # IndexFlatIP usa similitud coseno si embeddings están L2-normalizados.
+            # Distancia/similitud en [-1,1]. Convertimos a [0,1].
+            best_sim = float(distances[0][0]) if k > 0 else -1.0
+            sim01 = max(0.0, min(1.0, (best_sim + 1.0) / 2.0))
+            novelty = 1.0 - sim01
+            return novelty
+
     @property
     def size(self) -> int:
         return len(self.solutions)
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1134,6 +1316,7 @@ class EarlyStopMonitor:
 
 class MutaLambdaAgent:
     """
+
     Orquestador principal del ciclo evolutivo MutaLambda.
 
     Coordina:
@@ -1151,7 +1334,9 @@ class MutaLambdaAgent:
         llm_fn: Callable[[str], str],
         test_cases: List[Dict],
         timeout_sec: float = 10.0,
+        parallelism: Optional[int] = None,
     ):
+
         self.config = config
         self.llm_fn = llm_fn
 
@@ -1159,7 +1344,9 @@ class MutaLambdaAgent:
         self.evaluator = SandboxEvaluator(
             test_cases=test_cases,
             timeout_sec=timeout_sec,
+            parallelism=parallelism,
         )
+
         self.migration_bus = MigrationBus(topology=config.topology)
 
         # Crear islas
@@ -1210,22 +1397,17 @@ class MutaLambdaAgent:
         )
 
     def _score_with_novelty(self, individual: Individual) -> float:
-        """
-        [MEJ-3] Combina fitness funcional con bonus de novedad semántica.
+        """Combina fitness funcional con bonus de novedad semántica.
 
-        score_combined = (1 - alpha) * fitness + alpha * novelty_score
-
-        Beneficio: penaliza individuos que convergen a soluciones ya
-        conocidas en el archivo, manteniendo diversidad genética sin
-        sacrificar fitness.
-
-        Si el archivo no está disponible, devuelve el fitness puro.
+        Si el archive está disponible, usa novelty_score() para penalizar
+        convergencia hacia soluciones semánticamente cercanas.
         """
         if self.archive is None or self.config.novelty_alpha == 0.0:
             return individual.score
         novelty = self.archive.novelty_score(individual.code, k=10)
         alpha = self.config.novelty_alpha
         return (1.0 - alpha) * individual.score + alpha * novelty * 100.0
+
 
     def run(self, task: str = "") -> Individual:
         """Ejecuta el ciclo evolutivo completo.
@@ -1344,8 +1526,12 @@ class MutaLambdaAgent:
 
     def shutdown(self) -> None:
         """Apaga recursos de forma controlada."""
-        self.evaluator.shutdown()
+        try:
+            self.evaluator.shutdown()
+        except Exception:
+            pass
         logger.info("MutaLambda agent shut down cleanly.")
+
 
     def get_metrics(self) -> Dict[str, Any]:
         """Retorna métricas acumuladas del agente."""

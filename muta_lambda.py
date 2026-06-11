@@ -559,7 +559,271 @@ class ASTMutator:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 3. BUS DE MIGRACIÓN (Multi-Isla)
+# 3. CORE EVOLUTION ENGINE
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class CodeRegion:
+    """Bloque AST candidato para optimización."""
+    kind: str
+    name: str
+    start_line: int
+    end_line: int
+    source: str
+    complexity_score: int
+
+
+class CoreEvolutionEngine:
+    """Selecciona regiones AST y construye prompts internos estrictos."""
+
+    _CANDIDATE_NODES = (
+        ast.FunctionDef,
+        ast.AsyncFunctionDef,
+        ast.For,
+        ast.While,
+        ast.If,
+        ast.Match,
+    )
+
+    _OUTPUT_CONTRACT = """OUTPUT CONTRACT:
+- Return exactly one complete Python module.
+- Return raw Python code only.
+- Do not use Markdown fences.
+- Do not explain, summarize, apologize, or include prose.
+- Preserve public function names and call signatures unless the task explicitly requires otherwise.
+- The result must parse with ast.parse()."""
+
+    def select_code_regions(self, code: str, max_regions: int = 5) -> List[CodeRegion]:
+        """Devuelve los bloques AST más prometedores para optimizar."""
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            return []
+
+        regions: List[CodeRegion] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, self._CANDIDATE_NODES):
+                continue
+            source = ast.get_source_segment(code, node)
+            if not source:
+                continue
+            start = getattr(node, "lineno", 0)
+            end = getattr(node, "end_lineno", start)
+            regions.append(
+                CodeRegion(
+                    kind=type(node).__name__,
+                    name=self._node_name(node),
+                    start_line=start,
+                    end_line=end,
+                    source=source,
+                    complexity_score=self._complexity_score(node),
+                )
+            )
+
+        regions.sort(
+            key=lambda r: (r.complexity_score, r.end_line - r.start_line),
+            reverse=True,
+        )
+        return regions[:max_regions]
+
+    def build_mutation_prompt(
+        self,
+        code: str,
+        region: Optional[CodeRegion],
+        score: float,
+        error_info: str = "",
+    ) -> str:
+        """Prompt para mutación heurística: cambios pequeños y conservadores."""
+        region_block = self._format_region(region)
+        error_block = f"\nCURRENT ERROR:\n{error_info}\n" if error_info else ""
+        return f"""SYSTEM: You are MutaLambda Core Evolution Engine.
+MODE: HEURISTIC_MUTATION
+OBJECTIVE: Make the smallest useful algorithmic improvement to the target code.
+
+CURRENT SCORE: {score:.4f}
+{error_block}
+TARGET REGION:
+{region_block}
+
+SOURCE MODULE:
+{code}
+
+RULES:
+- Prefer one localized change over a rewrite.
+- Fix obvious correctness bugs before optimizing performance.
+- Avoid new third-party dependencies.
+{self._OUTPUT_CONTRACT}
+"""
+
+    def build_crossover_prompt(
+        self,
+        parent_a: str,
+        parent_b: str,
+        region_a: Optional[CodeRegion],
+        region_b: Optional[CodeRegion],
+    ) -> str:
+        """Prompt para cruce: combinar dos soluciones completas."""
+        return f"""SYSTEM: You are MutaLambda Core Evolution Engine.
+MODE: CROSSOVER
+OBJECTIVE: Produce one better Python module by combining the strongest ideas from two parents.
+
+PARENT A TARGET REGION:
+{self._format_region(region_a)}
+
+PARENT B TARGET REGION:
+{self._format_region(region_b)}
+
+PARENT A MODULE:
+{parent_a}
+
+PARENT B MODULE:
+{parent_b}
+
+RULES:
+- Keep the public API from Parent A unless Parent B clearly fixes correctness.
+- Combine algorithms, not comments.
+- Remove duplicated helper code created by the merge.
+- Avoid new third-party dependencies.
+{self._OUTPUT_CONTRACT}
+"""
+
+    def build_redesign_prompt(
+        self,
+        code: str,
+        region: Optional[CodeRegion],
+        score: float,
+        task: str = "",
+    ) -> str:
+        """Prompt para rediseño radical cuando la línea evolutiva está estancada."""
+        task_block = f"\nTASK CONTEXT:\n{task}\n" if task else ""
+        return f"""SYSTEM: You are MutaLambda Core Evolution Engine.
+MODE: RADICAL_REDESIGN
+OBJECTIVE: Redesign the algorithm while preserving the callable interface.
+
+CURRENT SCORE: {score:.4f}
+{task_block}
+TARGET REGION:
+{self._format_region(region)}
+
+SOURCE MODULE:
+{code}
+
+RULES:
+- Replace the core algorithm if needed.
+- Preserve imports only when still required.
+- Preserve public function names and parameters.
+- Avoid new third-party dependencies.
+{self._OUTPUT_CONTRACT}
+"""
+
+    def extract_valid_code(self, response: str) -> Optional[str]:
+        """Extrae código de una respuesta LLM y exige sintaxis Python válida."""
+        candidates = [response.strip()]
+        fenced = self._extract_fenced_python(response)
+        if fenced:
+            candidates.insert(0, fenced.strip())
+
+        for candidate in candidates:
+            if not candidate:
+                continue
+            try:
+                ast.parse(candidate)
+                return candidate
+            except SyntaxError:
+                continue
+        return None
+
+    def mutate_with_llm(
+        self,
+        code: str,
+        score: float,
+        error_info: str,
+        llm_fn: Callable[[str], str],
+    ) -> str:
+        """Ejecuta mutación dirigida por LLM con fallback AST local."""
+        region = self._top_region(code)
+        prompt = self.build_mutation_prompt(code, region, score, error_info)
+        generated = self.extract_valid_code(llm_fn(prompt))
+        return generated if generated is not None else ASTMutator.apply_random_mutation(code)
+
+    def crossover_with_llm(
+        self,
+        parent_a: str,
+        parent_b: str,
+        llm_fn: Callable[[str], str],
+    ) -> Optional[str]:
+        """Ejecuta cruce dirigido por LLM; devuelve None si la salida no es válida."""
+        prompt = self.build_crossover_prompt(
+            parent_a,
+            parent_b,
+            self._top_region(parent_a),
+            self._top_region(parent_b),
+        )
+        return self.extract_valid_code(llm_fn(prompt))
+
+    def redesign_with_llm(
+        self,
+        code: str,
+        score: float,
+        task: str,
+        llm_fn: Callable[[str], str],
+    ) -> Optional[str]:
+        """Ejecuta rediseño radical dirigido por LLM."""
+        prompt = self.build_redesign_prompt(code, self._top_region(code), score, task)
+        return self.extract_valid_code(llm_fn(prompt))
+
+    def _top_region(self, code: str) -> Optional[CodeRegion]:
+        regions = self.select_code_regions(code, max_regions=1)
+        return regions[0] if regions else None
+
+    @staticmethod
+    def _node_name(node: ast.AST) -> str:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            return node.name
+        return type(node).__name__
+
+    @staticmethod
+    def _complexity_score(node: ast.AST) -> int:
+        score = 0
+        for child in ast.walk(node):
+            score += 1
+            if isinstance(child, (ast.For, ast.While, ast.AsyncFor)):
+                score += 6
+            elif isinstance(child, (ast.If, ast.Match)):
+                score += 4
+            elif isinstance(child, ast.Call):
+                score += 2
+        return score
+
+    @staticmethod
+    def _format_region(region: Optional[CodeRegion]) -> str:
+        if region is None:
+            return "No parseable AST region was selected."
+        return (
+            f"{region.kind} {region.name} "
+            f"(lines {region.start_line}-{region.end_line}, "
+            f"complexity={region.complexity_score})\n"
+            f"{region.source}"
+        )
+
+    @staticmethod
+    def _extract_fenced_python(text: str) -> Optional[str]:
+        marker = "```"
+        start = text.find(marker)
+        if start == -1:
+            return None
+        content_start = text.find("\n", start)
+        if content_start == -1:
+            return None
+        end = text.find(marker, content_start + 1)
+        if end == -1:
+            return None
+        return text[content_start + 1:end]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 4. BUS DE MIGRACIÓN (Multi-Isla)
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -655,7 +919,7 @@ class MigrationBus:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 4. ISLA EVOLUTIVA
+# 5. ISLA EVOLUTIVA
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -679,6 +943,7 @@ class Island:
         self.llm_fn = llm_fn
         self.evaluator = evaluator
         self.migration_bus = migration_bus
+        self.core_engine = CoreEvolutionEngine()
 
         self.population: List[Individual] = []
         self.generation: int = 0
@@ -746,7 +1011,9 @@ class Island:
         while len(new_pop) < self.config.population_size:
             parent = random.choice(elites)
             # 15% de probabilidad de crossover si hay al menos dos elites
-            if random.random() < 0.15 and len(elites) >= 2:
+            if parent.score < 0 and random.random() < 0.10:
+                mutated_code = self._redesign(parent.code, parent.score)
+            elif random.random() < 0.15 and len(elites) >= 2:
                 other = random.choice([e for e in elites if e != parent])
                 mutated_code = self._crossover(parent.code, other.code)
             else:
@@ -780,43 +1047,30 @@ class Island:
     # ── Interfaz de migración ──────────────────────────────────────────────────
 
     def _mutate_with_context(self, code: str, score: float, error_info: str = "") -> str:
-        """Mutación informada: el LLM recibe contexto del error y ejemplos exitosos."""
-        best_examples = ""
-        if hasattr(self, "archive") and self.archive:
-            try:
-                similares = self.archive.nearest(code, k=2)
-                if similares:
-                    best_examples = "\n\nSOLUCIONES PREVIAS EXITOSAS (para referencia):\n"
-                    for i, sol in enumerate(similares):
-                        best_examples += f"--- Ejemplo {i+1} (score={sol.metrics.get('score',0):.2f}) ---\n{sol.code}\n"
-            except Exception:
-                pass
-        error_section = f"\nERROR ACTUAL:\n{error_info}" if error_info else ""
-        prompt = f"""Eres un optimizador de código Python experto.
+        """Mutación informada: selector AST + prompt estricto + fallback AST."""
+        return self.core_engine.mutate_with_llm(
+            code=code,
+            score=score,
+            error_info=error_info,
+            llm_fn=self.llm_fn,
+        )
 
-TAREA: Mejorar esta función para que pase todos los tests.
-SCORE ACTUAL: {score:.2f} (100.0 = perfecto, negativo = fallo)
-{error_section}
-
-CÓDIGO A MEJORAR:
-{code}
-{best_examples}
-
-INSTRUCCIONES:
-- Devuelve SOLO código Python válido, sin explicaciones
-- Corrige el error si hay uno
-- Si el score es positivo, optimiza velocidad o maneja edge cases
-- NO uses librerías externas no estándar
-"""
-        result = self.llm_fn(prompt)
-        try:
-            ast.parse(result)
-            return result
-        except SyntaxError:
-            return code
+    def _redesign(self, code: str, score: float) -> str:
+        """Rediseño radical dirigido por LLM para individuos fallidos."""
+        redesigned = self.core_engine.redesign_with_llm(
+            code=code,
+            score=score,
+            task="Repair correctness first, then improve algorithmic efficiency.",
+            llm_fn=self.llm_fn,
+        )
+        return redesigned if redesigned is not None else ASTMutator.apply_random_mutation(code)
 
     def _crossover(self, parent_a: str, parent_b: str) -> str:
-        """Recombina dos soluciones tomando funciones de cada una."""
+        """Recombina dos soluciones con LLM y fallback AST local."""
+        generated = self.core_engine.crossover_with_llm(parent_a, parent_b, self.llm_fn)
+        if generated is not None:
+            return generated
+
         try:
             tree_a = ast.parse(parent_a)
             tree_b = ast.parse(parent_b)
@@ -863,7 +1117,7 @@ INSTRUCCIONES:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 5. SANDBOX EVALUATOR
+# 6. SANDBOX EVALUATOR
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -1003,7 +1257,7 @@ class SandboxEvaluator:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 6. SISTEMA DE PROMPTS EVOLUTIVO
+# 7. SISTEMA DE PROMPTS EVOLUTIVO
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -1105,7 +1359,7 @@ class PromptEvolver:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 7. ARCHIVO DE SOLUCIONES A LARGO PLAZO (Memoria)
+# 8. ARCHIVO DE SOLUCIONES A LARGO PLAZO (Memoria)
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -1234,7 +1488,7 @@ class SolutionArchive:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 8. ORQUESTADOR PRINCIPAL — MutaLambdaAgent
+# 9. ORQUESTADOR PRINCIPAL — MutaLambdaAgent
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -1350,7 +1604,7 @@ class MutaLambdaAgent:
             Island(
                 island_id=i,
                 config=island_cfg,
-                llm_fn=llm_fn,
+                llm_fn=self.llm_fn,
                 evaluator=self.evaluator,
                 migration_bus=self.migration_bus,
             )
@@ -1372,7 +1626,7 @@ class MutaLambdaAgent:
 
         self.prompt_evolver: Optional[PromptEvolver] = None
         if config.prompt_evolution:
-            self.prompt_evolver = PromptEvolver(llm_fn, self.evaluator)
+            self.prompt_evolver = PromptEvolver(self.llm_fn, self.evaluator)
 
         # Métricas
         self._start_time: float = 0.0
@@ -1612,6 +1866,69 @@ def run_full_test_suite() -> bool:
     test("ast_todas_mutaciones_validas (200 runs)", t_ast_syntax_valid)
     test("BUG-1: no_rename_builtins (500 runs)", t_no_builtin_rename)
     test("BUG-2: replace_aug_assign_sin_class_hack", t_replace_aug_no_class_mutation)
+
+    # ── Bloque 1b: CoreEvolutionEngine ─────────────────────────────────────
+    print("\n── CoreEvolutionEngine ──")
+
+    def t_core_selects_ast_regions():
+        code = (
+            "def solve(xs):\n"
+            "    total = 0\n"
+            "    for x in xs:\n"
+            "        if x > 0:\n"
+            "            total += x\n"
+            "    return total\n"
+        )
+        engine = CoreEvolutionEngine()
+        regions = engine.select_code_regions(code)
+        assert regions, "No seleccionó regiones AST"
+        assert regions[0].kind == "FunctionDef"
+        assert regions[0].name == "solve"
+        assert regions[0].complexity_score > 0
+
+    def t_core_prompt_contract_is_strict():
+        code = "def f(x):\n    return x + 1\n"
+        engine = CoreEvolutionEngine()
+        region = engine.select_code_regions(code, max_regions=1)[0]
+        prompt = engine.build_mutation_prompt(code, region, score=1.0)
+        assert "MODE: HEURISTIC_MUTATION" in prompt
+        assert "Return raw Python code only" in prompt
+        assert "Do not use Markdown fences" in prompt
+        assert "ast.parse()" in prompt
+
+    def t_core_extracts_fenced_code_and_rejects_prose():
+        engine = CoreEvolutionEngine()
+        fenced = "Here is code:\n```python\ndef f(x):\n    return x\n```\n"
+        assert engine.extract_valid_code(fenced) == "def f(x):\n    return x"
+        assert engine.extract_valid_code("I would improve it by using a loop.") is None
+
+    def t_core_llm_mutation_falls_back_to_valid_code():
+        code = "def f(x):\n    return x + 1\n"
+        engine = CoreEvolutionEngine()
+        result = engine.mutate_with_llm(
+            code=code,
+            score=-1.0,
+            error_info="SyntaxError",
+            llm_fn=lambda _prompt: "not python prose",
+        )
+        ast.parse(result)
+
+    def t_core_llm_crossover_accepts_valid_code():
+        code_a = "def f(x):\n    return x + 1\n"
+        code_b = "def f(x):\n    return x * 2\n"
+        engine = CoreEvolutionEngine()
+        result = engine.crossover_with_llm(
+            code_a,
+            code_b,
+            llm_fn=lambda _prompt: "def f(x):\n    return x + 2\n",
+        )
+        assert result == "def f(x):\n    return x + 2"
+
+    test("core_selects_ast_regions", t_core_selects_ast_regions)
+    test("core_prompt_contract_is_strict", t_core_prompt_contract_is_strict)
+    test("core_extracts_fenced_code_and_rejects_prose", t_core_extracts_fenced_code_and_rejects_prose)
+    test("core_llm_mutation_falls_back_to_valid_code", t_core_llm_mutation_falls_back_to_valid_code)
+    test("core_llm_crossover_accepts_valid_code", t_core_llm_crossover_accepts_valid_code)
 
     # ── Bloque 2: SolutionArchive ────────────────────────────────────────────
     print("\n── SolutionArchive ──")
