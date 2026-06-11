@@ -1,0 +1,12 @@
+numpy
+pydantic>=2
+requests
+huggingface_hub
+transformers
+torch
+faiss-cpu
+sentence-transformers
+pdfplumber
+pandas
+openpyxl
+pillow
