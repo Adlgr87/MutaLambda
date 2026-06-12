@@ -1213,10 +1213,16 @@ class SandboxEvaluator:
         self.test_cases = test_cases
         self.timeout_sec = timeout_sec
         self.memory_mb = memory_mb
-        self.parallelism = min(
-            parallelism or multiprocessing.cpu_count(),
-            multiprocessing.cpu_count(),
-        )
+        # For environments where multiprocessing ProcessPool is unstable
+        # (e.g. certain CI containers / forkserver limitations), allow forcing
+        # serial evaluation via env var.
+        if os.getenv("MUTALAMBDA_E2E_SERIAL", "0") == "1":
+            self.parallelism = 1
+        else:
+            self.parallelism = min(
+                parallelism or multiprocessing.cpu_count(),
+                multiprocessing.cpu_count(),
+            )
         # Pool persistente: evita overhead de crear/destruir procesos por batch
         self._pool = ProcessPoolExecutor(max_workers=self.parallelism)
 

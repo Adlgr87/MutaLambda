@@ -189,7 +189,6 @@ def run_e2e(
         test_cases=test_cases,
         llm_fn=make_llm_stub(llm_mode),
         timeout_sec=3.0,
-        parallelism=(1 if serial else None),
     )
 
 
