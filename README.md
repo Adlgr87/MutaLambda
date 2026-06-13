@@ -3,10 +3,12 @@
 [![CI](https://github.com/Adlgr87/MutaLambda/actions/workflows/python-package.yml/badge.svg)](https://github.com/Adlgr87/MutaLambda/actions)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
+![Phases](https://img.shields.io/badge/phases-7%2B-orange)
+![Tests](https://img.shields.io/badge/tests-74%2B-brightgreen)
 
-**MutaLambda** is a research-grade evolutionary computation platform that emulates Google DeepMind's **AlphaEvolve** paradigm: evolving code through multi-island genetic algorithms, LLM-powered prompt meta-evolution, FAISS-based long-term memory, and NSGA-II multi-objective optimization.
+**MutaLambda** is a research-grade evolutionary computation platform that emulates Google DeepMind's **AlphaEvolve** paradigm: evolving code through multi-island genetic algorithms, LLM-powered prompt meta-evolution, FAISS-based long-term memory, NSGA-II multi-objective optimization, convergent evolution boosting, and **Linaje Multiversal** — a time-travel backtracking system inspired by 5D chess.
 
-> *"Code that writes itself — guided by evolution, validated by sandbox, curated by Pareto."*
+> *"Code that writes itself — guided by evolution, validated by sandbox, curated by Pareto, and blessed by pedigree."*
 
 ---
 
@@ -58,6 +60,21 @@
      │              │  Mutation / Crossover│                   │
      │              │  LLM + AST (13 ops)  │                   │
      │              └──────────────────────┘                   │
+     │                                                         │
+     │   ┌─────────────────────────────────────────────────┐   │
+     │   │        Fase 6.5–7: ConvergentBoost + Linaje    │   │
+     │   │  ┌──────────────────┐  ┌────────────────────┐  │   │
+     │   │  │ LineageGraph     │  │ ConvergentBoost    │  │   │
+     │   │  │ DAG genealógico  │  │ Consenso entre     │  │   │
+     │   │  │ + Pedigree ♜     │  │ islas → +15% score │  │   │
+     │   │  └────────┬─────────┘  └────────────────────┘  │   │
+     │   │           ▼                                     │   │
+     │   │  ┌─────────────────────────────────────────┐    │   │
+     │   │  │ ♜ Resurrección de ramas abandonadas    │    │   │
+     │   │  │   (time-travel backtracking)            │    │   │
+     │   │  │ ✕ Cross-branch crossover (linajes)     │    │   │
+     │   │  └─────────────────────────────────────────┘    │   │
+     │   └─────────────────────────────────────────────────┘   │
      └─────────────────────────────────────────────────────────┘
                                    │
                     ┌──────────────┴──────────────┐
@@ -85,9 +102,12 @@
 3. **Select** — NSGA-II non-dominated sorting preserves Pareto frontier
 4. **Mutate** — LLM creative mutation + AST-guaranteed structural mutation
 5. **Migrate** — Top individuals migrate between islands via configurable topology
-6. **Archive** — Novel solutions stored in FAISS index; Novelty Search prevents convergence
-7. **Meta-Evolve** — Prompt genomes co-evolve with code; system learns to prompt itself
-8. **Checkpoint** — Full RNG state + population + archive snapshotted for reproducibility
+6. **Boost** — Cross-island convergent solutions get +15% fitness (consensus mechanism)
+7. **Archive** — Novel solutions stored in FAISS index; Novelty Search prevents convergence
+8. **Meta-Evolve** — Prompt genomes co-evolve with code; system learns to prompt itself
+9. **Track Lineage** — Every individual's pedigree recorded in the LineageGraph DAG
+10. **Backtrack** — On stagnation, revive abandoned branches via time-travel resurrection ♜
+11. **Checkpoint** — Full RNG state + population + archive + lineage snapshotted
 
 ---
 
@@ -107,7 +127,7 @@ MutaLambda/
 ├── config.yaml               # Reference declarative configuration
 ├── app.py                    # HuggingFace model wrapper (optional)
 ├── document_intelligence.py  # MASSIVE parameter extraction (auxiliary)
-└── tests/                    # 54 pytest + E2E pipeline tests
+└── tests/                    # 74 pytest + E2E pipeline tests
 ```
 
 ---
@@ -144,7 +164,7 @@ python muta_lambda.py --resume checkpoints/chk_gen0010
 ### Run tests
 
 ```bash
-# Full pytest suite (54 tests)
+# Full pytest suite (74 tests)
 pytest tests/ -v
 
 # Embedded integration tests
@@ -167,6 +187,22 @@ evolution:
   topology: ring          # ring | mesh | fully_connected | random
   early_stop_patience: 15
   novelty_alpha: 0.15
+
+  convergent_boost:
+    enabled: true
+    threshold: 0.85
+    factor: 0.15
+
+  resurrection:
+    enabled: true
+    threshold: 8
+    max_attempts: 3
+    min_score_ratio: 0.3
+
+  cross_branch_crossover:
+    enabled: true
+    prob: 0.05
+    min_distance: 3
 
 population:
   size: 8
@@ -216,6 +252,83 @@ NSGA-II selection preserves the Pareto frontier while maintaining diversity via 
 - **Differentiated seeding** — Island 0 gets original code; islands 1..N get progressively mutated variants
 - **MigrationBus** — Configurable topology (ring, mesh, fully_connected, random)
 - **Diversity tracking** — Intra-island and cross-island uniqueness metrics
+
+---
+## 🤝 Convergent Evolution Boost
+
+When multiple islands independently arrive at similar solutions, that's a strong signal of optimality. MutaLambda detects this and reinforces it:
+
+- **Cross-island consensus detection** — cosine similarity via `SolutionArchive` embeddings (or Jaccard fallback)
+- **Fitness boosting** — convergent individuals get `score *= (1 + factor × similarity)` (default +15%)
+- **Periodic evaluation** — checked every `migration_interval` generations
+- **Configurable** — enable/disable, adjust similarity threshold and boost factor
+
+```yaml
+convergent_boost:
+  enabled: true
+  threshold: 0.85    # minimum cosine similarity
+  factor: 0.15       # boost multiplier
+```
+
+> *Concept adapted from FACTOR Protocols' Consensus Boosting pattern.*
+
+---
+## ♜ Linaje Multiversal (Time-Travel Backtracking)
+
+Inspired by **5D chess with multiversal time travel**, this system gives every solution a complete pedigree and the ability to revisit abandoned evolutionary paths.
+
+### 🌳 LineageGraph — The Genealogical DAG
+
+Every individual is registered as a node in a directed acyclic graph with:
+
+| Field | Purpose |
+|-------|---------|
+| `id` / `parent_ids` | Full ancestry chain (who mutated into whom) |
+| `generation` / `island_id` | Spatiotemporal origin |
+| `score` / `fitness` | Multi-objective metrics at time of evaluation |
+| `code_hash` | Fast deduplication |
+| `alive` | Whether this branch is still active |
+| `resurrected` | Whether this node was revived via time-travel |
+
+```python
+# Query the genealogical tree
+ancestors = lineage.get_ancestors(best_individual.id)
+distance  = lineage.get_genealogical_distance(ind_a.id, ind_b.id)
+```
+
+### ♜ Branch Resurrection (Time Travel)
+
+When evolution stagnates (configurable threshold, default 8 generations without improvement):
+
+1. **Scan abandoned branches** — find nodes with `score > threshold` that were prematurely discarded
+2. **Revive the most promising** — apply aggressive 3× mutation with alternative operators
+3. **Inject into the weakest island** — the stagnant island gets a fresh genetic injection
+4. **Mark as resurrected** — prevents infinite loops
+
+```yaml
+resurrection:
+  enabled: true
+  threshold: 8          # stagnant gens before first attempt
+  max_attempts: 3       # max resurrections per run
+  min_score_ratio: 0.3  # min score relative to global_best
+```
+
+### ✕ Cross-Branch Crossover
+
+Instead of only crossing parents within the same island and generation, MutaLambda can cross parents from **different genealogical lineages**:
+
+- Selects one parent with high `correctness` and another with high `throughput`
+- Verifies genealogical distance ≥ `min_distance` (default 3)
+- Applies crossover to produce hybrid offspring with both lineages
+
+```yaml
+cross_branch_crossover:
+  enabled: true
+  prob: 0.05            # probability per new child
+  min_distance: 3       # minimum genealogical distance
+```
+
+> *"En lugar de solo avanzar hacia la mejor solución, puedes retomar ramas muertas si detectas que la evolución se estancó — equivalente a viajar al pasado para explorar otra rama."*
 
 ---
 
@@ -321,8 +434,7 @@ print(agent.get_metrics())
 
 | Suite | Tests | Command |
 |-------|-------|---------|
-| Unit (pytest) | 54 | `pytest tests/ -v` |
-| Embedded | 14 | `python muta_lambda.py --test` |
+| Unit (pytest) | 74 | `pytest tests/ -v` |
 | E2E Pipeline | 3 pipelines | `python tests/e2e_tests.py` |
 
 ---
