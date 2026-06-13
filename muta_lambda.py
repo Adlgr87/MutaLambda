@@ -1247,6 +1247,15 @@ class Island:
             return result
         except Exception:
             return parent_a
+
+    def recompute_local_best(self) -> None:
+        """Recalcula local_best tras cambios externos al score (ej. convergent boost)."""
+        if not self.population:
+            return
+        top = max(self.population, key=lambda ind: ind.score)
+        if self.local_best is None or top.score > self.local_best.score:
+            self.local_best = copy.deepcopy(top)
+
 # ── Interfaz de migración ──────────────────────────────────────────────────
 
     def get_migrants(self, count: int) -> List[Individual]:
@@ -1962,6 +1971,10 @@ class EvolveConfig:
     early_stop_delta: float = 0.001 # mejora relativa mínima para no parar
     # [MEJ-3] Peso del bonus de novedad en el score combinado (0 = puro fitness)
     novelty_alpha: float = 0.15     # 15 % novedad, 85 % fitness
+    # Convergent Evolution Boost: refuerza soluciones que convergen entre islas
+    convergent_boost_enabled: bool = True
+    convergent_boost_threshold: float = 0.85   # cosine similarity mínima
+    convergent_boost_factor: float = 0.15      # score *= (1 + factor * sim)
 
     @classmethod
     def from_yaml(cls, path: str) -> "EvolveConfig":
@@ -1993,6 +2006,9 @@ class EvolveConfig:
             early_stop_patience=evo.get("early_stop_patience", 15),
             early_stop_delta=evo.get("early_stop_delta", 0.001),
             novelty_alpha=evo.get("novelty_alpha", 0.15),
+            convergent_boost_enabled=evo.get("convergent_boost", {}).get("enabled", True),
+            convergent_boost_threshold=evo.get("convergent_boost", {}).get("threshold", 0.85),
+            convergent_boost_factor=evo.get("convergent_boost", {}).get("factor", 0.15),
         )
 
         # Set sandbox params as instance attributes
@@ -2208,6 +2224,89 @@ class MutaLambdaAgent:
             return 0.0
         return len(set(all_codes)) / len(all_codes)
 
+    def _code_similarity(self, code_a: str, code_b: str) -> float:
+        """Similitud semántica entre dos fragmentos de código (0.0–1.0).
+
+        Si el SolutionArchive está disponible, usa embeddings cosine.
+        Fallback: Jaccard sobre tokens (split por whitespace).
+        """
+        if code_a == code_b:
+            return 1.0
+        if not code_a or not code_b:
+            return 0.0
+
+        # Intento vía embeddings del archive
+        if self.archive is not None:
+            try:
+                emb_a = self.archive._encode_normalized([code_a])[0]
+                emb_b = self.archive._encode_normalized([code_b])[0]
+                return max(0.0, float(np.dot(emb_a, emb_b)))
+            except Exception:
+                pass
+
+        # Fallback: Jaccard sobre tokens
+        tokens_a = set(code_a.split())
+        tokens_b = set(code_b.split())
+        if not tokens_a or not tokens_b:
+            return 0.0
+        return len(tokens_a & tokens_b) / len(tokens_a | tokens_b)
+
+    def _apply_convergent_boost(self) -> Dict[str, int]:
+        """Boostea individuos cuyas soluciones convergen entre islas.
+
+        Si 2+ islas evolucionan independientemente soluciones con
+        alta similitud semántica (> threshold), se refuerza su fitness.
+
+        Returns:
+            Dict con estadísticas: {"boosted": N, "pairs": M}
+        """
+        if not self.config.convergent_boost_enabled:
+            return {"boosted": 0, "pairs": 0}
+
+        # Solo considerar islas que tengan local_best
+        active = [(i, isl) for i, isl in enumerate(self.islands) if isl.local_best is not None]
+        if len(active) < 2:
+            return {"boosted": 0, "pairs": 0}
+
+        threshold = self.config.convergent_boost_threshold
+        factor = self.config.convergent_boost_factor
+
+        # ── Detectar pares convergentes ──────────────────────────
+        convergent_pairs: List[Tuple[int, int, float]] = []
+        for i in range(len(active)):
+            for j in range(i + 1, len(active)):
+                idx_a, isl_a = active[i]
+                idx_b, isl_b = active[j]
+                sim = self._code_similarity(isl_a.local_best.code, isl_b.local_best.code)
+                if sim > threshold:
+                    convergent_pairs.append((idx_a, idx_b, sim))
+
+        if not convergent_pairs:
+            return {"boosted": 0, "pairs": 0}
+
+        # ── Aplicar boost a las poblaciones de islas convergentes ─
+        # Boost proporcional a la similitud
+        island_boosts: Dict[int, float] = {}
+        for ia, ib, sim in convergent_pairs:
+            boost = factor * sim
+            island_boosts[ia] = island_boosts.get(ia, 0.0) + boost
+            island_boosts[ib] = island_boosts.get(ib, 0.0) + boost
+
+        boosted_count = 0
+        for isl_idx, total_boost in island_boosts.items():
+            island = self.islands[isl_idx]
+            for ind in island.population:
+                ind.score *= (1.0 + total_boost)
+                boosted_count += 1
+            # Recalcular local_best con scores boosteados
+            island.recompute_local_best()
+
+        logger.debug(
+            "ConvergentBoost: %d inds boosted (%.0f%% x%d pairs, threshold=%.2f)",
+            boosted_count, factor * 100, len(convergent_pairs), threshold,
+        )
+        return {"boosted": boosted_count, "pairs": len(convergent_pairs)}
+
     def _score_with_novelty(self, individual: Individual) -> float:
         """
         [MEJ-3] Combina fitness funcional con bonus de novedad semántica.
@@ -2263,6 +2362,15 @@ class MutaLambdaAgent:
                     ", ".join(f"{d:.3f}" for d in diversities),
                     cross_diversity,
                 )
+
+            # ── Convergent Evolution Boost (consenso entre islas) ─────
+            if gen % max(1, self.config.migration_interval) == 0:
+                boost_stats = self._apply_convergent_boost()
+                if boost_stats.get("boosted", 0) > 0:
+                    logger.info(
+                        "Gen %d — convergent boost: %d inds × %d pairs",
+                        gen + 1, boost_stats["boosted"], boost_stats.get("pairs", 0),
+                    )
 
             # ── Fase 6: NSGA-II stats ────────────────────────────────────
             if gen % 5 == 0:

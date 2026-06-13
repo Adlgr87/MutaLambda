@@ -13,6 +13,12 @@ evolution:
   early_stop_delta: 0.001     # Mejora relativa mínima (0 = desactivado)
   novelty_alpha: 0.15         # Peso del bonus de novedad (0.0–1.0)
 
+  # ── Convergent Evolution Boost ──────────────────────────────────
+  convergent_boost:
+    enabled: true             # Activar refuerzo de convergencia entre islas
+    threshold: 0.85           # Similitud coseno mínima para considerar convergencia
+    factor: 0.15              # Multiplicador del score (score *= 1 + factor * sim)
+
 # ── Población por isla ──────────────────────────────────────────────
 population:
   size: 8                     # Individuos por isla
