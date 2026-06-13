@@ -24,8 +24,10 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 
-# Import core
-import mutalambda_v2_patched as core
+# Import core — add parent dir to path since we're in tests/
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import muta_lambda as core
 
 
 def _extract_first_function_name(code: str) -> str:

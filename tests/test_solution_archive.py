@@ -42,6 +42,9 @@ with patch.dict("sys.modules", {
 @pytest.fixture
 def archive():
     """Create a SolutionArchive with mocked dependencies."""
+    # Ensure muta_lambda.faiss points to our mock
+    muta_lambda.faiss = _mock_faiss
+
     with patch.object(SolutionArchive, "__init__", lambda self, **kw: None):
         arch = SolutionArchive.__new__(SolutionArchive)
 

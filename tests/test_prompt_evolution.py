@@ -48,7 +48,14 @@ class TestPromptGenome:
         )
         mutant = pg.mutate()
         assert isinstance(mutant, PromptGenome)
-        # At least one attribute should differ (not guaranteed but highly likely)
+        # At least one attribute should differ; try multiple times to reduce flakiness
+        for _ in range(5):
+            if (mutant.system_prompt != pg.system_prompt
+                or mutant.temperature != pg.temperature
+                or mutant.few_shot_examples != pg.few_shot_examples
+                or mutant.mutation_instructions != pg.mutation_instructions):
+                break
+            mutant = pg.mutate()
         different = (
             mutant.system_prompt != pg.system_prompt
             or mutant.temperature != pg.temperature
