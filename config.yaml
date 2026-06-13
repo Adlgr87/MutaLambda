@@ -1,0 +1,56 @@
+# MutaLambda — Configuración Declarativa de Referencia
+# =====================================================
+# Este archivo define TODOS los parámetros del motor evolutivo.
+# Cópialo, modifícalo y pásalo con:
+#   python muta_lambda.py --config my_config.yaml
+
+# ── Motor evolutivo ─────────────────────────────────────────────────
+evolution:
+  num_islands: 4              # Número de islas semi‑aisladas
+  generations: 50             # Generaciones totales
+  topology: ring              # ring | fully_connected | random | mesh
+  early_stop_patience: 15     # Generaciones sin mejora para parada temprana
+  early_stop_delta: 0.001     # Mejora relativa mínima (0 = desactivado)
+  novelty_alpha: 0.15         # Peso del bonus de novedad (0.0–1.0)
+
+# ── Población por isla ──────────────────────────────────────────────
+population:
+  size: 8                     # Individuos por isla
+  top_k: 3                    # Elite size (≤ population.size)
+  migration_interval: 10      # Cada cuántas generaciones migrar
+  migrants_per_island: 2      # Cuántos emigrantes por isla
+
+# ── Sandbox ─────────────────────────────────────────────────────────
+sandbox:
+  timeout_sec: 10.0           # Timeout por evaluación (segundos)
+  max_workers: 4              # Workers paralelos en ProcessPoolExecutor
+
+# ── Archivo de soluciones ───────────────────────────────────────────
+archive:
+  enabled: true               # Activar SolutionArchive + FAISS
+  max_size: 10000             # Máximo de soluciones en el archivo
+  prune_threshold: 50         # Purgas diferidas antes de rebuild
+  embedder_model: all-MiniLM-L6-v2  # Modelo de sentence-transformers
+
+# ── Evolución de prompts ────────────────────────────────────────────
+prompt_evolution:
+  enabled: true               # Activar meta‑evolución de prompts
+  pop_size: 6                 # Tamaño de población de prompts
+  elite_frac: 0.5             # Fracción de élite preservada
+
+# ── Checkpointing ───────────────────────────────────────────────────
+checkpoint:
+  interval: 10                # Cada cuántas generaciones guardar
+  dir: checkpoints            # Directorio de checkpoints
+  save_archive: true          # Guardar archivo en checkpoint
+  save_prompts: true          # Guardar prompts en checkpoint
+
+# ── Logging ─────────────────────────────────────────────────────────
+logging:
+  level: INFO                 # DEBUG | INFO | WARNING | ERROR
+  log_file: null              # Archivo de log (null = stderr)
+
+# ── Reproducibilidad ────────────────────────────────────────────────
+reproducibility:
+  seed: null                  # Semilla RNG (null = aleatorio)
+  track_git_commit: true      # Guardar hash de commit en checkpoint

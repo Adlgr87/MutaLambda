@@ -1920,7 +1920,10 @@ class SolutionArchive:
 
 @dataclass
 class EvolveConfig:
-    """Configuración global del agente."""
+    """Configuración global del agente.
+
+    Todos los valores pueden cargarse desde YAML con ``from_yaml()``.
+    """
     num_islands: int = 4
     generations: int = 50
     seed_codes: List[str] = field(default_factory=list)
@@ -1938,6 +1941,57 @@ class EvolveConfig:
     early_stop_delta: float = 0.001 # mejora relativa mínima para no parar
     # [MEJ-3] Peso del bonus de novedad en el score combinado (0 = puro fitness)
     novelty_alpha: float = 0.15     # 15 % novedad, 85 % fitness
+
+    @classmethod
+    def from_yaml(cls, path: str) -> "EvolveConfig":
+        """Load EvolveConfig from a validated YAML file."""
+        from config_loader import load_yaml
+        cfg = load_yaml(path)
+
+        evo = cfg.get("evolution", {})
+        pop = cfg.get("population", {})
+        sand = cfg.get("sandbox", {})
+        arch = cfg.get("archive", {})
+        prompt = cfg.get("prompt_evolution", {})
+        chk = cfg.get("checkpoint", {})
+        log = cfg.get("logging", {})
+        repro = cfg.get("reproducibility", {})
+
+        config = cls(
+            num_islands=evo.get("num_islands", 4),
+            generations=evo.get("generations", 50),
+            topology=evo.get("topology", "ring"),
+            population_size=pop.get("size", 8),
+            top_k=pop.get("top_k", 3),
+            migration_interval=pop.get("migration_interval", 10),
+            migrants_per_island=pop.get("migrants_per_island", 2),
+            archive_solutions=arch.get("enabled", True),
+            prompt_evolution=prompt.get("enabled", True),
+            checkpoint_interval=chk.get("interval", 10),
+            checkpoint_dir=chk.get("dir", "checkpoints"),
+            early_stop_patience=evo.get("early_stop_patience", 15),
+            early_stop_delta=evo.get("early_stop_delta", 0.001),
+            novelty_alpha=evo.get("novelty_alpha", 0.15),
+        )
+
+        # Set sandbox params as instance attributes
+        config.sandbox_timeout = sand.get("timeout_sec", 10.0)
+        config.sandbox_workers = sand.get("max_workers", 4)
+
+        # Logging
+        log_level = log.get("level", "INFO")
+        import logging
+        logging.getLogger("MutaLambda").setLevel(log_level)
+
+        # Seed
+        seed = repro.get("seed")
+        if seed is not None:
+            import random as _random
+            _random.seed(seed)
+            import numpy as _np
+            _np.random.seed(seed)
+
+        return config
 
 
 class EarlyStopMonitor:
@@ -2235,25 +2289,35 @@ class MutaLambdaAgent:
         return global_best
 
     def _save_checkpoint(self, generation: int) -> None:
-        """Guarda un checkpoint JSON con el estado actual."""
-        os.makedirs(self.config.checkpoint_dir, exist_ok=True)
-        path = os.path.join(
-            self.config.checkpoint_dir, f"checkpoint_gen{generation:04d}.json"
-        )
-        best = self.migration_bus.get_global_best()
-        data = {
-            "generation": generation,
-            "best_score": best.score if best else None,
-            "best_code": best.code if best else None,
-            "island_generations": [isl.generation for isl in self.islands],
-            "avg_gen_time": (
-                sum(self._generation_times) / len(self._generation_times)
-                if self._generation_times else 0
-            ),
-        }
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        logger.debug("Checkpoint saved: %s", path)
+        """Guarda un checkpoint completo con RNG y estado de islas."""
+        try:
+            from checkpoint_manager import save_full_checkpoint
+            # Pass raw config if we loaded from YAML, else None
+            raw_config = getattr(self, '_raw_config', None)
+            save_full_checkpoint(
+                self, generation, self.config,
+                raw_config=raw_config,
+            )
+        except ImportError:
+            # Fallback al checkpoint básico
+            os.makedirs(self.config.checkpoint_dir, exist_ok=True)
+            path = os.path.join(
+                self.config.checkpoint_dir, f"checkpoint_gen{generation:04d}.json"
+            )
+            best = self.migration_bus.get_global_best()
+            data = {
+                "generation": generation,
+                "best_score": best.score if best else None,
+                "best_code": best.code if best else None,
+                "island_generations": [isl.generation for isl in self.islands],
+                "avg_gen_time": (
+                    sum(self._generation_times) / len(self._generation_times)
+                    if self._generation_times else 0
+                ),
+            }
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            logger.debug("Checkpoint saved: %s", path)
 
     def shutdown(self) -> None:
         """Apaga recursos de forma controlada."""
@@ -2569,6 +2633,11 @@ def main() -> None:
     # [MEJ-4] Flag para correr la suite de tests
     parser.add_argument("--test", action="store_true",
                         help="Ejecutar suite de tests integrada y salir")
+    # Fase 5 — Config declarativa + checkpointing
+    parser.add_argument("--config", type=str, default=None,
+                        help="Ruta a archivo YAML de configuración")
+    parser.add_argument("--resume", type=str, default=None,
+                        help="Ruta a checkpoint para reanudar evolución")
     args = parser.parse_args()
 
     # Ajustar nivel de log desde CLI
@@ -2578,36 +2647,56 @@ def main() -> None:
         ok = run_full_test_suite()
         sys.exit(0 if ok else 1)
 
-    # Código semilla
-    seed = (
-        "def compute_sum(n):\n"
-        "    total = 0\n"
-        "    for i in range(n):\n"
-        "        total += i\n"
-        "    return total\n"
-    )
+    # ── Fase 5: Cargar desde YAML si --config ──────────────────────
+    if args.config:
+        config = EvolveConfig.from_yaml(args.config)
+        # Store raw config for checkpoint hash
+        from config_loader import load_yaml
+        agent_kwargs = {"config": config}
+    else:
+        # Código semilla
+        seed = (
+            "def compute_sum(n):\n"
+            "    total = 0\n"
+            "    for i in range(n):\n"
+            "        total += i\n"
+            "    return total\n"
+        )
 
-    config = EvolveConfig(
-        num_islands=args.islands,
-        generations=args.generations,
-        seed_codes=[seed],
-        topology=args.topology,
-        population_size=args.pop_size,
-        top_k=max(2, args.pop_size // 3),
-        archive_solutions=False,   # Deshabilitar FAISS para demo rápida
-        prompt_evolution=False,
-        novelty_alpha=args.novelty_alpha,
-        early_stop_patience=args.early_stop_patience,
-    )
+        config = EvolveConfig(
+            num_islands=args.islands,
+            generations=args.generations,
+            seed_codes=[seed],
+            topology=args.topology,
+            population_size=args.pop_size,
+            top_k=max(2, args.pop_size // 3),
+            archive_solutions=False,   # Deshabilitar FAISS para demo rápida
+            prompt_evolution=False,
+            novelty_alpha=args.novelty_alpha,
+            early_stop_patience=args.early_stop_patience,
+        )
+        # Set sandbox defaults for CLI mode
+        config.sandbox_timeout = 5.0
+        config.sandbox_workers = 4
 
-    agent = MutaLambdaAgent(
-        config=config,
-        llm_fn=_demo_llm_fn,
-        test_cases=[],
-        timeout_sec=5.0,
-    )
-
-    best = agent.run(task="Optimize a sum function for correctness and speed")
+    # ── Resume from checkpoint if --resume ──────────────────────────
+    if args.resume:
+        from checkpoint_manager import resume_agent
+        agent = resume_agent(
+            args.resume, config,
+            test_cases=[],
+            llm_fn=_demo_llm_fn,
+        )
+        # Continue from checkpoint generation
+        best = agent.run(task="Continue evolution from checkpoint")
+    else:
+        agent = MutaLambdaAgent(
+            config=config,
+            llm_fn=_demo_llm_fn,
+            test_cases=[],
+            timeout_sec=getattr(config, 'sandbox_timeout', 5.0),
+        )
+        best = agent.run(task="Optimize a sum function for correctness and speed")
     print("\n" + "=" * 60)
     print("BEST SOLUTION FOUND:")
     print("=" * 60)
