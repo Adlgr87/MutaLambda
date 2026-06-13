@@ -58,6 +58,7 @@ import logging
 import multiprocessing
 import os
 import random
+import resource
 import subprocess
 import sys
 import tempfile
@@ -81,6 +82,9 @@ from typing import (
 
 # ─── Third-party ──────────────────────────────────────────────────────────────
 import numpy as np
+
+# ─── MutaLambda local modules ────────────────────────────────────────────────
+from fitness_vector import FitnessVector
 
 # Conditional imports: allow running without heavy deps for testing ASTMutator
 try:
@@ -213,13 +217,22 @@ class Individual:
 
 @dataclass
 class EvalResult:
-    """Resultado de evaluar un individuo en el sandbox."""
-    score: float
-    passed: bool
-    metrics: Dict[str, float]
-    stdout: str
-    stderr: str
-    timed_out: bool
+    """Resultado de evaluar un individuo en el sandbox.
+
+    ``fitness`` carries the full 6‑dimensional multi‑objective vector;
+    ``score`` (property) provides backward‑compatible scalar aggregation.
+    """
+    fitness: FitnessVector = field(default_factory=FitnessVector)
+    passed: bool = False
+    metrics: Dict[str, float] = field(default_factory=dict)
+    stdout: str = ""
+    stderr: str = ""
+    timed_out: bool = False
+
+    @property
+    def score(self) -> float:
+        """Backward-compatible scalar score via weighted sum."""
+        return self.fitness.to_scalar()
 
 
 @dataclass
@@ -1124,7 +1137,16 @@ class Island:
 def _eval_worker(args: Tuple[str, List[Dict], float]) -> EvalResult:
     """
     Función de nivel módulo (necesario para pickling en ProcessPoolExecutor).
-    Ejecuta el código en un subproceso aislado y mide métricas.
+    Ejecuta el código en un subproceso aislado y extrae métricas multi‑objetivo.
+
+    Métricas del vector de fitness
+    ------------------------------
+    correctness   — fracción de tests pasados (0.0 – 1.0)
+    latency_p50   — mediana de latencia en segundos
+    latency_p99   — p99 de latencia (con una sola ejecución = p50)
+    throughput    — tests por segundo
+    memory_peak   — memoria pico RSS vía resource.getrusage (MiB)
+    parsimony     — 1/(1 + complejidad_ciclomatica / max(1, code_kb))
 
     Optimización: cleanup garantizado en finally, truncación de stdout/stderr.
     """
@@ -1147,44 +1169,119 @@ def _eval_worker(args: Tuple[str, List[Dict], float]) -> EvalResult:
         )
         elapsed = time.perf_counter() - start
 
-        # Intentar extraer reporte JSON de resultados de tests del stdout
+        # ── Memoria pico (RSS) vía resource.getrusage ───────────────────
         try:
-            report = json.loads(proc.stdout.strip().split('\n')[-1])
+            usage = resource.getrusage(resource.RUSAGE_CHILDREN)
+            peak_kb: float = float(usage.ru_maxrss)
+            # En macOS ru_maxrss está en bytes; en Linux en KiB
+            if sys.platform == "darwin":
+                peak_kb /= 1024.0
+            peak_mb = peak_kb / 1024.0
+        except (AttributeError, ValueError):
+            peak_mb = 0.0
+
+        # ── Throughput (tests / segundo) ─────────────────────────────────
+        num_tests = max(1, len(test_cases))
+        throughput = num_tests / max(elapsed, 1e-9)
+
+        # ── Parsimonia ──────────────────────────────────────────────────
+        code_kb = max(1.0, len(code.encode("utf-8")) / 1024.0)
+        try:
+            tree = ast.parse(code)
+            decision_points = sum(
+                1
+                for node in ast.walk(tree)
+                if isinstance(node, (ast.If, ast.While, ast.For,
+                                     ast.ExceptHandler, ast.BoolOp))
+            )
+            for node in ast.walk(tree):
+                if isinstance(node, ast.If):
+                    decision_points += len(node.orelse) > 0  # cuenta else
+            cyclomatic = 1 + decision_points
+        except SyntaxError:
+            cyclomatic = 1
+        parsimony = 1.0 / (1.0 + cyclomatic / code_kb)
+
+        # ── Correctitud ──────────────────────────────────────────────────
+        try:
+            last_line = proc.stdout.strip().split('\n')[-1]
+            report = json.loads(last_line)
             passed = report.get("passed", 0)
             total = report.get("total", 1)
             correctness = passed / total
-            # Penalizar latencia menos agresivamente
-            score = correctness * 100.0 - elapsed * 5.0
         except Exception:
-            # Fallback al comportamiento original si no hay JSON válido
             correctness = 1.0 if proc.returncode == 0 else 0.0
-            score = correctness * 100.0 - elapsed * 10.0
+
+        # ── Construir vector de fitness ──────────────────────────────────
+        fitness = FitnessVector(
+            correctness=correctness,
+            latency_p50=elapsed,
+            latency_p99=elapsed,
+            throughput=throughput,
+            memory_peak_mb=peak_mb,
+            parsimony=parsimony,
+        )
+
+        metrics: Dict[str, float] = {
+            "latency": elapsed,
+            "latency_p50": elapsed,
+            "latency_p99": elapsed,
+            "throughput": throughput,
+            "memory_peak_mb": peak_mb,
+            "parsimony": parsimony,
+            "correctness": correctness,
+            "cyclomatic_complexity": float(cyclomatic),
+            "code_kb": code_kb,
+        }
 
         return EvalResult(
-            score=score,
+            fitness=fitness,
             passed=proc.returncode == 0,
-            metrics={"latency": elapsed, "correctness": correctness},
+            metrics=metrics,
             stdout=proc.stdout[:2000],
             stderr=proc.stderr[:2000],
             timed_out=False,
         )
     except subprocess.TimeoutExpired:
         return EvalResult(
-            score=-100.0,
+            fitness=FitnessVector(
+                correctness=0.0,
+                latency_p50=timeout_sec,
+                latency_p99=timeout_sec,
+                throughput=0.0,
+                memory_peak_mb=float("inf"),
+                parsimony=0.0,
+            ),
             passed=False,
-            metrics={"latency": timeout_sec, "correctness": 0.0},
+            metrics={
+                "latency": timeout_sec,
+                "correctness": 0.0,
+                "error": "TimeoutExpired",
+            },
             stdout="",
             stderr="[TIMEOUT]",
             timed_out=True,
         )
     except Exception as exc:
+        error_str = str(exc)[:2000]
         return EvalResult(
-            score=-200.0,
+            fitness=FitnessVector(
+                correctness=0.0,
+                latency_p50=timeout_sec,
+                latency_p99=timeout_sec,
+                throughput=0.0,
+                memory_peak_mb=float("inf"),
+                parsimony=0.0,
+            ),
             passed=False,
-            metrics={},
+            metrics={
+                "latency": timeout_sec,
+                "correctness": 0.0,
+                "error": error_str[:200],
+            },
             stdout="",
-            stderr=str(exc)[:2000],
-            timed_out=False,
+            stderr=error_str,
+            timed_out="Timeout" in error_str or "timeout" in error_str.lower(),
         )
     finally:
         if tmp_path and os.path.exists(tmp_path):
@@ -1244,9 +1341,14 @@ class SandboxEvaluator:
                 results[idx] = future.result()
             except Exception as exc:
                 logger.warning("Eval worker %d raised: %s", idx, exc)
+                error_str = str(exc)[:2000]
                 results[idx] = EvalResult(
-                    score=-200.0, passed=False, metrics={},
-                    stdout="", stderr=str(exc)[:2000], timed_out=False,
+                    fitness=FitnessVector.worst(),
+                    passed=False,
+                    metrics={"error": error_str[:200]},
+                    stdout="",
+                    stderr=error_str,
+                    timed_out=False,
                 )
 
         return results  # type: ignore[return-value]

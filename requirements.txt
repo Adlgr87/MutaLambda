@@ -10,3 +10,4 @@ pdfplumber
 pandas
 openpyxl
 pillow
+pytest>=7.0
