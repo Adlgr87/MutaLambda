@@ -1614,6 +1614,202 @@ class SolutionArchive:
             solution_list = list(self.solutions)
             return [solution_list[i] for i in indices[0] if 0 <= i < len(solution_list)]
 
+    # ── Fase 3: Novelty Search + Curriculum Learning ──────────────────────
+
+    def novelty_score(self, code: str, k: int = 10) -> float:
+        """
+        Novelty score: 1.0 — max_similarity a los k vecinos más cercanos.
+
+        Valores cercanos a 1.0 indican código muy novedoso (distinto del
+        archivo); valores cercanos a 0.0 indican redundancia.
+
+        Si el archivo está vacío, devuelve 1.0 (máxima novedad por defecto).
+
+        Se usa en ``_score_with_novelty()`` para premiar diversidad:
+            combined = (1-α) * fitness + α * novelty * 100
+        """
+        with self._lock:
+            if not self.solutions:
+                return 1.0
+            # Sincronizar FAISS si hay prunes pendientes
+            if self._pending_prunes > 0:
+                self._rebuild_index()
+                self._pending_prunes = 0
+            emb = self._encode_normalized([code])
+            k_actual = min(k, len(self.solutions))
+            distances, _ = self.index.search(emb, k_actual)
+            # distances son cosine similarities (IndexFlatIP + L2 norm → cos)
+            max_sim = float(distances[0][0]) if k_actual > 0 else 0.0
+            return 1.0 - max(0.0, min(1.0, max_sim))
+
+    def get_diverse_sample(self, k: int = 5) -> List[str]:
+        """
+        Curriculum Learning: retorna k soluciones diversas del archivo.
+
+        Usa k‑means sobre los embeddings para seleccionar representantes
+        de distintos clusters del espacio de soluciones.  Si hay menos
+        de k soluciones, las devuelve todas.
+
+        Útil para:
+          - Inyectar diversidad como seeds en islas estancadas
+          - Proveer ejemplos variados al LLM durante la mutación
+        """
+        with self._lock:
+            n = len(self.solutions)
+            if n == 0:
+                return []
+            if n <= k:
+                return [s.code for s in self.solutions]
+
+            # Apilar embeddings y correr k‑means (faiss)
+            embs = np.vstack(
+                [s.embedding.reshape(1, -1) for s in self.solutions]
+            ).astype("float32")
+            kmeans = faiss.Kmeans(
+                d=self._dim, k=k, niter=20, verbose=False, gpu=False
+            )
+            kmeans.train(embs)
+            # Para cada centroide, encontrar la solución más cercana
+            _, assignments = kmeans.index.search(embs, 1)
+            diverse: List[str] = []
+            seen_clusters: set = set()
+            for idx, cluster in enumerate(assignments.flatten()):
+                cluster_id = int(cluster)
+                if cluster_id not in seen_clusters:
+                    seen_clusters.add(cluster_id)
+                    diverse.append(self.solutions[idx].code)
+                    if len(diverse) >= k:
+                        break
+            return diverse
+
+    def save(self, path: str) -> None:
+        """
+        Persiste el archivo a disco: índice FAISS + metadatos.
+
+        Guarda dos archivos:
+          - ``{path}.index``    → índice FAISS binario
+          - ``{path}.json``     → metadatos (código, métricas, timestamp)
+        """
+        import os as _os
+        _os.makedirs(_os.path.dirname(path) or ".", exist_ok=True)
+
+        with self._lock:
+            if self._pending_prunes > 0:
+                self._rebuild_index()
+                self._pending_prunes = 0
+
+            # Guardar índice FAISS
+            faiss.write_index(self.index, f"{path}.index")
+
+            # Guardar metadatos como JSON
+            meta = [
+                {
+                    "code": s.code,
+                    "metrics": s.metrics,
+                    "timestamp": s.timestamp,
+                }
+                for s in self.solutions
+            ]
+            with open(f"{path}.json", "w", encoding="utf-8") as f:
+                json.dump(meta, f, indent=2, ensure_ascii=False)
+
+        logger.info(
+            "SolutionArchive saved: %d solutions → %s",
+            len(self.solutions), path,
+        )
+
+    @classmethod
+    def load(
+        cls,
+        path: str,
+        embedder_model: str = "all-MiniLM-L6-v2",
+    ) -> "SolutionArchive":
+        """
+        Carga un archivo previamente persistido con ``save()``.
+
+        Parameters
+        ----------
+        path : str
+            Ruta base (sin extensión).  Espera ``{path}.index`` y ``{path}.json``.
+        embedder_model : str
+            Modelo de embedding (debe coincidir con el usado al guardar).
+        """
+        if SentenceTransformer is None or faiss is None:
+            raise ImportError(
+                "SolutionArchive.load() requires faiss-cpu and sentence-transformers."
+            )
+
+        archive = cls.__new__(cls)  # bypass __init__
+        archive.embedder = SentenceTransformer(
+            f"sentence-transformers/{embedder_model}"
+        )
+        archive._dim = archive.embedder.get_sentence_embedding_dimension()
+        archive._lock = threading.Lock()
+        archive._pending_prunes = 0
+
+        # Cargar índice FAISS
+        archive.index = faiss.read_index(f"{path}.index")
+
+        # Cargar metadatos
+        with open(f"{path}.json", "r", encoding="utf-8") as f:
+            meta = json.load(f)
+
+        archive.max_size = max(10_000, len(meta) * 2)
+        archive.prune_threshold = 50
+        archive.solutions = deque(maxlen=archive.max_size)
+
+        for entry in meta:
+            emb = archive._encode_normalized([entry["code"]])[0]
+            archive.solutions.append(
+                ArchivedSolution(
+                    code=entry["code"],
+                    metrics=entry.get("metrics", {}),
+                    embedding=emb,
+                    timestamp=entry.get("timestamp", 0.0),
+                )
+            )
+
+        logger.info(
+            "SolutionArchive loaded: %d solutions from %s",
+            len(archive.solutions), path,
+        )
+        return archive
+
+    def stats(self) -> Dict[str, Any]:
+        """
+        Métricas de telemetría del archivo para monitoreo.
+
+        Returns
+        -------
+        dict con:
+          - total_solutions   — número de soluciones en el archivo
+          - prunes_pending    — purgas diferidas sin aplicar
+          - mean_similarity   — similitud coseno promedio entre vecinos
+          - coverage_dim      — dimensionalidad del espacio de embedding
+        """
+        with self._lock:
+            total = len(self.solutions)
+            if total < 2:
+                mean_sim = 0.0
+            else:
+                # Muestrear hasta 500 pares para estimar similitud promedio
+                sample = min(total, 500)
+                embs = np.vstack(
+                    [self.solutions[i].embedding.reshape(1, -1)
+                     for i in range(sample)]
+                ).astype("float32")
+                sims = embs @ embs.T  # cosine sim (ya están normalizados)
+                # Excluir diagonal (self-similarity = 1.0)
+                np.fill_diagonal(sims, 0.0)
+                mean_sim = float(np.mean(sims)) if sample > 1 else 0.0
+
+            return {
+                "total_solutions": total,
+                "prunes_pending": self._pending_prunes,
+                "mean_pairwise_similarity": round(mean_sim, 6),
+                "embedding_dim": self._dim,
+            }
+
     @property
     def size(self) -> int:
         return len(self.solutions)
