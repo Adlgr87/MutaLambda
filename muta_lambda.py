@@ -204,9 +204,14 @@ def _resolve_llm_backend() -> Callable[[str], str]:
 
 @dataclass
 class Individual:
-    """Unidad evolutiva: un fragmento de código con su puntuación."""
+    """Unidad evolutiva: un fragmento de código con su puntuación.
+
+    ``score`` es el escalar agregado (retrocompatible).
+    ``fitness`` es el vector multi‑objetivo completo (Fase 1/NSGA‑II).
+    """
     code: str
     score: float = float("-inf")
+    fitness: Optional[FitnessVector] = None
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
     def __lt__(self, other: "Individual") -> bool:
@@ -1118,6 +1123,7 @@ class Island:
 
         for ind, res in zip(self.population, results):
             ind.score = res.score
+            ind.fitness = res.fitness  # Fase 6 — NSGA-II necesita el vector
 
         # Actualizar mejor local
         top = max(self.population, key=lambda x: x.score)
@@ -1130,11 +1136,18 @@ class Island:
                 self.id, self.generation, top.score,
             )
 
-        # Selección elitista con heapq: O(n log k) vs O(n log n) sort
-        elites = heapq.nlargest(self.config.top_k, self.population, key=lambda x: x.score)
+        # ── Fase 6: NSGA-II selection (replaces elitist scalar) ──────────
+        try:
+            from nsga2 import nsga2_select, nsga2_tournament_select
+            elites = nsga2_select(self.population, self.config.top_k)
+            use_nsga2 = True
+        except ImportError:
+            elites = heapq.nlargest(
+                self.config.top_k, self.population, key=lambda x: x.score
+            )
+            use_nsga2 = False
 
         # Nueva población: elites + mutaciones
-        # Construir nueva población con elites y mutaciones informadas
         # Capturamos información de errores de los individuos evaluados
         error_map: Dict[int, str] = {}
         for ind, res in zip(self.population, results):
@@ -1144,7 +1157,13 @@ class Island:
 
         new_pop: List[Individual] = list(elites)
         while len(new_pop) < self.config.population_size:
-            parent = random.choice(elites)
+            # NSGA-II tournament or fallback to random elite
+            if use_nsga2 and len(elites) >= 2 and random.random() < 0.7:
+                parents = nsga2_tournament_select(elites, 1)
+                parent = parents[0] if parents else random.choice(elites)
+            else:
+                parent = random.choice(elites)
+
             # 15% de probabilidad de crossover si hay al menos dos elites
             if parent.score < 0 and random.random() < 0.10:
                 mutated_code = self._redesign(parent.code, parent.score)
@@ -1153,7 +1172,9 @@ class Island:
                 mutated_code = self._crossover(parent.code, other.code)
             else:
                 error_info = error_map.get(parent.id, "")
-                mutated_code = self._mutate_with_context(parent.code, parent.score, error_info)
+                mutated_code = self._mutate_with_context(
+                    parent.code, parent.score, error_info
+                )
             new_pop.append(Individual(code=mutated_code))
 
         self.population = new_pop
@@ -2153,6 +2174,28 @@ class MutaLambdaAgent:
             len(self.islands), len(self.islands) - 1,
         )
 
+    def _process_hitl_hints(self) -> None:
+        """
+        Fase 6: Procesar hints de experto inyectados vía dashboard/CLI.
+
+        Cada hint se inyecta como individuo semilla en una isla aleatoria.
+        """
+        hints = getattr(self, '_pending_hints', [])
+        if not hints:
+            return
+        for code in hints:
+            island = random.choice(self.islands)
+            new_ind = Individual(code=code, score=0.0)
+            island.population.append(new_ind)
+            logger.info("HITL: hint injected into island %d", island.id)
+        self._pending_hints = []
+
+    def inject_hint(self, code: str) -> None:
+        """API pública para inyectar hints externos."""
+        pending = getattr(self, '_pending_hints', [])
+        pending.append(code)
+        self._pending_hints = pending
+
     def _compute_cross_island_diversity(self) -> float:
         """
         Diversidad entre islas: fracción de individuos únicos
@@ -2207,6 +2250,9 @@ class MutaLambdaAgent:
                 self.islands, gen
             )
 
+            # ── Fase 6: HITL — inyectar hints de experto ────────────────
+            self._process_hitl_hints()
+
             # ── Métricas de diversidad entre islas ────────────────────────
             cross_diversity = self._compute_cross_island_diversity()
             if gen % 5 == 0:
@@ -2217,6 +2263,24 @@ class MutaLambdaAgent:
                     ", ".join(f"{d:.3f}" for d in diversities),
                     cross_diversity,
                 )
+
+            # ── Fase 6: NSGA-II stats ────────────────────────────────────
+            if gen % 5 == 0:
+                try:
+                    from nsga2 import get_nsga2_stats
+                    all_inds = [
+                        ind for isl in self.islands
+                        for ind in isl.population
+                    ]
+                    nsga_stats = get_nsga2_stats(all_inds)
+                    logger.debug(
+                        "NSGA-II fronts=%d pareto=%d crowding=%.3f",
+                        nsga_stats["num_fronts"],
+                        nsga_stats["pareto_frontier_size"],
+                        nsga_stats["mean_crowding"],
+                    )
+                except ImportError:
+                    pass
 
             # Evolución de prompts (opcional)
             if self.prompt_evolver and task:
@@ -2638,6 +2702,11 @@ def main() -> None:
                         help="Ruta a archivo YAML de configuración")
     parser.add_argument("--resume", type=str, default=None,
                         help="Ruta a checkpoint para reanudar evolución")
+    # Fase 6 — HITL dashboard + hints
+    parser.add_argument("--dashboard", action="store_true",
+                        help="Activar dashboard de consola HITL")
+    parser.add_argument("--hint", type=str, default=None,
+                        help="Inyectar código como hint experto en una isla")
     args = parser.parse_args()
 
     # Ajustar nivel de log desde CLI

@@ -37,4 +37,4 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       run: |
-        pytest test_fitness_vector.py test_solution_archive.py test_prompt_evolution.py test_config.py -v
+        pytest test_fitness_vector.py test_solution_archive.py test_prompt_evolution.py test_config.py test_nsga2.py -v
