@@ -85,6 +85,7 @@ import numpy as np
 
 # ─── MutaLambda local modules ────────────────────────────────────────────────
 from fitness_vector import FitnessVector
+from island_evolution import IslandPool, IslandDiversity, IslandSnapshot
 
 # Conditional imports: allow running without heavy deps for testing ASTMutator
 try:
@@ -854,6 +855,8 @@ class MigrationBus:
         self._neighbor_cache: Dict[int, List[int]] = {}
         self._cache_version: int = 0
         self._islands_version: int = 0
+        # Mesh: calcular dimensiones de grid según número de islas
+        self._mesh_cols: int = 0
 
     def register_island(self, island_id: int, island: Island) -> None:
         with self._lock:
@@ -887,14 +890,35 @@ class MigrationBus:
             result = [ids[(idx - 1) % len(ids)], ids[(idx + 1) % len(ids)]]
         elif self.topology == "fully_connected":
             result = [i for i in ids if i != island_id]
+        elif self.topology == "mesh":
+            # Grid 2D: vecinos N/S/E/W según posición en grid
+            n = len(ids)
+            cols = max(1, int(n ** 0.5))
+            result = self._mesh_neighbors(island_id, ids, cols)
         else:  # "random": 2 vecinos aleatorios — nunca se cachea
             candidates = [i for i in ids if i != island_id]
             return random.sample(candidates, min(2, len(candidates)))
 
-        # Solo cachear topologías deterministas (ring, fully_connected)
+        # Solo cachear topologías deterministas (ring, fully_connected, mesh)
         self._neighbor_cache[island_id] = result
         self._cache_version = self._islands_version
         return result
+
+    def _mesh_neighbors(
+        self, island_id: int, ids: List[int], cols: int
+    ) -> List[int]:
+        """Calcula vecinos en grid 2D para topología mesh."""
+        idx = ids.index(island_id)
+        row, col = divmod(idx, cols)
+        neighbors: List[int] = []
+        # Norte, Sur, Este, Oeste (si existen)
+        for dr, dc in [(-1, 0), (1, 0), (0, 1), (0, -1)]:
+            nr, nc = row + dr, col + dc
+            if 0 <= nr and 0 <= nc < cols:
+                nidx = nr * cols + nc
+                if nidx < len(ids):
+                    neighbors.append(ids[nidx])
+        return neighbors
 
     def migrate(self, island_id: int, generation: int) -> None:
         """Envía migrantes si el intervalo de migración se cumple."""
@@ -1719,10 +1743,10 @@ class MutaLambdaAgent:
             for i in range(config.num_islands)
         ]
 
-        # Sembrar poblaciones iniciales
+        # Sembrar poblaciones iniciales con variantes por isla
+        # para evitar convergencia prematura (todas parten de lo mismo)
         if config.seed_codes:
-            for island in self.islands:
-                island.seed_population(config.seed_codes)
+            self._seed_islands_differentiated(config.seed_codes)
 
         # Componentes opcionales
         self.archive: Optional[SolutionArchive] = None
@@ -1741,11 +1765,54 @@ class MutaLambdaAgent:
         self._generation_times: List[float] = []
         self._global_best_history: List[float] = []
 
+        # Fase 2 — Pool de evolución paralela
+        self._island_pool = IslandPool()
+
         # [MEJ-1] Monitor de parada temprana por convergencia
         self._early_stop = EarlyStopMonitor(
             patience=config.early_stop_patience,
             delta=config.early_stop_delta,
         )
+
+    def _seed_islands_differentiated(self, seed_codes: List[str]) -> None:
+        """
+        Siembra cada isla con una variante mutada del código base.
+
+        En lugar de dar a todas las islas exactamente los mismos seeds
+        (→ convergencia prematura), cada isla recibe una versión
+        ligeramente mutada vía ASTMutator.  La isla 0 recibe el original
+        sin modificar para mantener una referencia.
+        """
+        for i, island in enumerate(self.islands):
+            if i == 0:
+                island.seed_population(seed_codes)
+            else:
+                # Cada isla recibe variantes con distinta intensidad de mutación
+                mutated = []
+                for code in seed_codes:
+                    variant = code
+                    # Aplicar i mutaciones acumulativas (más islas → más variación)
+                    for _ in range(i):
+                        variant = ASTMutator.apply_random_mutation(variant)
+                    mutated.append(variant)
+                island.seed_population(mutated)
+        logger.info(
+            "Seeded %d islands with differentiated populations "
+            "(island 0 = original, islands 1..%d = mutated variants)",
+            len(self.islands), len(self.islands) - 1,
+        )
+
+    def _compute_cross_island_diversity(self) -> float:
+        """
+        Diversidad entre islas: fracción de individuos únicos
+        considerando todas las poblaciones combinadas.
+        """
+        all_codes: List[str] = []
+        for island in self.islands:
+            all_codes.extend(ind.code for ind in island.population)
+        if not all_codes:
+            return 0.0
+        return len(set(all_codes)) / len(all_codes)
 
     def _score_with_novelty(self, individual: Individual) -> float:
         """
@@ -1784,10 +1851,21 @@ class MutaLambdaAgent:
         for gen in range(self.config.generations):
             gen_start = time.perf_counter()
 
-            # Evolucionar cada isla (secuencialmente; las evaluaciones
-            # internas ya son paralelas via ProcessPoolExecutor)
-            for island in self.islands:
-                island.step()
+            # ── Fase 2: Evolución paralela de islas ───────────────────────
+            island_snapshots = self._island_pool.run_generation(
+                self.islands, gen
+            )
+
+            # ── Métricas de diversidad entre islas ────────────────────────
+            cross_diversity = self._compute_cross_island_diversity()
+            if gen % 5 == 0:
+                diversities = [s.diversity for s in island_snapshots]
+                logger.debug(
+                    "Gen %d diversity — intra: [%s] | cross: %.3f",
+                    gen + 1,
+                    ", ".join(f"{d:.3f}" for d in diversities),
+                    cross_diversity,
+                )
 
             # Evolución de prompts (opcional)
             if self.prompt_evolver and task:
@@ -1899,6 +1977,9 @@ class MutaLambdaAgent:
             "num_islands": len(self.islands),
             "stagnant_generations": self._early_stop.stagnant_generations,
             "novelty_alpha": self.config.novelty_alpha,
+            # Fase 2 — métricas de diversidad
+            "cross_island_diversity": self._compute_cross_island_diversity(),
+            "parallel_generations": self._island_pool.generation_count,
         }
 
 
@@ -2182,7 +2263,7 @@ def main() -> None:
     parser.add_argument("--generations", type=int, default=20)
     parser.add_argument("--pop-size", type=int, default=6)
     parser.add_argument("--topology", default="ring",
-                        choices=["ring", "fully_connected", "random"])
+                        choices=["ring", "fully_connected", "random", "mesh"])
     parser.add_argument("--novelty-alpha", type=float, default=0.15,
                         help="Peso del bonus de novedad en el score (0.0–1.0)")
     parser.add_argument("--early-stop-patience", type=int, default=15)
