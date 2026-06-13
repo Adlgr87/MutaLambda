@@ -283,6 +283,104 @@ class PromptGenome:
             parts.extend(("\nInstructions: ", self.mutation_instructions))
         return "".join(parts)
 
+    @classmethod
+    def crossover(
+        cls,
+        parent_a: "PromptGenome",
+        parent_b: "PromptGenome",
+    ) -> "PromptGenome":
+        """
+        Uniform crossover: each component independently inherits
+        from one parent with equal probability.
+
+        Few‑shot examples are merged and randomly sampled.
+        Temperature is averaged with gaussian noise (σ=0.02).
+        """
+        sys = (
+            parent_a.system_prompt
+            if random.random() < 0.5
+            else parent_b.system_prompt
+        )
+        instr = (
+            parent_a.mutation_instructions
+            if random.random() < 0.5
+            else parent_b.mutation_instructions
+        )
+        temp = (parent_a.temperature + parent_b.temperature) / 2.0
+        temp += random.gauss(0, 0.02)
+        temp = max(0.1, min(1.0, temp))
+
+        all_fewshot = list(
+            set(parent_a.few_shot_examples + parent_b.few_shot_examples)
+        )
+        random.shuffle(all_fewshot)
+        fewshot = all_fewshot[:max(1, len(all_fewshot) // 2)]
+
+        return cls(
+            system_prompt=sys,
+            few_shot_examples=fewshot,
+            mutation_instructions=instr,
+            temperature=temp,
+        )
+
+    def mutate(self) -> "PromptGenome":
+        """
+        Apply a random mutation, returning a new mutated copy.
+
+        Mutations: word swap, suffix append, temperature jitter,
+        few‑shot example drop/add, instruction rephrase.
+        """
+        mutant = copy.deepcopy(self)
+        op = random.randint(0, 5)
+        if op == 0:
+            # Swap two words in system prompt
+            words = mutant.system_prompt.split()
+            if len(words) >= 2:
+                i, j = random.sample(range(len(words)), 2)
+                words[i], words[j] = words[j], words[i]
+                mutant.system_prompt = " ".join(words)
+        elif op == 1:
+            # Append suffix to system prompt
+            suffixes = [
+                " Be concise.",
+                " Return only valid Python.",
+                " Prioritize readability.",
+                " Avoid external dependencies.",
+            ]
+            mutant.system_prompt += random.choice(suffixes)
+        elif op == 2:
+            # Jitter temperature
+            mutant.temperature += random.gauss(0, 0.05)
+            mutant.temperature = max(0.1, min(1.0, mutant.temperature))
+        elif op == 3:
+            # Drop random few‑shot example
+            if mutant.few_shot_examples:
+                mutant.few_shot_examples.pop(
+                    random.randrange(len(mutant.few_shot_examples))
+                )
+        elif op == 4:
+            # Add generic few‑shot
+            mutant.few_shot_examples.append((
+                "def solve(n): return n * (n + 1) // 2",
+                "def solve(n):\n    return n * (n + 1) // 2\n",
+            ))
+        elif op == 5:
+            # Rephrase mutation instructions
+            synonyms = {
+                "optimize": "enhance", "ensure": "guarantee",
+                "avoid": "prevent", "use": "employ",
+            }
+            words = mutant.mutation_instructions.split()
+            for i, w in enumerate(words):
+                low = w.lower().rstrip(",.;")
+                if low in synonyms:
+                    words[i] = synonyms[low] + (
+                        w[len(low):] if len(w) > len(low) else ""
+                    )
+                    break
+            mutant.mutation_instructions = " ".join(words)
+        return mutant
+
 
 @dataclass
 class ArchivedSolution:
@@ -1952,9 +2050,12 @@ class MutaLambdaAgent:
             except ImportError:
                 logger.warning("FAISS/sentence-transformers not available; archive disabled.")
 
-        self.prompt_evolver: Optional[PromptEvolver] = None
+        self.prompt_evolver: Optional[RichPromptEvolver] = None
         if config.prompt_evolution:
-            self.prompt_evolver = PromptEvolver(self.llm_fn, self.evaluator)
+            from prompt_evolution import RichPromptEvolver
+            self.prompt_evolver = RichPromptEvolver(
+                self.llm_fn, self.evaluator, archive=self.archive
+            )
 
         # Métricas
         self._start_time: float = 0.0
