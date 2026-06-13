@@ -115,6 +115,17 @@ class FitnessVector:
         """Alias for weighted_sum() with default weights."""
         return self.weighted_sum()
 
+    def to_dict(self) -> Dict[str, float]:
+        """Exporta los 6 objetivos como diccionario (para serialización)."""
+        return {
+            "correctness": self.correctness,
+            "latency_p50": self.latency_p50,
+            "latency_p99": self.latency_p99,
+            "throughput": self.throughput,
+            "memory_peak_mb": self.memory_peak_mb,
+            "parsimony": self.parsimony,
+        }
+
     # ── Helpers ──────────────────────────────────────────────────────────
 
     @classmethod

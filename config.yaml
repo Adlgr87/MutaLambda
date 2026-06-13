@@ -19,6 +19,19 @@ evolution:
     threshold: 0.85           # Similitud coseno mínima para considerar convergencia
     factor: 0.15              # Multiplicador del score (score *= 1 + factor * sim)
 
+  # ── Resurrection (time-travel backtracking, Fase 7) ──────────────
+  resurrection:
+    enabled: true               # Activar resurrección de ramas abandonadas
+    threshold: 8                # Generaciones estancadas antes del primer intento
+    max_attempts: 3             # Máximo de resurrecciones por run
+    min_score_ratio: 0.3        # Score mínimo (ratio vs global_best)
+
+  # ── Cross-branch crossover (Fase 7) ──────────────────────────────
+  cross_branch_crossover:
+    enabled: true               # Activar crossover entre ramas distantes
+    prob: 0.05                  # Probabilidad de usar cross-branch por hijo
+    min_distance: 3             # Distancia genealógica mínima
+
 # ── Población por isla ──────────────────────────────────────────────
 population:
   size: 8                     # Individuos por isla

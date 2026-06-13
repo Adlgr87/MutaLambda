@@ -213,12 +213,234 @@ class Individual:
     score: float = float("-inf")
     fitness: Optional[FitnessVector] = None
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    parent_ids: Optional[List[str]] = None   # IDs de los padres en el árbol genealógico
 
     def __lt__(self, other: "Individual") -> bool:
         return self.score < other.score
 
     def __repr__(self) -> str:
         return f"Individual(id={self.id}, score={self.score:.4f})"
+
+
+# ── Fase 7: Árbol Genealógico (Lineage DAG) ──────────────────────────────────
+
+
+@dataclass
+class LineageNode:
+    """Nodo en el DAG genealógico de la evolución.
+
+    Cada individuo evaluado se registra como nodo. Los edges
+    representan relaciones padre→hijo (mutación o crossover).
+    """
+    id: str
+    generation: int
+    score: float
+    code_hash: int = 0
+    fitness: Dict[str, float] = field(default_factory=dict)
+    island_id: int = 0
+    parent_ids: List[str] = field(default_factory=list)
+    alive: bool = True
+    resurrected: bool = False
+
+
+class LineageGraph:
+    """DAG que registra la genealogía completa de una corrida evolutiva.
+
+    Permite trazabilidad, búsqueda de ramas abandonadas (resurrección),
+    distancia genealógica (cross-branch crossover) y serialización.
+    """
+
+    def __init__(self) -> None:
+        self.nodes: Dict[str, LineageNode] = {}
+        self._roots: List[str] = []
+        self._gen_map: Dict[int, List[str]] = {}
+        self._resurrection_count: int = 0
+
+    def record(self, child: Individual,
+               parents: List[Individual],
+               generation: int,
+               island_id: int,
+               reason: str = "mutation") -> LineageNode:
+        """Registra un nuevo individuo y sus padres en el DAG."""
+        # Registrar padres si no existen (semillas)
+        for parent in parents:
+            if parent.id not in self.nodes:
+                p_node = LineageNode(
+                    id=parent.id,
+                    generation=max(0, generation - 1),
+                    score=parent.score,
+                    code_hash=hash(parent.code) & 0xFFFFFFFF,
+                    fitness=(parent.fitness.to_dict()
+                             if parent.fitness else {}),
+                    island_id=island_id,
+                    parent_ids=parent.parent_ids or [],
+                    alive=True,
+                )
+                self.nodes[parent.id] = p_node
+                self._gen_map.setdefault(p_node.generation, []).append(parent.id)
+                if not parent.parent_ids:
+                    self._roots.append(parent.id)
+
+        # Crear nodo hijo
+        child_node = LineageNode(
+            id=child.id,
+            generation=generation,
+            score=child.score,
+            code_hash=hash(child.code) & 0xFFFFFFFF,
+            fitness=(child.fitness.to_dict() if child.fitness else {}),
+            island_id=island_id,
+            parent_ids=[p.id for p in parents],
+            alive=True,
+        )
+        self.nodes[child.id] = child_node
+        self._gen_map.setdefault(generation, []).append(child.id)
+
+        # Marcar padres como «no vivos» si fueron reemplazados
+        for parent in parents:
+            pn = self.nodes.get(parent.id)
+            if pn:
+                pn.alive = False
+
+        return child_node
+
+    def get_ancestors(self, node_id: str, max_depth: int = -1) -> List[str]:
+        """Cadena de ancestros (BFS hacia atrás)."""
+        if node_id not in self.nodes:
+            return []
+        ancestors: List[str] = []
+        visited: set = {node_id}
+        queue: deque = deque([node_id])
+        depth = 0
+        while queue and (max_depth < 0 or depth < max_depth):
+            current = queue.popleft()
+            node = self.nodes.get(current)
+            if not node:
+                continue
+            for pid in node.parent_ids:
+                if pid not in visited:
+                    visited.add(pid)
+                    ancestors.append(pid)
+                    queue.append(pid)
+            depth += 1
+        return ancestors
+
+    def get_genealogical_distance(self, id_a: str, id_b: str) -> Optional[int]:
+        """Distancia genealógica (BFS bidireccional en DAG no dirigido)."""
+        if id_a == id_b:
+            return 0
+        if id_a not in self.nodes or id_b not in self.nodes:
+            return None
+
+        # BFS desde id_a
+        visited: Dict[str, int] = {id_a: 0}
+        queue: deque = deque([(id_a, 0)])
+
+        while queue:
+            current, dist = queue.popleft()
+            node = self.nodes.get(current)
+            if not node:
+                continue
+
+            # Vecinos = padres + hijos en el DAG
+            neighbors = list(node.parent_ids)
+            for nid, nnode in self.nodes.items():
+                if current in nnode.parent_ids:
+                    neighbors.append(nid)
+
+            for neighbor in neighbors:
+                if neighbor == id_b:
+                    return dist + 1
+                if neighbor not in visited:
+                    visited[neighbor] = dist + 1
+                    queue.append((neighbor, dist + 1))
+
+        return None
+
+    def find_abandoned_branches(self,
+                                current_best_id: str,
+                                threshold_score: float,
+                                max_candidates: int = 5) -> List[LineageNode]:
+        """Busca ramas abandonadas con potencial para resurrección.
+
+        Criterios:
+        - No está en la cadena de ancestros del current_best
+        - score > threshold_score
+        - No resucitado previamente
+        """
+        active_ancestors = set(self.get_ancestors(current_best_id))
+        active_ancestors.add(current_best_id)
+
+        candidates: List[LineageNode] = []
+        for node_id, node in self.nodes.items():
+            if node_id in active_ancestors:
+                continue
+            if node.score <= threshold_score:
+                continue
+            if node.resurrected:
+                continue
+            candidates.append(node)
+
+        candidates.sort(key=lambda n: n.score, reverse=True)
+        return candidates[:max_candidates]
+
+    def stats(self) -> Dict[str, Any]:
+        """Estadísticas resumidas del grafo genealógico."""
+        if not self.nodes:
+            return {"total_nodes": 0, "max_depth": 0, "branches": 0,
+                    "resurrections": 0, "generations": 0}
+        depths = [len(self.get_ancestors(n.id)) for n in self.nodes.values()]
+        return {
+            "total_nodes": len(self.nodes),
+            "max_depth": max(depths),
+            "avg_depth": round(sum(depths) / len(depths), 1),
+            "branches": len(self._roots),
+            "resurrections": self._resurrection_count,
+            "generations": len(self._gen_map),
+        }
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serializa el grafo para checkpointing."""
+        return {
+            "nodes": {
+                nid: {
+                    "id": node.id,
+                    "generation": node.generation,
+                    "score": node.score,
+                    "code_hash": node.code_hash,
+                    "fitness": node.fitness,
+                    "island_id": node.island_id,
+                    "parent_ids": node.parent_ids,
+                    "alive": node.alive,
+                    "resurrected": node.resurrected,
+                }
+                for nid, node in self.nodes.items()
+            },
+            "roots": self._roots,
+            "gen_map": self._gen_map,
+            "resurrection_count": self._resurrection_count,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "LineageGraph":
+        """Restaura el grafo desde un checkpoint."""
+        graph = cls()
+        for nid, ndata in data.get("nodes", {}).items():
+            node = LineageNode(
+                id=ndata["id"],
+                generation=ndata["generation"],
+                score=ndata["score"],
+                code_hash=ndata.get("code_hash", 0),
+                fitness=ndata.get("fitness", {}),
+                island_id=ndata.get("island_id", 0),
+                parent_ids=ndata.get("parent_ids", []),
+                alive=ndata.get("alive", True),
+                resurrected=ndata.get("resurrected", False),
+            )
+            graph.nodes[nid] = node
+        graph._roots = data.get("roots", [])
+        graph._gen_map = data.get("gen_map", {})
+        graph._resurrection_count = data.get("resurrection_count", 0)
+        return graph
 
 
 @dataclass
@@ -960,6 +1182,8 @@ class MigrationBus:
         self._islands_version: int = 0
         # Mesh: calcular dimensiones de grid según número de islas
         self._mesh_cols: int = 0
+        # Lineage tracking (Fase 7)
+        self.lineage_graph: Optional["LineageGraph"] = None
 
     def register_island(self, island_id: int, island: Island) -> None:
         with self._lock:
@@ -1125,6 +1349,23 @@ class Island:
             ind.score = res.score
             ind.fitness = res.fitness  # Fase 6 — NSGA-II necesita el vector
 
+        # Fase 7: registrar linaje tras evaluación (scores ya asignados)
+        if (self.migration_bus is not None
+                and self.migration_bus.lineage_graph is not None
+                and self.generation > 0):
+            for ind in self.population:
+                if ind.parent_ids:
+                    try:
+                        parents = [
+                            Individual(id=pid, code="")
+                            for pid in ind.parent_ids
+                        ]
+                        self.migration_bus.lineage_graph.record(
+                            ind, parents, self.generation, self.id,
+                        )
+                    except Exception:
+                        pass
+
         # Actualizar mejor local
         top = max(self.population, key=lambda x: x.score)
         self._history.append(top.score)
@@ -1164,18 +1405,25 @@ class Island:
             else:
                 parent = random.choice(elites)
 
+            child_parents: List[Individual] = [parent]
             # 15% de probabilidad de crossover si hay al menos dos elites
             if parent.score < 0 and random.random() < 0.10:
                 mutated_code = self._redesign(parent.code, parent.score)
             elif random.random() < 0.15 and len(elites) >= 2:
                 other = random.choice([e for e in elites if e != parent])
                 mutated_code = self._crossover(parent.code, other.code)
+                child_parents.append(other)
             else:
                 error_info = error_map.get(parent.id, "")
                 mutated_code = self._mutate_with_context(
                     parent.code, parent.score, error_info
                 )
-            new_pop.append(Individual(code=mutated_code))
+
+            child = Individual(code=mutated_code)
+            # Fase 7: vincular padres para registro post-evaluación
+            if self.migration_bus is not None and self.migration_bus.lineage_graph is not None:
+                child.parent_ids = [p.id for p in child_parents]
+            new_pop.append(child)
 
         self.population = new_pop
 
@@ -1975,6 +2223,14 @@ class EvolveConfig:
     convergent_boost_enabled: bool = True
     convergent_boost_threshold: float = 0.85   # cosine similarity mínima
     convergent_boost_factor: float = 0.15      # score *= (1 + factor * sim)
+    # Fase 7: Retroceso Temporal Multiversal (time-travel backtracking)
+    resurrection_enabled: bool = True
+    resurrection_threshold: int = 8       # gens estancadas antes de intentar resurrección
+    resurrection_max_attempts: int = 3    # máximo de resurrecciones por run
+    resurrection_min_score_ratio: float = 0.3  # score mínimo vs global_best
+    cross_branch_crossover_enabled: bool = True
+    cross_branch_crossover_prob: float = 0.05   # probabilidad por hijo nuevo
+    cross_branch_min_distance: int = 3           # distancia genealógica mínima
 
     @classmethod
     def from_yaml(cls, path: str) -> "EvolveConfig":
@@ -2009,6 +2265,14 @@ class EvolveConfig:
             convergent_boost_enabled=evo.get("convergent_boost", {}).get("enabled", True),
             convergent_boost_threshold=evo.get("convergent_boost", {}).get("threshold", 0.85),
             convergent_boost_factor=evo.get("convergent_boost", {}).get("factor", 0.15),
+            # Fase 7: Retroceso Temporal
+            resurrection_enabled=evo.get("resurrection", {}).get("enabled", True),
+            resurrection_threshold=evo.get("resurrection", {}).get("threshold", 8),
+            resurrection_max_attempts=evo.get("resurrection", {}).get("max_attempts", 3),
+            resurrection_min_score_ratio=evo.get("resurrection", {}).get("min_score_ratio", 0.3),
+            cross_branch_crossover_enabled=evo.get("cross_branch_crossover", {}).get("enabled", True),
+            cross_branch_crossover_prob=evo.get("cross_branch_crossover", {}).get("prob", 0.05),
+            cross_branch_min_distance=evo.get("cross_branch_crossover", {}).get("min_distance", 3),
         )
 
         # Set sandbox params as instance attributes
@@ -2162,6 +2426,10 @@ class MutaLambdaAgent:
             delta=config.early_stop_delta,
         )
 
+        # Fase 7: Árbol genealógico global
+        self._lineage = LineageGraph()
+        self.migration_bus.lineage_graph = self._lineage
+
     def _seed_islands_differentiated(self, seed_codes: List[str]) -> None:
         """
         Siembra cada isla con una variante mutada del código base.
@@ -2307,6 +2575,111 @@ class MutaLambdaAgent:
         )
         return {"boosted": boosted_count, "pairs": len(convergent_pairs)}
 
+    # ── Fase 7: Retroceso Temporal Multiversal ──────────────────────────
+
+    def _find_stagnant_island(self) -> Optional[Island]:
+        """Retorna la isla más estancada (local_best con menor score)."""
+        active = [isl for isl in self.islands if isl.local_best is not None]
+        if not active:
+            return None
+        return min(active, key=lambda isl: isl.local_best.score)
+
+    def _resurrect_branch(self, node: LineageNode) -> Individual:
+        """Resucita una rama abandonada: crea un individuo con el código
+        original del nodo + mutación agresiva para explorar variantes.
+
+        Se aplica 3× la tasa de mutación normal y se evitan los operadores
+        usados en la rama original (simulando «viaje en el tiempo»
+        para explorar un camino alternativo).
+        """
+        self._lineage._resurrection_count += 1
+        node.resurrected = True
+
+        # Crear individuo base desde el código del nodo abandonado
+        # (el código original no está en el grafo, solo metadata — usamos
+        #  una reconstrucción parcial: mutamos el local_best de la isla
+        #  estancada para diversificar la rama resucitada)
+        stagnant = self._find_stagnant_island()
+        base_code = stagnant.local_best.code if stagnant else "def solution():\n    pass"
+
+        # Mutación agresiva: 3 rondas de mutación para divergir rápido
+        ops = ["rename_var", "dead_store", "loop_unroll",
+               "swap_ifelse", "hoist_invariant", "insert_unreachable"]
+        code = base_code
+        for _ in range(3):
+            code = _ast_guaranteed_mutation(code, random.choice(ops))
+
+        resurrected = Individual(
+            code=code,
+            parent_ids=[node.id],  # el nodo resucitado es el «ancestro»
+        )
+        logger.info(
+            "♜ Branch resurrected: node=%s gen=%d score=%.4f",
+            node.id[:8], node.generation, node.score,
+        )
+        return resurrected
+
+    def _cross_branch_crossover(self, island: Island) -> Optional[Individual]:
+        """Intenta crossover entre ramas genealógicamente distantes.
+
+        Selecciona un padre con alto correctness y otro con alta throughput
+        de ramas distintas (distancia >= min_distance). Si no encuentra
+        candidatos válidos, retorna None.
+        """
+        if not self.config.cross_branch_crossover_enabled:
+            return None
+        if len(self._lineage.nodes) < 10:
+            return None
+        if random.random() > self.config.cross_branch_crossover_prob:
+            return None
+
+        min_dist = self.config.cross_branch_min_distance
+
+        # Buscar nodos con fitness parcial conocido
+        correctness_nodes = []
+        throughput_nodes = []
+        for nid, node in self._lineage.nodes.items():
+            if not node.fitness:
+                continue
+            corr = node.fitness.get("correctness", 0.0)
+            tp = node.fitness.get("throughput", 0.0)
+            if corr > 0.5:
+                correctness_nodes.append(node)
+            if tp > 0.5:
+                throughput_nodes.append(node)
+
+        if len(correctness_nodes) < 1 or len(throughput_nodes) < 1:
+            return None
+
+        # Intentar hasta 10 combinaciones
+        for _ in range(10):
+            node_a = random.choice(correctness_nodes)
+            node_b = random.choice(throughput_nodes)
+            if node_a.id == node_b.id:
+                continue
+            dist = self._lineage.get_genealogical_distance(node_a.id, node_b.id)
+            if dist is not None and dist >= min_dist:
+                # Usar el código del local_best de islas diferentes
+                candidates_a = [isl for isl in self.islands
+                                if isl.id != island.id and isl.local_best]
+                if not candidates_a:
+                    return None
+                parent_a = random.choice(candidates_a).local_best
+                parent_b = island.local_best or random.choice(island.population)
+
+                child_code = island._crossover(parent_a.code, parent_b.code)
+                child = Individual(
+                    code=child_code,
+                    parent_ids=[parent_a.id, parent_b.id],
+                )
+                logger.debug(
+                    "Cross-branch crossover: nodes %s × %s (dist=%d)",
+                    node_a.id[:8], node_b.id[:8], dist,
+                )
+                return child
+
+        return None
+
     def _score_with_novelty(self, individual: Individual) -> float:
         """
         [MEJ-3] Combina fitness funcional con bonus de novedad semántica.
@@ -2371,6 +2744,28 @@ class MutaLambdaAgent:
                         "Gen %d — convergent boost: %d inds × %d pairs",
                         gen + 1, boost_stats["boosted"], boost_stats.get("pairs", 0),
                     )
+
+            # ── Fase 7: Retroceso Temporal (resurrección de ramas) ─────
+            if (self.config.resurrection_enabled
+                    and self._early_stop.stagnant_generations
+                    >= self.config.resurrection_threshold
+                    and self._lineage._resurrection_count
+                    < self.config.resurrection_max_attempts
+                    and global_best is not None):
+                threshold = (self.config.resurrection_min_score_ratio
+                             * global_best.score)
+                candidates = self._lineage.find_abandoned_branches(
+                    global_best.id, threshold,
+                )
+                if candidates:
+                    resurrected = self._resurrect_branch(candidates[0])
+                    stagnant_island = self._find_stagnant_island()
+                    if stagnant_island:
+                        stagnant_island.population[0] = resurrected
+                        logger.info(
+                            "Gen %d — ♜ resurrected branch → island %d",
+                            gen + 1, stagnant_island.id,
+                        )
 
             # ── Fase 6: NSGA-II stats ────────────────────────────────────
             if gen % 5 == 0:

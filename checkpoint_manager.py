@@ -34,6 +34,7 @@ from muta_lambda import (
     EvolveConfig,
     Individual,
     Island,
+    LineageGraph,
     logger,
     MutaLambdaAgent,
     SandboxEvaluator,
@@ -72,6 +73,9 @@ class Checkpoint:
 
     # Config metadata
     config_dir: str = field(default_factory=lambda: os.getcwd())
+
+    # Fase 7: Lineage DAG
+    lineage: Optional[Dict[str, Any]] = None
 
 
 # ── Save ──────────────────────────────────────────────────────────────
@@ -152,6 +156,10 @@ def save_full_checkpoint(
     checkpoint.global_best_history = agent._global_best_history
     checkpoint.generation_times = agent._generation_times
 
+    # ── Lineage graph (Fase 7) ────────────────────────────────────────
+    if hasattr(agent, '_lineage') and agent._lineage.nodes:
+        checkpoint.lineage = agent._lineage.to_dict()
+
     # ── Serialise ────────────────────────────────────────────────────
     ckpt_path = chk_dir / "checkpoint.json"
     with open(ckpt_path, "w", encoding="utf-8") as f:
@@ -215,6 +223,7 @@ def _serialise_checkpoint(cp: Checkpoint) -> Dict[str, Any]:
         "prompt_metrics": cp.prompt_metrics,
         "random_state": random_serialised,
         "numpy_state": numpy_serialised,
+        "lineage": cp.lineage,
     }
 
 
@@ -264,6 +273,7 @@ def load_checkpoint(path: str | Path) -> Checkpoint:
         archive_path=data.get("archive_path"),
         prompt_population=data.get("prompt_population"),
         prompt_metrics=data.get("prompt_metrics"),
+        lineage=data.get("lineage"),
     )
 
     # Restore RNG state
@@ -349,6 +359,11 @@ def resume_agent(
     # Restore metrics
     agent._global_best_history = cp.global_best_history
     agent._generation_times = cp.generation_times
+
+    # Restore lineage graph (Fase 7)
+    if cp.lineage and hasattr(agent, '_lineage'):
+        agent._lineage = LineageGraph.from_dict(cp.lineage)
+        agent.migration_bus.lineage_graph = agent._lineage
 
     logger.info(
         "Agent resumed from checkpoint: gen %d, %d islands restored, "
