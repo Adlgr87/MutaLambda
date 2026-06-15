@@ -3,6 +3,22 @@ MutaLambda Agent — Fully Optimized + Patched Implementation
 =============================================================
 
 Emulación funcional del modelo MutaLambda:
+
+── TABLE OF CONTENTS ─────────────────────────────────────────────────────────
+  §  1  Data Classes (Individual, FitnessVector, EvalResult, …)   ~L 206
+  §  2  Island + IslandConfig                                     ~L 1066
+  §  3  MigrationBus (ring/mesh/fully_connected/random)           ~L 1166
+  §  4  SandboxEvaluator (subprocess + resource limits)           ~L 1275
+  §  5  AST-Guaranteed Mutation (13 operators)                    ~L 1500
+  §  6  MutaLambdaAgent (orchestrator, run, evolution loop)       ~L 2338
+  §  7  EvolveConfig + EarlyStopMonitor                           ~L 1960
+  §  8  Checkpointing + Resume                                    ~L 2828
+  §  9  CLI (argparse, --config, --resume, --dashboard)           ~L 3180
+  § 10  SolutionArchive (FAISS + Novelty Search)                  ~L 2088
+  § 11  LineageGraph (Multiversal DAG)                            ~L 228
+  § 12  ConvergentBoost + Cross-branch Crossover                  ~L 2494
+  § 13  HITL Dashboard hooks                                      ~L 2400
+── ────────────────────────────────────────────────────────────────────────────
   - Arquitectura Multi-Isla con migración topológica
   - Evaluación en Sandbox seguro (subprocess aislado)
   - Sistema de Prompts Evolutivo (PromptGenome)
@@ -2231,6 +2247,8 @@ class EvolveConfig:
     cross_branch_crossover_enabled: bool = True
     cross_branch_crossover_prob: float = 0.05   # probabilidad por hijo nuevo
     cross_branch_min_distance: int = 3           # distancia genealógica mínima
+    # Parallel backend
+    use_process_pool: bool = False  # True = ProcessPoolExecutor (CPU-bound), False = ThreadPool (I/O)
 
     @classmethod
     def from_yaml(cls, path: str) -> "EvolveConfig":
@@ -2273,6 +2291,7 @@ class EvolveConfig:
             cross_branch_crossover_enabled=evo.get("cross_branch_crossover", {}).get("enabled", True),
             cross_branch_crossover_prob=evo.get("cross_branch_crossover", {}).get("prob", 0.05),
             cross_branch_min_distance=evo.get("cross_branch_crossover", {}).get("min_distance", 3),
+            use_process_pool=evo.get("use_process_pool", False),
         )
 
         # Set sandbox params as instance attributes
@@ -2481,16 +2500,44 @@ class MutaLambdaAgent:
         self._pending_hints = pending
 
     def _compute_cross_island_diversity(self) -> float:
+        """Diversidad entre islas: promedio de distancia Jaccard pairwise.
+
+        Compara cada par de islas y mide cuán diferentes son sus
+        conjuntos de código. 1.0 = completamente disjuntas (máx diversidad),
+        0.0 = todas las islas tienen exactamente el mismo código.
+
+        Jaccard(A,B) = |A ∩ B| / |A ∪ B|
+        Diversidad  = 1 - promedio(Jaccard)
         """
-        Diversidad entre islas: fracción de individuos únicos
-        considerando todas las poblaciones combinadas.
-        """
-        all_codes: List[str] = []
-        for island in self.islands:
-            all_codes.extend(ind.code for ind in island.population)
-        if not all_codes:
+        n = len(self.islands)
+        if n < 2:
             return 0.0
-        return len(set(all_codes)) / len(all_codes)
+
+        # Tokenizar cada isla como conjunto de tokens (más robusto que strings)
+        island_tokens: List[Set[str]] = []
+        for isl in self.islands:
+            tokens: Set[str] = set()
+            for ind in isl.population:
+                tokens.update(ind.code.split())
+            island_tokens.append(tokens)
+
+        total_jaccard = 0.0
+        pairs = 0
+        for i in range(n):
+            for j in range(i + 1, n):
+                a, b = island_tokens[i], island_tokens[j]
+                if not a and not b:
+                    continue  # ambas vacías → no cuentan
+                union = len(a | b)
+                if union == 0:
+                    continue
+                intersection = len(a & b)
+                total_jaccard += intersection / union
+                pairs += 1
+
+        if pairs == 0:
+            return 0.0
+        return 1.0 - (total_jaccard / pairs)
 
     def _code_similarity(self, code_a: str, code_b: str) -> float:
         """Similitud semántica entre dos fragmentos de código (0.0–1.0).

@@ -13,7 +13,7 @@ evitar la convergencia prematura mediante:
 from __future__ import annotations
 
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
@@ -45,18 +45,32 @@ class IslandPool:
     """
     Coordinador de evolución paralela para múltiples islas.
 
-    Usa ThreadPoolExecutor para ejecutar island.step() concurrentemente.
-    Cada isla comparte el mismo MigrationBus (thread‑safe vía RLock).
+    Usa ThreadPoolExecutor (default) o ProcessPoolExecutor para ejecutar
+    island.step() concurrentemente. Cada isla comparte el mismo MigrationBus
+    (thread‑safe vía RLock).
 
     Parameters
     ----------
-    max_workers : int
-        Número máximo de threads para evolución paralela.
-        Default: min(32, num_islands + 4) para dejar margen al OS.
+    max_workers : int, optional
+        Número máximo de workers. Default: min(32, num_islands + 4).
+    backend : str
+        "thread" (default) para ThreadPoolExecutor (I/O-bound, LLM calls).
+        "process" para ProcessPoolExecutor (CPU-bound, sandbox pesada).
+        NOTA: "process" requiere que Island sea pickleable — actualmente
+        limitado a islas sin LLM callables complejos.
+
+    Warning
+    -------
+    ``backend="process"`` está en fase experimental. Las islas con LLM
+    callables (funciones lambda/closures) no son pickleables y causarán
+    errores. Se recomienda usar "thread" a menos que el sandbox sea el
+    cuello de botella principal.
     """
 
-    def __init__(self, max_workers: Optional[int] = None):
+    def __init__(self, max_workers: Optional[int] = None,
+                 backend: str = "thread"):
         self._max_workers = max_workers
+        self.backend = backend
         self._lock = threading.Lock()
         self._generation_snapshots: List[List[IslandSnapshot]] = []
 
@@ -82,7 +96,11 @@ class IslandPool:
 
         snapshots: Dict[int, IslandSnapshot] = {}
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        ExecutorClass = (
+            ProcessPoolExecutor if self.backend == "process"
+            else ThreadPoolExecutor
+        )
+        with ExecutorClass(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(self._step_island, island): island.id
                 for island in islands

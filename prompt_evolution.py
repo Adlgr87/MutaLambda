@@ -26,17 +26,18 @@ from muta_lambda import (
 
 # ── Enriched mutation operators ─────────────────────────────────────────
 
+# ── Rich mutation operators (13 unique) ──────────────────────────────────────
 _MUTATION_OPS_RICH: List[Tuple[str, str]] = [
     # System prompt mutations
     ("sys_mut_word", "swap two random words"),
     ("sys_add_reminder", "append: Always output raw Python only"),
-    ("sys_add_constraint", "append: Avoid external dependencies"),
-    ("sys_add_constraint", "append: Use type hints everywhere"),
+    ("sys_add_constraint_a", "append: Avoid external dependencies"),
+    ("sys_add_constraint_b", "append: Use type hints everywhere"),
     ("sys_remove_sentence", "delete last sentence"),
     ("sys_emphasize", "prefix: IMPORTANT: "),
     # Mutation instruction mutations
-    ("instr_add", "Add: Prioritize algorithmic correctness"),
-    ("instr_add", "Add: Optimize for memory efficiency"),
+    ("instr_add_algo", "Add: Prioritize algorithmic correctness"),
+    ("instr_add_mem", "Add: Optimize for memory efficiency"),
     ("instr_remove", "remove last instruction line"),
     ("instr_rephrase", "rephrase current instructions"),
     # Few-shot mutations
@@ -287,13 +288,13 @@ class RichPromptEvolver:
             self._mut_sys_swap_words(genome)
         elif op_type == "sys_add_reminder":
             genome.system_prompt += " " + arg
-        elif op_type == "sys_add_constraint":
+        elif op_type in ("sys_add_constraint_a", "sys_add_constraint_b"):
             genome.system_prompt += ". " + arg
         elif op_type == "sys_remove_sentence":
             self._mut_sys_remove_sentence(genome)
         elif op_type == "sys_emphasize":
             genome.system_prompt = arg + genome.system_prompt
-        elif op_type == "instr_add":
+        elif op_type in ("instr_add_algo", "instr_add_mem"):
             genome.mutation_instructions = (
                 genome.mutation_instructions + ". " + arg
                 if genome.mutation_instructions else arg

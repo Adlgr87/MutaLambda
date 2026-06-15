@@ -15,6 +15,14 @@ Reference
 ---------
 Deb, K., et al. "A Fast and Elitist Multiobjective Genetic Algorithm:
 NSGA-II." IEEE Trans. Evol. Comput., 2002.
+
+Complexity
+----------
+- non_dominated_sort: O(M·N²) where M = objectives (6), N = population size
+- crowding_distance:   O(M·N log N)
+- For typical MutaLambda configs (N ≤ 32 per island, M=6), overhead is
+  negligible (< 100 µs per generation). For larger populations, consider
+  Kung's algorithm (O(N log N) for M=2) or the Rust backend (future).
 """
 
 from __future__ import annotations

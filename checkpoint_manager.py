@@ -122,7 +122,8 @@ def save_full_checkpoint(
     # ── Island populations (ALL individuals) ─────────────────────────
     for island in agent.islands:
         pop_data = [
-            {"id": ind.id, "code": ind.code, "score": ind.score}
+            {"id": ind.id, "code": ind.code, "score": ind.score,
+             "parent_ids": ind.parent_ids or []}
             for ind in island.population
         ]
         checkpoint.island_populations.append(pop_data)
@@ -330,7 +331,8 @@ def resume_agent(
         if i < len(cp.island_populations):
             pop_data = cp.island_populations[i]
             island.population = [
-                Individual(code=ind["code"], score=ind["score"], id=ind.get("id", ""))
+                Individual(code=ind["code"], score=ind["score"], id=ind.get("id", ""),
+                               parent_ids=ind.get("parent_ids", []))
                 for ind in pop_data
             ]
             if island.population:
