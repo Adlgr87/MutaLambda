@@ -111,6 +111,45 @@
 
 ---
 
+## 🧩 Optional Evolutionary Extensions (muta_ext)
+
+MutaLambda ships a **plug‑in package** `muta_ext/` that adds powerful, opt‑in capabilities without touching the core evolution loop. All extensions are disabled by default and can be toggled via the new flags in `EvolveConfig` (e.g. `enable_numerical_health`, `enable_tipping_detection`).
+
+| Module | Purpose | Key API |
+|--------|---------|---------|
+| `lineage/compression.py` | Differential compression of inactive `LineageGraph` nodes (zlib + optional diff). Reduces RAM usage >60 % on runs with >1 000 individuals. | `LineageCompressor.compress_inactive()`, `decompress_node()` |
+| `evaluation/cache.py` | Canonical AST cache keyed by a structural hash (normalised variable names, stripped metadata). Skips sandbox execution for duplicate code. | `CanonicalCache.get()`, `put()`, `stats()` |
+| `evaluation/numerical_health.py` | Static analysis of generated code for numerical stability (stiffness, division safety, exponential calls). Adds a `numerical_health` dimension to `FitnessVector`. | `evaluate_numerical_health()` |
+| `diagnostics/tipping.py` | Robust MAD‑based detection of tipping points in the fitness time‑series. Emits `TippingEvent` objects with magnitude and severity. | `detect_tipping()` |
+| `diagnostics/evolution_report.py` | Computes Shannon entropy, Lyapunov exponent, spectral radius and classifies the evolutionary state (`converging`, `exploring`, `stalled`, `unstable`). Serializable to JSON for the dashboard. | `EvolutionReport.compute()`, `to_dashboard_dict()` |
+| `mutation/stepper_protocol.py` | Protocol (`MutationStepper`) for composable mutation steppers. Includes built‑in `ASTStepper` and `CrossBranchStepper`. Allows weighted selection via YAML. | `MutationComposer`, `ASTStepper`, `CrossBranchStepper` |
+
+These modules are imported under `muta_ext` and can be used from the main loop:
+
+```python
+from muta_ext.evaluation.cache import CanonicalCache
+from muta_ext.diagnostics.evolution_report import EvolutionReport
+# …
+```
+
+### 📊 Dashboard – Diagnostics Tab
+
+The Streamlit HITL dashboard now features a **Diagnostics** tab that surfaces the new evolutionary metrics:
+
+* **Shannon Entropy** – genetic diversity of the population.
+* **Lyapunov Exponent** – rate of divergence/convergence between successive generations.
+* **Spectral Radius** – ratio of max/min fitness (captures extreme dispersion).
+* **Classification** – automatic label (`converging`, `exploring`, `stalled`, `unstable`).
+* **Tipping Events** – table of recent outliers detected by the MAD‑based detector.
+* **Lineage Compression Stats** – number of compressed nodes, active nodes and compression ratio.
+
+All of these are rendered in real‑time via `DashboardRenderer` and are stored in `DashboardState` through the new `record_diagnostics` method. The dashboard still offers the classic HITL controls (hint injection, approve/reject) and the original fitness/diversity charts.
+
+---
+
+
+---
+
 ## 📦 Architecture
 
 ```
@@ -127,12 +166,19 @@ MutaLambda/
 ├── config.yaml               # Reference declarative configuration
 ├── app.py                    # HuggingFace model wrapper (optional)
 ├── document_intelligence.py  # MASSIVE parameter extraction (auxiliary)
+├── muta_ext/                # Optional extensions (opt‑in)
+│   ├── lineage/
+│   │   └── compression.py
+│   ├── evaluation/
+│   │   ├── cache.py
+│   │   └── numerical_health.py
+│   ├── diagnostics/
+│   │   ├── tipping.py
+│   │   └── evolution_report.py
+│   └── mutation/
+│       └── stepper_protocol.py
 └── tests/                    # 74 pytest + E2E pipeline tests
 ```
-
----
-
-## 🚀 Quick Start
 
 ### Requirements
 - Python 3.10+
