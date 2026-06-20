@@ -119,7 +119,26 @@ class EvolutionReport:
         return report
 
     def to_dashboard_dict(self) -> Dict:
-        """Serializa el reporte para consumo del dashboard Streamlit."""
+        """Serializa el reporte para consumo del dashboard Streamlit.
+
+        Garantiza campos serializables a JSON y graceful degradation:
+        si módulos científicos están apagados, devuelve defaults vacíos
+        sin lanzar KeyError.
+        """
+        # Safe metadata (optional extensions)
+        cache_stats = self.metadata.get("cache_stats", {}) if isinstance(self.metadata, dict) else {}
+        compression_stats = (
+            self.metadata.get("lineage_compression", {})
+            if isinstance(self.metadata, dict)
+            else {}
+        )
+        tipping_alerts = (
+            self.metadata.get("tipping_alerts", [])
+            if isinstance(self.metadata, dict)
+            else []
+        )
+
+        # Keep stable top-level fields for the dashboard
         return {
             "generation": self.generation,
             "shannon_entropy": round(self.shannon_entropy, 4),
@@ -130,6 +149,10 @@ class EvolutionReport:
             "mean_fitness": round(self.mean_fitness, 4),
             "best_fitness": round(self.best_fitness, 4),
             "fitness_std": round(self.fitness_std, 4),
+            # Optional extension fields (defaults safe)
+            "cache_stats": cache_stats,
+            "lineage_compression": compression_stats,
+            "tipping_alerts": tipping_alerts,
         }
 
 
@@ -203,7 +226,7 @@ def _spectral_radius(scores: List[float]) -> float:
     min_abs = min(abs_scores)
 
     if min_abs < 1e-9:
-        return max_abs / 1e-9  # cap para evitar división por cero
+        return float("inf") if max_abs > 0 else 0.0
     return max_abs / min_abs
 
 

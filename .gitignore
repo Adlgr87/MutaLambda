@@ -15,10 +15,15 @@ env/
 .coverage
 htmlcov/
 
+.continue/
+.kilocode/
+.kilocodemodes
+
 .ipynb_checkpoints/
 
 models/
 checkpoints/
+REPOPACK.md
 *.safetensors
 *.bin
 *.pt

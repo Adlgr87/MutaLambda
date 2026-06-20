@@ -1,0 +1,44 @@
+{
+  "output": {
+    "filePath": "REPOPACK.md",
+    "style": "markdown",
+    "removeComments": false,
+    "showLineNumbers": true,
+    "topFilesLength": 20
+  },
+  "include": [
+    "**/*.py",
+    "**/*.md",
+    "**/*.yaml",
+    "**/*.txt",
+    "**/*.json"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      ".git/**",
+      ".pytest_cache/**",
+      ".mypy_cache/**",
+      ".ruff_cache/**",
+      "__pycache__/**",
+      ".venv/**",
+      "venv/**",
+      "env/**",
+      "checkpoints/**",
+      "models/**",
+      "*.pyc",
+      "*.pyo",
+      "*.pyd",
+      "*.faiss",
+      "*.bin",
+      "*.pt",
+      "*.pth",
+      "*.safetensors",
+      "REPOPACK.md"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  }
+}

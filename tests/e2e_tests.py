@@ -41,12 +41,30 @@ def _extract_first_function_name(code: str) -> str:
 
 
 @dataclass
-class SimpleTestSpec:
+class SampleTestSpec:
     # Un conjunto de casos para la función objetivo.
     # El sandbox recibe el test_cases como JSON para que el código generado lo ejecute.
     function_name: str
     inputs: List[List[Any]]
     expected: List[Any]
+
+
+def build_test_cases_from_spec(spec: SampleTestSpec) -> List[Dict[str, Any]]:
+    """Build sandbox test cases from a reusable sample specification."""
+    if len(spec.inputs) != len(spec.expected):
+        raise ValueError(
+            f"SampleTestSpec inputs/expected length mismatch: "
+            f"{len(spec.inputs)} != {len(spec.expected)}"
+        )
+
+    return [
+        {
+            "function": spec.function_name,
+            "args": args,
+            "expected": expected,
+        }
+        for args, expected in zip(spec.inputs, spec.expected)
+    ]
 
 
 def build_test_cases_sum() -> List[Dict[str, Any]]:
@@ -62,23 +80,13 @@ def build_test_cases_sum() -> List[Dict[str, Any]]:
     Por lo tanto, el código generado debe leer stdin y ejecutar asserts y finalmente imprimir JSON
     con keys: passed/total.
     """
-    return [
-        {
-            "function": "compute_sum",
-            "args": [0],
-            "expected": 0,
-        },
-        {
-            "function": "compute_sum",
-            "args": [1],
-            "expected": 0,
-        },
-        {
-            "function": "compute_sum",
-            "args": [5],
-            "expected": 10,
-        },
-    ]
+    return build_test_cases_from_spec(
+        SampleTestSpec(
+            function_name="compute_sum",
+            inputs=[[0], [1], [5]],
+            expected=[0, 0, 10],
+        )
+    )
 
 
 def make_llm_stub(mode: str = "good") -> Any:
@@ -143,7 +151,13 @@ def run_e2e(
     serial: bool,
 ) -> Dict[str, Any]:
 
-    test_cases = build_test_cases_sum()
+    test_cases = build_test_cases_from_spec(
+        SampleTestSpec(
+            function_name="compute_sum",
+            inputs=[[0], [1], [5]],
+            expected=[0, 0, 10],
+        )
+    )
 
     # Semilla: una implementación mínima pero que también incluye harness.
     seed_code = (

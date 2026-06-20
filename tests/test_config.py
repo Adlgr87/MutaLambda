@@ -136,8 +136,19 @@ checkpoint:
   dir: custom_ckpts
 logging:
   level: DEBUG
+llm:
+  backend: openai
+  model: gpt-test
+  timeout_sec: 12.0
+  temperature: 0.4
 reproducibility:
   seed: 42
+hfc:
+  enabled: true
+  lambda_clones: 4
+  tier1_size: 20
+  tier2_size: 10
+  tier3_size: 3
 """
         yaml_path = tmp_path / "test_config.yaml"
         yaml_path.write_text(yaml_content)
@@ -162,6 +173,55 @@ reproducibility:
         assert config.checkpoint_interval == 5
         assert config.archive_solutions is True
         assert config.prompt_evolution is True
+        assert config.llm_backend == "openai"
+        assert config.llm_model == "gpt-test"
+        assert config.llm_timeout_sec == 12.0
+        assert config.llm_temperature == 0.4
+        assert config.prompt_pop_size == 8
+        assert config.prompt_elite_frac == 0.6
+        assert config.hfc_enabled is True
+        assert config.hfc_lambda_clones == 4
+        assert config.hfc_tier1_size == 20
+        assert config.hfc_tier2_size == 10
+        assert config.hfc_tier3_size == 3
+ 
+    def test_llm_validation(self):
+        cfg = apply_defaults({
+            "evolution": {"num_islands": 2, "generations": 10, "topology": "ring"},
+            "population": {"size": 5, "top_k": 2, "migration_interval": 5},
+            "sandbox": {"timeout_sec": 5.0},
+            "llm": {
+                "backend": "not-a-provider",
+                "timeout_sec": 0,
+                "temperature": 3.0,
+            },
+            "prompt_evolution": {
+                "pop_size": 0,
+                "elite_frac": 1.5,
+            },
+        })
+        errors = validate_config(cfg)
+        assert any("llm.backend" in e for e in errors)
+        assert any("llm.timeout_sec" in e for e in errors)
+        assert any("llm.temperature" in e for e in errors)
+        assert any("prompt_evolution.pop_size" in e for e in errors)
+        assert any("prompt_evolution.elite_frac" in e for e in errors)
+
+    def test_hfc_validation(self):
+        cfg = apply_defaults({
+            "evolution": {"num_islands": 2, "generations": 10, "topology": "ring"},
+            "population": {"size": 5, "top_k": 2, "migration_interval": 5},
+            "sandbox": {"timeout_sec": 5.0},
+            "hfc": {
+                "lambda_clones": -1,
+                "tier1_size": 0,
+                "promotion_correctness": 1.5,
+            },
+        })
+        errors = validate_config(cfg)
+        assert any("hfc.lambda_clones" in e for e in errors)
+        assert any("hfc.tier1_size" in e for e in errors)
+        assert any("hfc.promotion_correctness" in e for e in errors)
 
 
 class TestCheckpointBasic:

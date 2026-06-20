@@ -32,6 +32,31 @@ evolution:
     prob: 0.05                  # Probabilidad de usar cross-branch por hijo
     min_distance: 3             # Distancia genealógica mínima
 
+# ── Evolution Upgrade v2.0 (opt-in) ─────────────────────────────────
+advanced_selection:
+  enabled: false               # Fitness + novelty + entropy + discovery score
+  fitness_weight: 1.0
+  novelty_weight: 0.15
+  entropy_weight: 0.20
+  discovery_weight: 0.35
+
+thc:
+  enabled: false               # Transferencia horizontal de código entre individuos
+  max_transfers_per_generation: 1
+  min_donor_score: 0.0
+  validate_in_sandbox: true
+
+dialectic:
+  enabled: false               # Tesis → crítica → síntesis antes de sandbox
+  critique_intensity: medium
+
+spatial:
+  enabled: false               # Grid 2D/Moore para migración local estructurada
+  neighborhood: moore          # moore | von_neumann
+
+pattern_memory:
+  enabled: false               # Almacenar patrones reutilizables, no individuos completos
+
 # ── Población por isla ──────────────────────────────────────────────
 population:
   size: 8                     # Individuos por isla
@@ -43,6 +68,17 @@ population:
 sandbox:
   timeout_sec: 10.0           # Timeout por evaluación (segundos)
   max_workers: 4              # Workers paralelos en ProcessPoolExecutor
+
+# ── HFC / Ligas evolutivas ─────────────────────────────────────────
+hfc:
+  enabled: false                # Activar HFC: Tier1 exploración, Tier2 refinamiento bacteriano, Tier3 élite
+  tier1_size: 100               # Laboratorio experimental
+  tier2_size: 50                # Fábrica de clones 1 -> lambda
+  tier3_size: 10                # Élite estática con validación pesada futura
+  lambda_clones: 8              # Clones bacterianos por individuo Tier2
+  top_down_distillation: true   # Extraer concepto de Tier3 para inyectarlo en Tier1
+  top_down_interval: 5          # Cada cuántas generaciones destilar élite
+  promotion_correctness: 1.0    # Umbral duro para pasar de Laboratorio a Fábrica
 
 # ── Archivo de soluciones ───────────────────────────────────────────
 archive:
@@ -68,6 +104,18 @@ checkpoint:
 logging:
   level: INFO                 # DEBUG | INFO | WARNING | ERROR
   log_file: null              # Archivo de log (null = stderr)
+
+# ── Proveedor LLM ───────────────────────────────────────────────────
+llm:
+  backend: ollama             # ollama | openai | anthropic | openrouter | mistral | microsoft_cpp | huggingface_cli
+  model: llama3.2:3b          # Nombre del modelo en el backend seleccionado
+  timeout_sec: 60.0           # Timeout por llamada al LLM
+  temperature: 0.2            # Temperatura de generación para APIs compatibles
+  # Variables opcionales:
+  #   MUTALAMBDA_OLLAMA_URL, MUTALAMBDA_OPENAI_URL, MUTALAMBDA_ANTHROPIC_URL,
+  #   MUTALAMBDA_OPENROUTER_URL, MUTALAMBDA_MISTRAL_URL, MUTALAMBDA_LLM_TIMEOUT_SEC,
+  #   MUTALAMBDA_LLM_TEMPERATURE, OPENAI_API_KEY, ANTHROPIC_API_KEY,
+  #   OPENROUTER_API_KEY, MISTRAL_API_KEY
 
 # ── Reproducibilidad ────────────────────────────────────────────────
 reproducibility:

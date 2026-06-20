@@ -153,7 +153,11 @@ class MutationComposer:
 
 
 class ASTStepper:
-    """Stepper de mutación AST-guaranteed (13 operadores)."""
+    """Stepper de mutación AST-guaranteed.
+
+    Implementación (opt-in) que delega en ``ASTMutator`` del motor MutaLambda
+    para asegurar que la mutación mantiene sintaxis válida.
+    """
 
     def __init__(self, weight: float = 0.6):
         self._weight = weight
@@ -167,30 +171,42 @@ class ASTStepper:
         return self._weight
 
     def step(self, code: str, context: Dict, rng: random.Random) -> MutationResult:
-        # ASTStepper delegates to Island._mutate_with_context
-        # Fallback: lightweight inline mutation for testing
-        ops = [
-            ("rename_var", lambda c: c.replace("x", "_x").replace("_x", "x", 1)),
-            ("dead_store", lambda c: c + "\n    _unused = 0"),
-            ("swap_ifelse", lambda c: c),
-            ("add_early_return", lambda c: "    return None\n" + c),
-        ]
-        op_name, op_fn = rng.choice(ops)
+        op_name = "ast_mutator"
         try:
-            mutated = op_fn(code)
+            # Import local para evitar ciclos; ASTMutator vive en muta_lambda.py
+            from muta_lambda import ASTMutator  # type: ignore
+
+            mutated = ASTMutator.apply_random_mutation(code)
+            if not mutated:
+                return MutationResult(
+                    code=code,
+                    stepper_name=self.name,
+                    success=False,
+                    metadata={"operator": op_name, "error": "empty_mutation"},
+                )
+
             return MutationResult(
-                code=mutated, stepper_name=self.name, success=True,
+                code=mutated,
+                stepper_name=self.name,
+                success=True,
                 metadata={"operator": op_name},
             )
         except Exception as e:
+            # Graceful degradation: conservar el código original
             return MutationResult(
-                code=code, stepper_name=self.name, success=False,
+                code=code,
+                stepper_name=self.name,
+                success=False,
                 metadata={"operator": op_name, "error": str(e)},
             )
 
 
 class CrossBranchStepper:
-    """Stepper de crossover entre ramas genealógicas distantes."""
+    """Stepper de crossover entre ramas genealógicas distantes.
+
+    Requiere contexto para acceder a linaje / agent y seleccionar un segundo
+    progenitor. Si el contexto no está presente, degrada con success=False.
+    """
 
     def __init__(self, weight: float = 0.1):
         self._weight = weight
@@ -204,8 +220,48 @@ class CrossBranchStepper:
         return self._weight
 
     def step(self, code: str, context: Dict, rng: random.Random) -> MutationResult:
-        # Delegado al agente (requiere acceso al LineageGraph)
+        # Mínimo contrato: requiere un objeto "agent" o una interfaz equivalente.
+        agent = context.get("agent")
+        if agent is None:
+            return MutationResult(
+                code=code,
+                stepper_name=self.name,
+                success=False,
+                metadata={"info": "requires agent context"},
+            )
+
+        # Si el agente expone un hook de crossover cross-branch, úsalo.
+        try:
+            crossover_fn = getattr(agent, "_cross_branch_crossover", None)
+            if not callable(crossover_fn):
+                return MutationResult(
+                    code=code,
+                    stepper_name=self.name,
+                    success=False,
+                    metadata={"info": "agent_missing_cross_branch_hook"},
+                )
+
+            # Se asume que el hook devuelve un objeto Individual o código.
+            result = crossover_fn(context.get("island"))  # type: ignore[arg-type]
+            out_code = getattr(result, "code", None)
+            if isinstance(out_code, str) and out_code:
+                return MutationResult(
+                    code=out_code,
+                    stepper_name=self.name,
+                    success=True,
+                    metadata={"operator": "cross_branch"},
+                )
+        except Exception as e:
+            return MutationResult(
+                code=code,
+                stepper_name=self.name,
+                success=False,
+                metadata={"error": str(e), "operator": "cross_branch"},
+            )
+
         return MutationResult(
-            code=code, stepper_name=self.name, success=False,
-            metadata={"info": "requires agent context"},
+            code=code,
+            stepper_name=self.name,
+            success=False,
+            metadata={"info": "cross_branch_unavailable"},
         )

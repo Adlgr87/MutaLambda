@@ -2,13 +2,12 @@
 Lineage Graph Compression
 ==========================
 
-Compresión diferencial de nodos inactivos del LineageGraph para reducir
-uso de memoria en runs largos (>1000 individuos). Los nodos activos
-permanecen en memoria; los abandonados (alive=False) se comprimen con
-zlib + diffs contra ancestros.
+Compresión zlib de nodos inactivos del LineageGraph para reducir uso de
+memoria en runs largos (>1000 individuos). Los nodos activos permanecen en
+memoria; los abandonados (alive=False) se comprimen como snapshots zlib.
 
-La descompresión solo ocurre durante resurrect_branch() o queries
-explícitas del DAG genealógico.
+La descompresión solo ocurre durante resurrect_branch() o queries explícitas
+del DAG genealógico.
 
 Usage
 -----
@@ -21,7 +20,6 @@ Usage
 """
 
 import zlib
-import difflib
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
 import logging
@@ -31,117 +29,84 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CompressedNode:
-    """Nodo de linaje comprimido — solo metadata + código comprimido."""
+    """Payload comprimido para un nodo del LineageGraph.
+
+    Nota:
+        En MutaLambda mantenemos el tipo de nodo (LineageNode) dentro del grafo
+        durante compresión para evitar romper serialización/checkpoints.
+        Esta estructura se usa como "modelo" y para compatibilidad, pero el
+        compresor principalmente adjunta los campos comprimidos al nodo
+        original.
+    """
     id: str
-    generation: int
-    score: float
-    fitness: Dict[str, float] = field(default_factory=dict)
-    island_id: int = 0
-    parent_ids: List[str] = field(default_factory=list)
-    # Compressed payload
-    compressed_code: bytes = b""
-    is_diff: bool = False      # True si es diff contra ancestro
-    ancestor_id: str = ""      # ancestro de referencia para diff
-    alive: bool = False
-    resurrected: bool = False
+    compressed_code: bytes
+    is_diff: bool = False
+    ancestor_id: str = ""
 
 
 class LineageCompressor:
-    """Compresor incremental del LineageGraph.
+    """Compresor incremental del LineageGraph (opt-in).
 
-    Comprime nodos abandonados (alive=False) con zlib. Opcionalmente
-    usa diffs contra el ancestro directo para ahorrar más espacio.
+    Mantiene el tipo del nodo original dentro del grafo y solo sustituye:
+    - `node.code` -> '' (para reducir memoria)
+    - adjunta `node._compressed_code` (bytes zlib) para reconstrucción bajo demanda
 
-    Attributes
-    ----------
-    graph : LineageGraph
-        Referencia al grafo de linaje activo.
-    compression_level : int
-        Nivel zlib (1=fast, 9=best). Default=6.
-    use_diff : bool
-        Si True, almacena diffs contra ancestros en lugar del código completo.
+    Esta implementación no usa diff contra ancestros; `is_diff` se mantiene
+    en False para compatibilidad. `decompress_node()` devuelve el código
+    exacto comprimido en el payload zlib.
     """
 
-    def __init__(self, graph, compression_level: int = 6,
-                 use_diff: bool = True):
+    _COMPRESSED_CODE_ATTR = "_compressed_code"
+
+    def __init__(self, graph, compression_level: int = 6) -> None:
         self.graph = graph
         self.compression_level = compression_level
-        self.use_diff = use_diff
         self._decompressed: Dict[str, str] = {}
 
     def compress_inactive(self, active_branch_ids: Set[str]) -> int:
-        """Comprime todos los nodos con alive=False no en la rama activa.
-
-        Args:
-            active_branch_ids: IDs de nodos en la rama activa.
-
-        Returns:
-            Número de nodos comprimidos.
-        """
+        """Comprime nodos abandonados (alive=False) fuera de la rama activa."""
         compressed_count = 0
         for node_id, node in self.graph.nodes.items():
-            if node.alive or node_id in active_branch_ids:
+            if getattr(node, "alive", True):
+                continue
+            if node_id in active_branch_ids:
                 continue
             if node_id in self._decompressed:
-                continue  # ya está descomprimido bajo demanda
-
+                continue
+            if getattr(node, "code", "") == "":
+                # ya estaba comprimido
+                continue
             self._compress_node(node_id)
             compressed_count += 1
 
-        logger.debug("LineageCompressor: %d nodes compressed", compressed_count)
+        logger.debug(
+            "LineageCompressor: %d nodes compressed (level=%s)",
+            compressed_count,
+            self.compression_level,
+        )
         return compressed_count
 
     def _compress_node(self, node_id: str) -> None:
-        """Comprime un nodo individual."""
         node = self.graph.nodes.get(node_id)
         if node is None:
             return
 
-        # Intento de diff contra ancestro
-        compressed = b""
-        is_diff = False
-        ancestor_id = ""
-
-        if self.use_diff and node.parent_ids:
-            ancestor_id = node.parent_ids[0]
-            # Buscar código del ancestro (descomprimido o en cache)
-            ancestor_code = self._get_code(ancestor_id)
-            if ancestor_code:
-                try:
-                    diff = list(difflib.unified_diff(
-                        ancestor_code.splitlines(keepends=True),
-                        "".splitlines(keepends=True),  # código se almacena aparte
-                    ))
-                    # Almacenamos el código completo comprimido, no diff
-                    # (los diffs contra ancestros son frágiles sin AST normalizado)
-                except Exception:
-                    pass
-
-        # Fallback: compresión directa del hash del código
-        code_hash = str(node.code_hash).encode()
-        compressed = zlib.compress(code_hash, level=self.compression_level)
-
-        # Guardar nodo comprimido
-        self.graph.nodes[node_id] = CompressedNode(
-            id=node.id,
-            generation=node.generation,
-            score=node.score,
-            fitness=node.fitness,
-            island_id=node.island_id,
-            parent_ids=node.parent_ids,
-            compressed_code=compressed,
-            is_diff=is_diff,
-            ancestor_id=ancestor_id,
-            alive=node.alive,
-            resurrected=node.resurrected,
+        code = getattr(node, "code", "") or ""
+        compressed = zlib.compress(
+            code.encode("utf-8"),
+            level=self.compression_level,
         )
 
-    def decompress_node(self, node_id: str) -> Optional[str]:
-        """Descomprime un nodo bajo demanda (para resurrect_branch).
+        # Adjuntar payload y liberar el código en memoria
+        setattr(node, self._COMPRESSED_CODE_ATTR, compressed)
+        setattr(node, "code", "")
+        # No tocamos score/fitness/etc.
 
-        Returns:
-            Código fuente del nodo, o None si no existe.
-        """
+        # Cache interna: removemos por si existía algo previo
+        self._decompressed.pop(node_id, None)
+
+    def decompress_node(self, node_id: str) -> Optional[str]:
+        """Descomprime un nodo bajo demanda (para resurrect_branch)."""
         if node_id in self._decompressed:
             return self._decompressed[node_id]
 
@@ -149,17 +114,25 @@ class LineageCompressor:
         if node is None:
             return None
 
-        if isinstance(node, CompressedNode):
-            # Código no disponible (solo teníamos hash)
-            # En un sistema real, el código se almacenaría en el archive
-            # o en disco. Aquí retornamos un placeholder.
-            self._decompressed[node_id] = (
-                f"# [decompressed node {node_id[:8]}] "
-                f"# score={node.score:.4f} gen={node.generation}"
-            )
-            return self._decompressed[node_id]
+        code = getattr(node, "code", "") or ""
+        if code:
+            self._decompressed[node_id] = code
+            return code
 
-        return ""
+        compressed = getattr(node, self._COMPRESSED_CODE_ATTR, None)
+        if not compressed:
+            return None
+
+        try:
+            raw = zlib.decompress(compressed)
+            restored = raw.decode("utf-8", errors="strict")
+        except Exception:
+            return None
+
+        self._decompressed[node_id] = restored
+        # Guardar también en el nodo para siguientes usos
+        setattr(node, "code", restored)
+        return restored
 
     def _get_code(self, node_id: str) -> Optional[str]:
         """Obtiene el código de un nodo (descomprimido o cache)."""
@@ -168,16 +141,17 @@ class LineageCompressor:
         node = self.graph.nodes.get(node_id)
         if node is None:
             return None
-        if isinstance(node, CompressedNode):
-            return self.decompress_node(node_id)
-        return ""
+        code = getattr(node, "code", "") or ""
+        if code:
+            return code
+        return self.decompress_node(node_id)
 
     def stats(self) -> Dict[str, int]:
         """Estadísticas de compresión."""
         total = len(self.graph.nodes)
         compressed = sum(
             1 for n in self.graph.nodes.values()
-            if isinstance(n, CompressedNode)
+            if getattr(n, self._COMPRESSED_CODE_ATTR, None) is not None
         )
         return {
             "total_nodes": total,

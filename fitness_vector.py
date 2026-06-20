@@ -112,7 +112,14 @@ class FitnessVector:
         )
 
     def to_scalar(self) -> float:
-        """Alias for weighted_sum() with default weights."""
+        """Return a correctness-gated scalar score.
+
+        Correctness is the hard constraint for code synthesis. Candidates
+        below full correctness are ranked below every fully correct candidate,
+        even if they are extremely fast or compact.
+        """
+        if self.correctness < 1.0:
+            return self.correctness - 1.0
         return self.weighted_sum()
 
     def to_dict(self) -> Dict[str, float]:
@@ -141,8 +148,16 @@ class FitnessVector:
         )
 
     def is_worst(self) -> bool:
-        """Cheap sentinel check (only correctness == 0 needed in practice)."""
-        return self.correctness == 0.0 and self.latency_p50 == float("inf")
+        """Return True if this vector exactly matches the worst sentinel."""
+        sentinel = FitnessVector.worst()
+        return (
+            self.correctness == sentinel.correctness
+            and self.latency_p50 == sentinel.latency_p50
+            and self.latency_p99 == sentinel.latency_p99
+            and self.throughput == sentinel.throughput
+            and self.memory_peak_mb == sentinel.memory_peak_mb
+            and self.parsimony == sentinel.parsimony
+        )
 
     def __repr__(self) -> str:
         return (

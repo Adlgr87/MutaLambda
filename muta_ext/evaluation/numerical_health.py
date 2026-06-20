@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from typing import Optional
 import logging
 
+from muta_ext.config.scientific_extension import EvolutionaryExtensionConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,7 +62,10 @@ class NumericalHealth:
     CONDITION_THRESHOLD: float = 1e6
 
 
-def evaluate_numerical_health(code: str) -> NumericalHealth:
+def evaluate_numerical_health(
+    code: str,
+    config: Optional[EvolutionaryExtensionConfig] = None,
+) -> NumericalHealth:
     """Analiza la salud numérica de un fragmento de código.
 
     Realiza análisis estático del AST para detectar patrones de riesgo
@@ -72,6 +77,11 @@ def evaluate_numerical_health(code: str) -> NumericalHealth:
     Returns:
         NumericalHealth con diagnóstico completo.
     """
+    # Graceful degradation: cuando está deshabilitado, devolvemos un estado
+    # neutral y estable.
+    adaptive_score: Optional[float] = None
+    if config is not None and not config.enable_numerical_health:
+        return NumericalHealth()
     health = NumericalHealth()
 
     try:
@@ -110,8 +120,38 @@ def evaluate_numerical_health(code: str) -> NumericalHealth:
             or health.condition_number > NumericalHealth.CONDITION_THRESHOLD):
         health.is_stable = False
 
+    # ── Meta-evaluador: Solver adaptativo (safe numpy) ────────────
+    if config is not None and getattr(config, "enable_adaptive_solver", False):
+        try:
+            import numpy as np  # type: ignore
+
+            # Construir vector de frecuencias de tipos de nodos del AST
+            node_types = [type(n).__name__ for n in ast.walk(tree)]
+            if node_types:
+                unique, counts = np.unique(node_types, return_counts=True)
+                probs = counts.astype(float) / max(1.0, float(counts.sum()))
+                # "Estabilidad" proxy: entropía baja => más determinismo
+                entropy = float(-np.sum(probs * np.log(probs + 1e-12)))
+                # Score adicional: entre 0..1 aproximado
+                adaptive_score = float(np.exp(-entropy))
+                # Combinación conservadora: no sobrepasa el score heurístico si es peor
+                health.score = min(health.score, adaptive_score)
+                # Si score adaptativo es muy bajo, marcar inestabilidad
+                if health.score <= 0.0:
+                    health.is_stable = False
+                    health.score = 0.0
+        except Exception as exc:
+            # Caja de arena: no detener la simulación
+            logger.warning("Adaptive solver meta-evaluator failed: %r", exc)
+            health.is_stable = False
+            health.score = 0.0
+            return health
+
     # ── Score normalizado ───────────────────────────────────────────
+    # (recalcular tras posibles ajustes arriba)
     health.score = _compute_stability_score(health)
+    if adaptive_score is not None:
+        health.score = min(health.score, adaptive_score)
 
     return health
 

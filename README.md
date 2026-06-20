@@ -1,473 +1,488 @@
-# 🧬 MutaLambda — Evolutionary Code Synthesis Platform
+# MutaLambda
 
-[![CI](https://github.com/Adlgr87/MutaLambda/actions/workflows/python-package.yml/badge.svg)](https://github.com/Adlgr87/MutaLambda/actions)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Phases](https://img.shields.io/badge/phases-7%2B-orange)
-![Tests](https://img.shields.io/badge/tests-74%2B-brightgreen)
+**MutaLambda** is a research platform for evolutionary code synthesis. It evolves Python code through isolated populations, sandbox evaluation, multi-objective selection, lineage tracking, long-term memory, prompt evolution, and optional Evolution Upgrade v2.0 modules.
 
-**MutaLambda** is a research-grade evolutionary computation platform that emulates Google DeepMind's **AlphaEvolve** paradigm: evolving code through multi-island genetic algorithms, LLM-powered prompt meta-evolution, FAISS-based long-term memory, NSGA-II multi-objective optimization, convergent evolution boosting, and **Linaje Multiversal** — a time-travel backtracking system inspired by 5D chess.
+The project is not a production code-generation service. It is a modular experiment bench for asking a practical question:
 
-> *"Code that writes itself — guided by evolution, validated by sandbox, curated by Pareto, and blessed by pedigree."*
+> Can code candidates improve over time while preserving traceable ancestry, measurable diversity, and reproducible experiment state?
 
----
+Current verified local status:
 
-## 🧠 How MutaLambda Works
+| Metric | Value |
+|---|---:|
+| Test suite result | `147 passed` |
+| Test warnings | `2` FAISS/SWIG deprecation warnings |
+| Test files | `17` |
+| Core runtime language | Python 3.10+ |
+| Fitness objectives | `6` |
+| Built-in island topologies | `ring`, `mesh`, `fully_connected`, `random`, `spatial_grid` |
+| Main v2.0 extension modules | `5` |
+| Optional archive backend | FAISS + sentence-transformers |
+| Default v2.0 behavior | Disabled unless enabled in config |
 
-```
-                    ┌──────────────────────────────────────────┐
-                    │         CONFIG (YAML / CLI)              │
-                    └──────────────┬───────────────────────────┘
-                                   │
-     ┌─────────────────────────────▼──────────────────────────────┐
-     │                 MutaLambdaAgent (Orchestrator)              │
-     │                                                            │
-     │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
-     │  │ Island 0 │  │ Island 1 │  │ Island 2 │  │ Island 3 │  │
-     │  │ ┌──────┐ │  │ ┌──────┐ │  │ ┌──────┐ │  │ ┌──────┐ │  │
-     │  │ │ Pop  │ │  │ │ Pop  │ │  │ │ Pop  │ │  │ │ Pop  │ │  │
-     │  │ └──┬───┘ │  │ └──┬───┘ │  │ └──┬───┘ │  │ └──┬───┘ │  │
-     │  └────┼─────┘  └────┼─────┘  └────┼─────┘  └────┼─────┘  │
-     │       │   MigrationBus (ring/mesh/random)   │            │
-     │       └──────────────┬──────────────────────┘            │
-     │                      ▼                                   │
-     │            ┌──────────────────┐                          │
-     │            │ IslandPool       │  ← Thread-parallel       │
-     │            │  evaluate_batch  │                          │
-     │            └────────┬─────────┘                          │
-     │                     ▼                                    │
-     │   ┌─────────────────────────────────────────────┐        │
-     │   │           SandboxEvaluator                  │        │
-     │   │  ┌─────────┐ ┌─────────┐ ┌─────────┐       │        │
-     │   │  │ Worker 0│ │ Worker 1│ │ Worker N│       │        │
-     │   │  │ subproc │ │ subproc │ │ subproc │       │        │
-     │   │  └────┬────┘ └────┬────┘ └────┬────┘       │        │
-     │   └───────┼───────────┼───────────┼────────────┘        │
-     │           ▼           ▼           ▼                      │
-     │    ┌──────────────────────────────────────────┐         │
-     │    │       FitnessVector (6-dim)              │         │
-     │    │  correctness │ p50 │ p99 │ thru │ mem │  │         │
-     │    │                     parsimony            │         │
-     │    └────────────────────┬─────────────────────┘         │
-     │                         ▼                               │
-     │              ┌──────────────────────┐                   │
-     │              │  NSGA-II Selection   │                   │
-     │              │  Non-dominated sort  │                   │
-     │              │  + Crowding distance │                   │
-     │              └──────────┬───────────┘                   │
-     │                         ▼                               │
-     │              ┌──────────────────────┐                   │
-     │              │  Mutation / Crossover│                   │
-     │              │  LLM + AST (13 ops)  │                   │
-     │              └──────────────────────┘                   │
-     │                                                         │
-     │   ┌─────────────────────────────────────────────────┐   │
-     │   │        Fase 6.5–7: ConvergentBoost + Linaje    │   │
-     │   │  ┌──────────────────┐  ┌────────────────────┐  │   │
-     │   │  │ LineageGraph     │  │ ConvergentBoost    │  │   │
-     │   │  │ DAG genealógico  │  │ Consenso entre     │  │   │
-     │   │  │ + Pedigree ♜     │  │ islas → +15% score │  │   │
-     │   │  └────────┬─────────┘  └────────────────────┘  │   │
-     │   │           ▼                                     │   │
-     │   │  ┌─────────────────────────────────────────┐    │   │
-     │   │  │ ♜ Resurrección de ramas abandonadas    │    │   │
-     │   │  │   (time-travel backtracking)            │    │   │
-     │   │  │ ✕ Cross-branch crossover (linajes)     │    │   │
-     │   │  └─────────────────────────────────────────┘    │   │
-     │   └─────────────────────────────────────────────────┘   │
-     └─────────────────────────────────────────────────────────┘
-                                   │
-                    ┌──────────────┴──────────────┐
-                    ▼                             ▼
-          ┌──────────────────┐         ┌──────────────────┐
-          │  SolutionArchive │         │  PromptEvolver   │
-          │  FAISS + MiniLM  │         │  15 mutation ops │
-          │  Novelty Search  │         │  Crossover       │
-          │  Curriculum Learn│         │  Archive-aware   │
-          └──────────────────┘         └──────────────────┘
-                    │                             │
-                    └──────────────┬──────────────┘
-                                   ▼
-                         ┌──────────────────┐
-                         │   Checkpoint     │
-                         │   RNG + State    │
-                         │   Resume         │
-                         └──────────────────┘
-```
-
-### The Evolution Cycle
-
-1. **Initialize** — N semi-isolated islands seeded with code variants
-2. **Evaluate** — Sandbox executes each individual; extracts 6-dim fitness vector
-3. **Select** — NSGA-II non-dominated sorting preserves Pareto frontier
-4. **Mutate** — LLM creative mutation + AST-guaranteed structural mutation
-5. **Migrate** — Top individuals migrate between islands via configurable topology
-6. **Boost** — Cross-island convergent solutions get +15% fitness (consensus mechanism)
-7. **Archive** — Novel solutions stored in FAISS index; Novelty Search prevents convergence
-8. **Meta-Evolve** — Prompt genomes co-evolve with code; system learns to prompt itself
-9. **Track Lineage** — Every individual's pedigree recorded in the LineageGraph DAG
-10. **Backtrack** — On stagnation, revive abandoned branches via time-travel resurrection ♜
-11. **Checkpoint** — Full RNG state + population + archive + lineage snapshotted
-
----
-
-## 🧩 Optional Evolutionary Extensions (muta_ext)
-
-MutaLambda ships a **plug‑in package** `muta_ext/` that adds powerful, opt‑in capabilities without touching the core evolution loop. All extensions are disabled by default and can be toggled via the new flags in `EvolveConfig` (e.g. `enable_numerical_health`, `enable_tipping_detection`).
-
-| Module | Purpose | Key API |
-|--------|---------|---------|
-| `lineage/compression.py` | Differential compression of inactive `LineageGraph` nodes (zlib + optional diff). Reduces RAM usage >60 % on runs with >1 000 individuals. | `LineageCompressor.compress_inactive()`, `decompress_node()` |
-| `evaluation/cache.py` | Canonical AST cache keyed by a structural hash (normalised variable names, stripped metadata). Skips sandbox execution for duplicate code. | `CanonicalCache.get()`, `put()`, `stats()` |
-| `evaluation/numerical_health.py` | Static analysis of generated code for numerical stability (stiffness, division safety, exponential calls). Adds a `numerical_health` dimension to `FitnessVector`. | `evaluate_numerical_health()` |
-| `diagnostics/tipping.py` | Robust MAD‑based detection of tipping points in the fitness time‑series. Emits `TippingEvent` objects with magnitude and severity. | `detect_tipping()` |
-| `diagnostics/evolution_report.py` | Computes Shannon entropy, Lyapunov exponent, spectral radius and classifies the evolutionary state (`converging`, `exploring`, `stalled`, `unstable`). Serializable to JSON for the dashboard. | `EvolutionReport.compute()`, `to_dashboard_dict()` |
-| `mutation/stepper_protocol.py` | Protocol (`MutationStepper`) for composable mutation steppers. Includes built‑in `ASTStepper` and `CrossBranchStepper`. Allows weighted selection via YAML. | `MutationComposer`, `ASTStepper`, `CrossBranchStepper` |
-
-These modules are imported under `muta_ext` and can be used from the main loop:
-
-```python
-from muta_ext.evaluation.cache import CanonicalCache
-from muta_ext.diagnostics.evolution_report import EvolutionReport
-# …
-```
-
-### 📊 Dashboard – Diagnostics Tab
-
-The Streamlit HITL dashboard now features a **Diagnostics** tab that surfaces the new evolutionary metrics:
-
-* **Shannon Entropy** – genetic diversity of the population.
-* **Lyapunov Exponent** – rate of divergence/convergence between successive generations.
-* **Spectral Radius** – ratio of max/min fitness (captures extreme dispersion).
-* **Classification** – automatic label (`converging`, `exploring`, `stalled`, `unstable`).
-* **Tipping Events** – table of recent outliers detected by the MAD‑based detector.
-* **Lineage Compression Stats** – number of compressed nodes, active nodes and compression ratio.
-
-All of these are rendered in real‑time via `DashboardRenderer` and are stored in `DashboardState` through the new `record_diagnostics` method. The dashboard still offers the classic HITL controls (hint injection, approve/reject) and the original fitness/diversity charts.
-
----
-
-
----
-
-## 📦 Architecture
-
-```
-MutaLambda/
-├── muta_lambda.py            # Core orchestrator (MutaLambdaAgent, Island, MigrationBus)
-├── fitness_vector.py         # 6-dim multi-objective fitness + Pareto dominance
-├── nsga2.py                  # NSGA-II: non-dominated sort + crowding distance
-├── island_evolution.py       # IslandPool: thread-parallel island evolution
-├── prompt_evolution.py       # RichPromptEvolver: 15 ops + crossover + archive-aware
-├── config_loader.py          # YAML config loader + schema validation
-├── checkpoint_manager.py     # Full RNG-aware checkpointing + resume
-├── property_testing.py       # Hypothesis + Z3 formal verification
-├── dashboard.py              # Streamlit HITL dashboard
-├── config.yaml               # Reference declarative configuration
-├── app.py                    # HuggingFace model wrapper (optional)
-├── document_intelligence.py  # MASSIVE parameter extraction (auxiliary)
-├── muta_ext/                # Optional extensions (opt‑in)
-│   ├── lineage/
-│   │   └── compression.py
-│   ├── evaluation/
-│   │   ├── cache.py
-│   │   └── numerical_health.py
-│   ├── diagnostics/
-│   │   ├── tipping.py
-│   │   └── evolution_report.py
-│   └── mutation/
-│       └── stepper_protocol.py
-└── tests/                    # 74 pytest + E2E pipeline tests
-```
-
-### Requirements
-- Python 3.10+
-- (Optional) FAISS + sentence-transformers for SolutionArchive
-- (Optional) Streamlit for HITL dashboard
-- (Optional) Z3 + Hypothesis for formal verification
-
-### Install
+Last verified command:
 
 ```bash
-git clone https://github.com/Adlgr87/MutaLambda.git
-cd MutaLambda
-pip install -r requirements.txt
+pytest -q
 ```
 
-### Run a demo evolution
+Result:
+
+```text
+147 passed, 2 warnings
+```
+
+---
+
+## What It Does
+
+MutaLambda starts with one or more seed programs, mutates them, evaluates them in a sandbox, selects the best and most diverse candidates, migrates individuals between islands, records their genealogy, and optionally stores useful solutions or patterns for later reuse.
+
+The default loop is:
+
+```text
+Initialize
+  -> Evaluate in Sandbox
+  -> Compute FitnessVector
+  -> Select with NSGA-II
+  -> Mutate / Crossover
+  -> Migrate between Islands
+  -> Archive / Track Lineage / Checkpoint
+```
+
+With Evolution Upgrade v2.0 enabled, the loop can add:
+
+```text
+Mutate
+  -> Dialectic Critique
+  -> Evaluate
+  -> Entropy + Discovery Selection
+  -> Horizontal Code Transfer
+  -> Spatial Migration
+  -> Pattern Memory
+```
+
+---
+
+## Design Values
+
+| Value | How the project implements it | Current honesty |
+|---|---|---|
+| Safety first | Generated code runs through `SandboxEvaluator`, not direct in-process execution. | Sandbox is useful but not a complete security boundary against every possible hostile program. |
+| Reproducibility | Checkpoints save populations, RNG state, lineage, prompt state, HFC state, metrics, and config hash. | Exact reproducibility still depends on LLM determinism and environment stability. |
+| Modularity | Optional features live mostly in `muta_ext/` and are controlled by `config.yaml`. | Some orchestration hooks still live in `muta_lambda.py` and `island.py`. |
+| Measurability | Fitness, diversity, lineage, entropy, THC, dialectic, HFC, and archive metrics are exposed. | Some metrics are proxies, not definitive scientific proof. |
+| Lineage over leaderboard-only evolution | `LineageGraph` records ancestry and supports branch resurrection and discovery scoring. | Long-run lineage scaling needs more benchmark data. |
+| Graceful degradation | Optional FAISS, sentence-transformers, Streamlit, and scientific helpers degrade when unavailable. | Optional paths need more integration testing across environments. |
+
+---
+
+## Architecture Map
+
+```text
+MutaLambdaAgent
+  |-- Islands
+  |     |-- population of Individual
+  |     |-- local evaluation
+  |     |-- mutation / crossover
+  |
+  |-- IslandPool
+  |     |-- parallel generation execution
+  |
+  |-- MigrationBus
+  |     |-- topology-aware migration
+  |     |-- optional spatial topology
+  |
+  |-- SandboxEvaluator
+  |     |-- subprocess execution
+  |     |-- timeout / memory / stdout / stderr
+  |
+  |-- FitnessVector
+  |     |-- correctness
+  |     |-- latency_p50
+  |     |-- latency_p99
+  |     |-- throughput
+  |     |-- memory_peak_mb
+  |     |-- parsimony
+  |
+  |-- NSGA-II
+  |     |-- non-dominated sorting
+  |     |-- crowding distance
+  |
+  |-- LineageGraph
+  |     |-- ancestors
+  |     |-- abandoned branches
+  |     |-- hybrid THC lineage
+  |
+  |-- Optional systems
+        |-- SolutionArchive
+        |-- PromptEvolver / RichPromptEvolver
+        |-- HFCLeagueEngine
+        |-- Evolution Upgrade v2.0 engines
+        |-- Dashboard / HITL
+        |-- CheckpointManager
+```
+
+---
+
+## Main Components
+
+| Component | File | Role | Stage |
+|---|---|---|---|
+| Main orchestrator | [`muta_lambda.py`](muta_lambda.py) | Builds the agent, runs generations, applies global features, exposes metrics. | Core, active |
+| Island evolution | [`island.py`](island.py) | Evaluates, selects, mutates, and reproduces one local population. | Core, active |
+| Parallel island pool | [`island_evolution.py`](island_evolution.py) | Runs islands concurrently and records island snapshots. | Core, usable |
+| Migration | [`migration.py`](migration.py) | Moves candidates between islands by topology. | Core, usable |
+| Data model | [`models.py`](models.py) | `Individual`, `LineageNode`, `LineageGraph`, `EvalResult`, configs. | Core, active |
+| Fitness | [`fitness_vector.py`](fitness_vector.py) | Six-objective fitness and scalar fallback. | Core, tested |
+| NSGA-II | [`nsga2.py`](nsga2.py) | Pareto selection and crowding distance. | Core, tested |
+| Sandbox | [`sandbox.py`](sandbox.py) | Subprocess evaluator with timeout and metrics. | Core, active |
+| LLM backend | [`llm_backend.py`](llm_backend.py) | Ollama, OpenAI, Anthropic, OpenRouter, Mistral, local CLI adapters. | Usable, provider-dependent |
+| Prompt evolution | [`prompt_evolver.py`](prompt_evolver.py), [`prompt_evolution.py`](prompt_evolution.py) | Evolves prompts as genomes. | Experimental |
+| Semantic archive | [`archive.py`](archive.py) | FAISS-backed long-term memory and novelty scoring. | Optional |
+| Checkpoints | [`checkpoint_manager.py`](checkpoint_manager.py) | Save/resume state and reproducibility metadata. | Usable |
+| HFC tiers | [`hfc_tiers.py`](hfc_tiers.py) | Hierarchical Fair Competition style tiered evolution. | Experimental |
+| Dashboard | [`dashboard.py`](dashboard.py) | Streamlit HITL and advanced metrics view. | Experimental UI |
+| Property helpers | [`property_testing.py`](property_testing.py) | Hypothesis/Z3-style helper checks. | Research helper |
+| Legacy adapter | [`legacy/`](legacy) | Inferless/document workflows kept outside core path. | Legacy |
+
+---
+
+## Evolution Upgrade v2.0
+
+The v2.0 layer is opt-in. It is designed to extend MutaLambda's identity around lineage, branch resurrection, diversity, and reusable knowledge. It does not replace the base engine.
+
+| Module | File | What it adds | Metrics |
+|---|---|---|---|
+| Advanced Selection | [`muta_ext/advanced_selection.py`](muta_ext/advanced_selection.py) | Combines fitness, novelty, entropy, and Discovery Score. | `population_entropy`, `discovery_score_avg`, `entropy_gain_per_gen` |
+| THC | [`muta_ext/thc_engine.py`](muta_ext/thc_engine.py) | Transfers reusable AST fragments between individuals and records hybrid ancestry. | `thc_transfer_rate`, `fragment_survival_gens`, `hybrid_lineage_depth` |
+| Dialectic Engine | [`muta_ext/dialectic_engine.py`](muta_ext/dialectic_engine.py) | Adds thesis -> critique -> synthesis before sandbox evaluation. | `critique_rejection_rate`, `sandbox_calls_saved` |
+| Spatial Topology | [`muta_ext/spatial_topology.py`](muta_ext/spatial_topology.py) | Uses 2D local neighborhoods for migration and local diversity. | `cluster_count`, `local_diversity_index`, `spatial_migration_success` |
+| Pattern Memory | [`muta_ext/pattern_memory.py`](muta_ext/pattern_memory.py) | Stores success patterns instead of only full individuals. | Pattern count and per-pattern success rate |
+
+Important limitation: v2.0 is implemented and tested at unit/integration level, but it still needs long benchmark runs to prove when it improves convergence, diversity, or compute efficiency. The code is ready for experiments; the scientific claims are not final.
+
+Enable it in [`config.yaml`](config.yaml):
+
+```yaml
+advanced_selection:
+  enabled: true
+  fitness_weight: 1.0
+  novelty_weight: 0.15
+  entropy_weight: 0.20
+  discovery_weight: 0.35
+
+thc:
+  enabled: true
+  max_transfers_per_generation: 1
+  min_donor_score: 0.0
+  validate_in_sandbox: true
+
+dialectic:
+  enabled: true
+  critique_intensity: medium
+
+spatial:
+  enabled: true
+  neighborhood: moore
+
+pattern_memory:
+  enabled: true
+```
+
+---
+
+## Discovery Score
+
+Discovery Score is the most identity-specific part of v2.0. It asks:
+
+> Did this branch produce improved descendants later?
+
+Instead of selecting only by immediate score, MutaLambda can value a candidate that historically acts as an ancestor of later improvements.
+
+Current implementation:
+
+```text
+Discovery Score = descendant improvement ratio + normalized descendant gain
+```
+
+Measured from:
+
+- `LineageGraph.nodes`
+- parent/child edges
+- descendant scores
+
+Current caveat: this score is strongest after enough lineage history exists. Early generations may have little or no descendant information, so discovery values can start near zero.
+
+---
+
+## Fitness Model
+
+`FitnessVector` tracks six objectives:
+
+| Objective | Direction | Meaning |
+|---|---:|---|
+| `correctness` | higher | Fraction of test cases passed, from `0.0` to `1.0`. |
+| `latency_p50` | lower | Median execution time. |
+| `latency_p99` | lower | Tail execution time. |
+| `throughput` | higher | Estimated operations per second. |
+| `memory_peak_mb` | lower | Peak resident memory. |
+| `parsimony` | higher | Bias toward smaller/simpler code. |
+
+Correctness is a hard gate in scalar fallback ranking. A partially correct candidate should not beat a fully correct one just because it is faster.
+
+---
+
+## Metrics You Can Inspect
+
+`agent.get_metrics()` returns runtime telemetry. Main fields include:
+
+| Metric | Meaning |
+|---|---|
+| `total_generations` | Number of completed generations. |
+| `total_time_sec` | Sum of generation durations. |
+| `avg_generation_time_sec` | Average generation duration. |
+| `best_score_history` | Best scalar score per generation. |
+| `archive_size` | Number of archived solutions when archive is enabled. |
+| `num_islands` | Active island count. |
+| `hfc_enabled` | Whether HFC tier mode is active. |
+| `hfc_stats` | Tier counts and HFC telemetry when enabled. |
+| `stagnant_generations` | Early-stop stagnation counter. |
+| `cross_island_diversity` | Token/Jaccard-style cross-island diversity estimate. |
+| `parallel_generations` | Generations executed through `IslandPool`. |
+| `advanced_selection` | Entropy and Discovery Score telemetry. |
+| `thc` | Horizontal transfer telemetry. |
+| `dialectic` | Critique/synthesis telemetry. |
+| `spatial` | Spatial neighborhood telemetry. |
+| `pattern_memory_size` | Number of stored pattern records. |
+
+Dashboard support:
+
+- Fitness trend
+- Diversity trend
+- Per-island scores
+- Pareto frontier size
+- HITL hint injection
+- Advanced v2.0 metrics
+
+---
+
+## Configuration
+
+Most behavior is configured from [`config.yaml`](config.yaml). Important sections:
+
+| Section | Purpose |
+|---|---|
+| `evolution` | Island count, generations, topology, novelty, early stop, resurrection, convergent boost. |
+| `population` | Population size, elite count, migration interval, migrants per island. |
+| `sandbox` | Evaluation timeout and worker count. |
+| `hfc` | Optional tiered evolution. |
+| `archive` | Optional FAISS memory. |
+| `prompt_evolution` | Prompt population and elite fraction. |
+| `checkpoint` | Save interval and checkpoint directory. |
+| `llm` | Backend, model, timeout, temperature. |
+| `reproducibility` | RNG seed and git commit tracking. |
+| `advanced_selection` | v2.0 selection weights. |
+| `thc` | Horizontal transfer behavior. |
+| `dialectic` | Critique/synthesis behavior. |
+| `spatial` | Local migration topology. |
+| `pattern_memory` | Reusable pattern storage. |
+
+---
+
+## LLM Providers
+
+Supported backend names:
+
+| Backend | Notes |
+|---|---|
+| `ollama` | Good local default if Ollama is running. |
+| `openai` | Requires `OPENAI_API_KEY`. |
+| `anthropic` | Requires `ANTHROPIC_API_KEY`. |
+| `openrouter` | Requires `OPENROUTER_API_KEY`. |
+| `mistral` | Requires `MISTRAL_API_KEY`. |
+| `microsoft_cpp` | Local CLI adapter. |
+| `huggingface_cli` | Local CLI adapter. |
+
+Honest status: the abstraction works, but provider behavior varies. Prompt formatting, token limits, retry policy, latency, and determinism are not identical across providers.
+
+---
+
+## Checkpointing and Reproducibility
+
+Checkpoints save:
+
+- best score and code
+- all island populations
+- island generation counters
+- archive snapshot path
+- prompt population and metrics
+- HFC tier state
+- lineage DAG
+- v2.0 metrics
+- pattern memory
+- Python `random` state
+- NumPy RNG state
+- config hash
+- git commit hash when available
+
+Resume:
 
 ```bash
-# 4 islands, 20 generations, mesh topology, with NSGA-II
-python muta_lambda.py --islands 4 --generations 20 --topology mesh --pop-size 6
-
-# From YAML config
-python muta_lambda.py --config config.yaml
-
-# Resume from checkpoint
 python muta_lambda.py --resume checkpoints/chk_gen0010
 ```
 
-### Run tests
+Honest status: checkpointing is practical and tested, but exact reproduction with external LLM APIs is not guaranteed. Deterministic local stubs are much easier to reproduce.
+
+---
+
+## Testing
+
+Run:
 
 ```bash
-# Full pytest suite (74 tests)
-pytest tests/ -v
-
-# Embedded integration tests
-python muta_lambda.py --test
-
-# End-to-end pipeline test
-python tests/e2e_tests.py
+pytest -q
 ```
 
----
+Current verified result:
 
-## ⚙️ Configuration
-
-All parameters externalized via YAML (`config.yaml`):
-
-```yaml
-evolution:
-  num_islands: 4
-  generations: 50
-  topology: ring          # ring | mesh | fully_connected | random
-  early_stop_patience: 15
-  novelty_alpha: 0.15
-
-  convergent_boost:
-    enabled: true
-    threshold: 0.85
-    factor: 0.15
-
-  resurrection:
-    enabled: true
-    threshold: 8
-    max_attempts: 3
-    min_score_ratio: 0.3
-
-  cross_branch_crossover:
-    enabled: true
-    prob: 0.05
-    min_distance: 3
-
-population:
-  size: 8
-  top_k: 3
-  migration_interval: 10
-  migrants_per_island: 2
-
-sandbox:
-  timeout_sec: 10.0
-  max_workers: 4
-
-archive:
-  enabled: true
-  max_size: 10000
-
-prompt_evolution:
-  enabled: true
-  pop_size: 6
-
-checkpoint:
-  interval: 10
-  dir: checkpoints
+```text
+147 passed, 2 warnings
 ```
 
----
+Test coverage areas:
 
-## 🧬 Multi-Objective Fitness
+| Test file | Covers |
+|---|---|
+| [`tests/test_config.py`](tests/test_config.py) | YAML defaults, validation, `EvolveConfig`. |
+| [`tests/test_fitness_vector.py`](tests/test_fitness_vector.py) | Fitness scalarization and Pareto behavior. |
+| [`tests/test_nsga2.py`](tests/test_nsga2.py) | Non-dominated sort and NSGA-II selection. |
+| [`tests/test_lineage.py`](tests/test_lineage.py) | DAG recording, ancestry, resurrection candidates. |
+| [`tests/test_lineage_compression.py`](tests/test_lineage_compression.py) | Optional lineage compression. |
+| [`tests/test_convergent_boost.py`](tests/test_convergent_boost.py) | Cross-island convergence boosting. |
+| [`tests/test_prompt_evolution.py`](tests/test_prompt_evolution.py) | Prompt evolution behavior. |
+| [`tests/test_llm_backend.py`](tests/test_llm_backend.py) | Backend resolution and adapter behavior. |
+| [`tests/test_hfc_tiers.py`](tests/test_hfc_tiers.py) | HFC tier transitions and state. |
+| [`tests/test_property_testing.py`](tests/test_property_testing.py) | Property-testing helpers. |
+| [`tests/test_solution_archive.py`](tests/test_solution_archive.py) | Archive behavior. |
+| [`tests/test_scientific_extension.py`](tests/test_scientific_extension.py) | Optional scientific extension config. |
+| [`tests/test_evolution_upgrade_v2.py`](tests/test_evolution_upgrade_v2.py) | v2.0 modules: advanced selection, THC, dialectic, spatial, pattern memory, checkpoint metrics. |
+| [`tests/benchmarks/test_evolution_upgrade_benchmark_matrix.py`](tests/benchmarks/test_evolution_upgrade_benchmark_matrix.py) | Benchmark matrix smoke definitions. |
+| [`tests/e2e_tests.py`](tests/e2e_tests.py) | End-to-end smoke tests. |
 
-MutaLambda optimizes **six objectives simultaneously** via Pareto dominance:
+What tests do not prove yet:
 
-| Objective | Direction | Meaning |
-|-----------|-----------|---------|
-| `correctness` | ↑ | Fraction of tests passed (0–1) |
-| `latency_p50` | ↓ | Median execution time (seconds) |
-| `latency_p99` | ↓ | P99 execution time (seconds) |
-| `throughput` | ↑ | Operations per second |
-| `memory_peak_mb` | ↓ | Peak RSS memory (MiB) |
-| `parsimony` | ↑ | 1 / (1 + cyclomatic_complexity / KB) |
-
-NSGA-II selection preserves the Pareto frontier while maintaining diversity via crowding distance.
-
----
-
-## 🏝️ Multi-Island Evolution
-
-- **N islands** evolve semi-independently in parallel threads
-- **Differentiated seeding** — Island 0 gets original code; islands 1..N get progressively mutated variants
-- **MigrationBus** — Configurable topology (ring, mesh, fully_connected, random)
-- **Diversity tracking** — Intra-island and cross-island uniqueness metrics
-
----
-## 🤝 Convergent Evolution Boost
-
-When multiple islands independently arrive at similar solutions, that's a strong signal of optimality. MutaLambda detects this and reinforces it:
-
-- **Cross-island consensus detection** — cosine similarity via `SolutionArchive` embeddings (or Jaccard fallback)
-- **Fitness boosting** — convergent individuals get `score *= (1 + factor × similarity)` (default +15%)
-- **Periodic evaluation** — checked every `migration_interval` generations
-- **Configurable** — enable/disable, adjust similarity threshold and boost factor
-
-```yaml
-convergent_boost:
-  enabled: true
-  threshold: 0.85    # minimum cosine similarity
-  factor: 0.15       # boost multiplier
-```
-
-> *Concept adapted from FACTOR Protocols' Consensus Boosting pattern.*
-
----
-## ♜ Linaje Multiversal (Time-Travel Backtracking)
-
-Inspired by **5D chess with multiversal time travel**, this system gives every solution a complete pedigree and the ability to revisit abandoned evolutionary paths.
-
-### 🌳 LineageGraph — The Genealogical DAG
-
-Every individual is registered as a node in a directed acyclic graph with:
-
-| Field | Purpose |
-|-------|---------|
-| `id` / `parent_ids` | Full ancestry chain (who mutated into whom) |
-| `generation` / `island_id` | Spatiotemporal origin |
-| `score` / `fitness` | Multi-objective metrics at time of evaluation |
-| `code_hash` | Fast deduplication |
-| `alive` | Whether this branch is still active |
-| `resurrected` | Whether this node was revived via time-travel |
-
-```python
-# Query the genealogical tree
-ancestors = lineage.get_ancestors(best_individual.id)
-distance  = lineage.get_genealogical_distance(ind_a.id, ind_b.id)
-```
-
-### ♜ Branch Resurrection (Time Travel)
-
-When evolution stagnates (configurable threshold, default 8 generations without improvement):
-
-1. **Scan abandoned branches** — find nodes with `score > threshold` that were prematurely discarded
-2. **Revive the most promising** — apply aggressive 3× mutation with alternative operators
-3. **Inject into the weakest island** — the stagnant island gets a fresh genetic injection
-4. **Mark as resurrected** — prevents infinite loops
-
-```yaml
-resurrection:
-  enabled: true
-  threshold: 8          # stagnant gens before first attempt
-  max_attempts: 3       # max resurrections per run
-  min_score_ratio: 0.3  # min score relative to global_best
-```
-
-### ✕ Cross-Branch Crossover
-
-Instead of only crossing parents within the same island and generation, MutaLambda can cross parents from **different genealogical lineages**:
-
-- Selects one parent with high `correctness` and another with high `throughput`
-- Verifies genealogical distance ≥ `min_distance` (default 3)
-- Applies crossover to produce hybrid offspring with both lineages
-
-```yaml
-cross_branch_crossover:
-  enabled: true
-  prob: 0.05            # probability per new child
-  min_distance: 3       # minimum genealogical distance
-```
-
-> *"En lugar de solo avanzar hacia la mejor solución, puedes retomar ramas muertas si detectas que la evolución se estancó — equivalente a viajar al pasado para explorar otra rama."*
+- They do not prove v2.0 improves every task.
+- They do not benchmark large-scale convergence.
+- They do not prove external LLM determinism.
+- They do not prove sandbox security against adversarial code.
 
 ---
 
-## 📚 SolutionArchive (Long-Term Memory)
+## Benchmark Plan
 
-- **FAISS IndexFlatIP** — Cosine-similarity search over MiniLM embeddings
-- **Novelty Search** — Rewards structural distance from archive (not just fitness)
-- **Curriculum Learning** — k-means sampling of diverse solutions
-- **Persistence** — Save/load archive to disk for experiment continuity
+The benchmark matrix is defined, but full empirical results are still pending.
+
+Required variants:
+
+| Variant | Purpose |
+|---|---|
+| `base` | Baseline MutaLambda. |
+| `base_plus_thc` | Measure fragment reuse effects. |
+| `base_plus_advanced_selection` | Measure entropy/discovery selection. |
+| `base_plus_dialectic` | Measure sandbox call savings and quality effect. |
+| `full_v2` | Measure combined system behavior. |
+
+Required global metrics:
+
+| Metric | Meaning |
+|---|---|
+| `best_fitness` | Best observed solution quality. |
+| `convergence_speed` | Generations or time to target quality. |
+| `fragment_reuse_ratio` | How often transferred fragments survive. |
+| `lineage_depth_max` | Maximum genealogical depth. |
+| `sandbox_efficiency` | Useful evaluations per sandbox call. |
+| `cpu_time_per_gain` | Compute cost per unit of improvement. |
+
+Current status: benchmark definitions exist as smoke tests. Long-run benchmark data is not yet included in the repo.
 
 ---
 
-## 🧠 Prompt Meta-Evolution
+## What Works Well Today
 
-Prompts are genomes that co-evolve with code:
-
-- **15 mutation operators** — Word swap, constraint add/remove, instruction rephrase, few-shot evolution
-- **Uniform crossover** — Combine system prompts, instructions, temperature, and few-shot examples
-- **Archive-aware** — Draws diverse few-shot examples from SolutionArchive
-- **PromptFitness** — Quality (50%) + Diversity (30%) + Consistency (20%)
-
----
-
-## 🛡️ Sandbox & Safety
-
-- **Subprocess isolation** — Every individual executes in a separate process
-- **Resource tracking** — Peak RSS memory via `resource.getrusage()`
-- **Timeout protection** — Configurable per-evaluation timeout
-- **Graceful degradation** — All failures → penalized FitnessVector, never engine crash
-- **ProcessPoolExecutor** — Massive parallel evaluation
+- The modular architecture is significantly cleaner than a single-file prototype.
+- The base evolutionary loop runs and is covered by tests.
+- NSGA-II and multi-objective fitness are implemented.
+- Sandbox evaluation is integrated with pass/fail and timing metrics.
+- Lineage tracking, ancestry queries, abandoned branch search, and resurrection are implemented.
+- Checkpointing covers the major runtime state.
+- v2.0 modules are implemented as opt-in extensions.
+- Dashboard exposes core and advanced metrics.
+- Optional dependencies degrade without stopping the whole project.
+- The full local test suite currently passes.
 
 ---
 
-## 💾 Reproducibility
+## What Is Still Rough
+
+- The project is still a research scaffold, not a polished product.
+- Long-run benchmark evidence is still missing.
+- v2.0 weights are reasonable defaults, not tuned scientific constants.
+- The Discovery Score needs enough history before it becomes meaningful.
+- THC uses AST-level function/class transfer; deeper semantic compatibility is still limited.
+- The Dialectic Engine can save sandbox calls, but it depends heavily on LLM critique quality.
+- The surrogate model described in the original vision is not yet a trained RandomForest/GP; current advanced selection uses deterministic entropy and lineage heuristics.
+- Streamlit HITL is useful, but not production hardened.
+- FAISS archive requires optional dependencies and can be heavy for small machines.
+- Process-based island parallelism can be fragile with non-pickleable LLM callables.
+- Memory metrics are OS-dependent approximations.
+- Legacy files are still present for compatibility.
+
+---
+
+## Installation
+
+Minimal:
 
 ```bash
-# Run with fixed seed
-python muta_lambda.py --config config.yaml
-
-# Checkpoints capture:
-#   - Random + numpy RNG state
-#   - Island populations + scores
-#   - SolutionArchive (FAISS index + metadata)
-#   - PromptEvolver state
-#   - Config SHA256 hash + git commit hash
+pip install -r requirements.txt
 ```
 
----
-
-## 📊 HITL Dashboard
+Optional semantic archive:
 
 ```bash
+pip install faiss-cpu sentence-transformers
+```
+
+Optional dashboard:
+
+```bash
+pip install streamlit pandas
 streamlit run dashboard.py
 ```
 
-- Real-time fitness/diversity/Pareto charts
-- Per-island score tracking
-- Expert hint injection into random islands
-- Variant approval/rejection before costly evaluation
-
 ---
 
-## 🔬 Property-Based Testing
+## Minimal API Example
 
 ```python
-from property_testing import infer_property_strategies, run_property_tests
-
-# Auto-generate Hypothesis strategies from function signatures
-strategies = infer_property_strategies(code)
-
-# Z3 formal verification of algorithmic invariants
-from property_testing import verify_invariant_z3
-holds, counterexample = verify_invariant_z3(code, "result >= 0")
-```
-
----
-
-## 🔮 API
-
-```python
-from muta_lambda import MutaLambdaAgent, EvolveConfig
+from muta_lambda import EvolveConfig, MutaLambdaAgent
 
 config = EvolveConfig(
     num_islands=4,
-    generations=100,
-    topology="mesh",
-    seed_codes=["def solution(x): return x + 1"],
+    generations=50,
+    seed_codes=["def solution(x):\n    return x + 1\n"],
+    archive_solutions=False,
+    prompt_evolution=False,
 )
 
-agent = MutaLambdaAgent(config=config, test_cases=[
-    {"function": "solution", "args": [1], "expected": 2},
-    {"function": "solution", "args": [5], "expected": 6},
-])
+agent = MutaLambdaAgent(
+    config=config,
+    test_cases=[
+        {"function": "solution", "args": [1], "expected": 2},
+        {"function": "solution", "args": [5], "expected": 6},
+    ],
+)
 
 best = agent.run(task="Optimize a simple arithmetic function")
 print(best.code)
@@ -476,15 +491,31 @@ print(agent.get_metrics())
 
 ---
 
-## 🧪 Testing
+## Repository Utilities
 
-| Suite | Tests | Command |
-|-------|-------|---------|
-| Unit (pytest) | 74 | `pytest tests/ -v` |
-| E2E Pipeline | 3 pipelines | `python tests/e2e_tests.py` |
+This repository includes [`repomix.config.json`](repomix.config.json) and [`.repomixignore`](.repomixignore) for packaging the source into a readable Markdown bundle:
+
+```bash
+repomix --config repomix.config.json
+```
 
 ---
 
-## 📜 License
+## Contributing
+
+Development principles:
+
+1. Keep new experiments modular and opt-in.
+2. Add objective metrics when adding behavior.
+3. Prefer graceful degradation over hard optional imports.
+4. Write tests for stabilized behavior.
+5. Preserve lineage and checkpoint compatibility.
+6. Be honest about what is proven, experimental, or incomplete.
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for more project notes.
+
+---
+
+## License
 
 MIT © 2026 Adlgr87

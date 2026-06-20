@@ -172,23 +172,25 @@ def verify_invariant_z3(code: str, invariant: str) -> Tuple[bool, Optional[str]]
         z3_vars = {arg: z3.Int(arg) for arg in args}
 
         # Attempt to translate Python AST to Z3 expression
-        # (simplified: only supports return x + y patterns)
+        # (simplified: only supports simple numeric return expressions)
         z3_expr = _ast_to_z3(func.body, z3_vars)
         if z3_expr is None:
             return (False, "Could not translate code to Z3 — too complex")
 
-        # Parse invariant
+        violation = _parse_invariant_violation(invariant, z3_expr)
+        if violation is None:
+            return (False, "Invariant must be a simple comparison like result >= 0")
+
         solv = z3.Solver()
-        # For now, check trivial invariant: result != None
-        solv.add(z3_expr == z3_expr)  # always true — placeholder
+        solv.add(violation)
 
         result = solv.check()
         if result == z3.unsat:
-            return (False, "Invariant violation detected")
+            return (True, None)
         elif result == z3.sat:
             model = solv.model()
             ce = ", ".join(f"{k}={model[v]}" for k, v in z3_vars.items())
-            return (True, None)
+            return (False, ce)
         else:
             return (False, "Z3 could not determine — unknown result")
 
@@ -224,6 +226,37 @@ def _expr_to_z3(node, z3_vars):
         if isinstance(node.op, ast.Div):
             return left / right
     return None
+
+
+def _parse_invariant_violation(invariant: str, z3_expr):
+   """Return a Z3 expression that violates a simple result comparison."""
+   comparisons = {
+       ">=": lambda expr, value: expr < value,
+       "<=": lambda expr, value: expr > value,
+       "==": lambda expr, value: expr != value,
+       "!=": lambda expr, value: expr == value,
+       ">": lambda expr, value: expr <= value,
+       "<": lambda expr, value: expr >= value,
+   }
+
+   text = invariant.strip()
+   if not text.startswith("result"):
+       return None
+
+   rest = text[len("result") :].strip()
+   for op in (">=", "<=", "==", "!=", ">", "<"):
+       if rest.startswith(op):
+           rhs = rest[len(op) :].strip()
+           try:
+               value = int(rhs)
+           except ValueError:
+               try:
+                   value = float(rhs)
+               except ValueError:
+                   return None
+           return comparisons[op](z3_expr, value)
+
+   return None
 
 
 # ── Combined Property Test Runner ─────────────────────────────────────

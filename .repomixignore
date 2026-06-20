@@ -1,0 +1,18 @@
+# Repomix-specific ignores for MutaLambda.
+# .gitignore patterns are already honored by repomix.config.json.
+
+REPOPACK.md
+checkpoints/**
+models/**
+.venv/**
+venv/**
+env/**
+__pycache__/**
+*.pyc
+*.pyo
+*.pyd
+*.faiss
+*.bin
+*.pt
+*.pth
+*.safetensors

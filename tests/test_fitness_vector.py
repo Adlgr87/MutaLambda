@@ -66,9 +66,36 @@ class TestFitnessVector:
         # worst should be negative (latency inf → -inf contribution)
         assert s < 0
 
-    def test_to_scalar_delegates(self):
+    def test_to_scalar_delegates_for_fully_correct(self):
         fv = FitnessVector(correctness=1.0)
         assert fv.to_scalar() == fv.weighted_sum()
+
+    def test_to_scalar_gates_incorrect_candidates_below_correct_ones(self):
+        incorrect_fast = FitnessVector(
+            correctness=0.0,
+            latency_p50=0.001,
+            latency_p99=0.001,
+            throughput=1000.0,
+            memory_peak_mb=1.0,
+            parsimony=0.5,
+        )
+        correct_slow = FitnessVector(
+            correctness=1.0,
+            latency_p50=1.0,
+            latency_p99=1.0,
+            throughput=1.0,
+            memory_peak_mb=1.0,
+            parsimony=0.5,
+        )
+
+        assert incorrect_fast.to_scalar() < correct_slow.to_scalar()
+        assert incorrect_fast.to_scalar() < 0.0
+        assert correct_slow.to_scalar() > 0.0
+
+    def test_to_scalar_partial_correctness_is_negative(self):
+        fv = FitnessVector(correctness=0.99, throughput=1000.0)
+
+        assert fv.to_scalar() == pytest.approx(-0.01)
 
     def test_worst_sentinel(self):
         w = FitnessVector.worst()

@@ -141,6 +141,7 @@ class RichPromptEvolver:
         self._output_history: List[List[str]] = []  # track generated code per gen
         self._best_history: List[float] = []
         self._diversity_history: List[float] = []
+        self._score_history: List[List[float]] = [[] for _ in self.population]
 
     # ── Initialisation ──────────────────────────────────────────────────
 
@@ -152,7 +153,10 @@ class RichPromptEvolver:
                 mutation_instructions=p["mutation_instructions"],
                 temperature=p["temperature"],
             )
-            for p in self._DEFAULT_PROMPTS[:self.pop_size]
+            for p in (
+                self._DEFAULT_PROMPTS[index % len(self._DEFAULT_PROMPTS)]
+                for index in range(self.pop_size)
+            )
         ]
 
     # ── Main evolution step ─────────────────────────────────────────────
@@ -182,16 +186,22 @@ class RichPromptEvolver:
         eval_results = self.evaluator.evaluate_batch(generated)
 
         # ── Compute multi-objective prompt fitness ───────────────────
-        for pg, res, gen_code in zip(self.population, eval_results, generated):
-            quality = max(0.0, min(1.0, res.score / 100.0)) if res.passed else 0.0
+        for idx, (pg, res, gen_code) in enumerate(
+            zip(self.population, eval_results, generated)
+        ):
+            quality = (
+                max(0.0, min(1.0, res.fitness.correctness))
+                if res.passed and res.fitness is not None
+                else 0.0
+            )
+            self._score_history[idx].append(quality)
 
             # Diversity: how unique is the generated code vs others this gen?
             all_codes = [g for g in generated if g != gen_code]
             uniqueness = 1.0 if not all_codes else (
                 1.0 - sum(1 for c in all_codes if c == gen_code) / len(all_codes)
             )
-            # Consistency: track score variance (placeholder until we have history)
-            consistency = 0.5  # neutral until enough history
+            consistency = self._consistency(idx)
 
             pf = PromptFitness(
                 code_quality=quality,
@@ -201,12 +211,20 @@ class RichPromptEvolver:
             pg.fitness = pf.combined()
 
         # ── Selection (elitist) ──────────────────────────────────────
-        self.population.sort(key=lambda pg: pg.fitness, reverse=True)
+        ranked = sorted(
+            enumerate(self.population),
+            key=lambda item: item[1].fitness,
+            reverse=True,
+        )
         elite_count = max(1, int(len(self.population) * self.elite_frac))
-        elites = self.population[:elite_count]
+        elite_indices = [idx for idx, _ in ranked[:elite_count]]
+        elites = [self.population[idx] for idx in elite_indices]
 
         # ── Breeding: fill with crossover + mutation ─────────────────
         new_pop: List[PromptGenome] = [copy.deepcopy(e) for e in elites]
+        new_score_history = [
+            list(self._score_history[idx]) for idx in elite_indices
+        ]
         while len(new_pop) < self.pop_size:
             if len(elites) >= 2 and random.random() < 0.6:
                 # Crossover
@@ -219,8 +237,10 @@ class RichPromptEvolver:
                 self._apply_mutation(child)
             child.fitness = 0.0
             new_pop.append(child)
+            new_score_history.append([])
 
         self.population = new_pop
+        self._score_history = new_score_history
 
         # ── Diversity tracking ───────────────────────────────────────
         diversity = self._population_diversity()
@@ -237,6 +257,16 @@ class RichPromptEvolver:
             )
 
         return generated
+
+    def _consistency(self, index: int) -> float:
+        """Return consistency from prompt score history, or a neutral prior."""
+        history = self._score_history[index]
+        if len(history) < 2:
+            return 0.5
+
+        mean = sum(history) / len(history)
+        variance = sum((score - mean) ** 2 for score in history) / len(history)
+        return max(0.0, min(1.0, 1.0 - (variance / 0.25)))
 
     # ── Crossover ──────────────────────────────────────────────────────
 

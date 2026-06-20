@@ -9,6 +9,22 @@ import pytest
 
 # Import directly (prompt_evolution imports muta_lambda internally)
 from muta_lambda import PromptGenome
+from prompt_evolution import RichPromptEvolver
+
+
+class DummyEvaluator:
+    def evaluate_batch(self, codes):
+        from fitness_vector import FitnessVector
+        from models import EvalResult
+
+        return [
+            EvalResult(
+                fitness=FitnessVector(correctness=1.0),
+                passed=True,
+                metrics={"score": 1.0},
+            )
+            for _ in codes
+        ]
 
 
 class TestPromptGenome:
@@ -128,3 +144,28 @@ class TestPromptGenome:
         child = PromptGenome.crossover(parent_a, parent_b)
         # Duplicates removed by set() in crossover
         assert len(child.few_shot_examples) <= len(set(parent_a.few_shot_examples + parent_b.few_shot_examples))
+
+
+class TestRichPromptEvolver:
+    def test_pop_size_is_honored_above_default_prompt_count(self):
+        evolver = RichPromptEvolver(
+            llm_fn=lambda _prompt: "def f(): return 1",
+            evaluator=DummyEvaluator(),
+            pop_size=8,
+            elite_frac=0.5,
+        )
+
+        assert len(evolver.population) == 8
+
+    def test_step_uses_configured_population_size(self):
+        evolver = RichPromptEvolver(
+            llm_fn=lambda _prompt: "def f(): return 1",
+            evaluator=DummyEvaluator(),
+            pop_size=4,
+            elite_frac=0.5,
+        )
+
+        generated = evolver.step("Sum numbers", "def f(n): return 0")
+
+        assert len(generated) == 4
+        assert len(evolver.population) == 4

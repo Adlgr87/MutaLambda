@@ -139,8 +139,8 @@ class DashboardRenderer:
             st.metric("Pareto Frontier", p_size)
 
         # ── Charts ────────────────────────────────────────────────
-        tab1, tab2, tab3 = st.tabs(
-            ["📈 Fitness", "🏝️ Islands", "🧠 HITL"]
+        tab1, tab2, tab3, tab4 = st.tabs(
+            ["📈 Fitness", "🏝️ Islands", "🧠 HITL", "Advanced Metrics"]
         )
 
         with tab1:
@@ -153,6 +153,9 @@ class DashboardRenderer:
 
         with tab3:
             self._render_hitl_panel(agent)
+
+        with tab4:
+            self._render_advanced_metrics(agent)
 
         # ── Auto-refresh ──────────────────────────────────────────
         if not self.state.stop_requested:
@@ -242,6 +245,29 @@ class DashboardRenderer:
                                     self.state.rejected_variants.append(best.code)
                                     st.warning("Rejected. Island will be reseeded.")
 
+    def _render_advanced_metrics(self, agent):
+        """Evolution Upgrade v2.0 telemetry."""
+        st.subheader("Evolution Upgrade v2.0")
+        if agent is None or not hasattr(agent, "get_metrics"):
+            st.info("No agent metrics available yet.")
+            return
+        metrics = agent.get_metrics()
+        advanced = metrics.get("advanced_selection", {}) or {}
+        thc = metrics.get("thc", {}) or {}
+        dialectic = metrics.get("dialectic", {}) or {}
+        spatial = metrics.get("spatial", {}) or {}
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Discovery Score Avg", f"{advanced.get('discovery_score_avg', 0.0):.3f}")
+            st.metric("Population Entropy", f"{advanced.get('population_entropy', 0.0):.3f}")
+        with col2:
+            st.metric("THC Rate", f"{thc.get('thc_transfer_rate', 0.0):.3f}")
+            st.metric("Fragment Survival", f"{thc.get('fragment_survival_gens', 0.0):.2f}")
+        with col3:
+            st.metric("Critique Rejection", f"{dialectic.get('critique_rejection_rate', 0.0):.3f}")
+            st.metric("Local Diversity", f"{spatial.get('local_diversity_index', 0.0):.3f}")
+
 
 # ── Lightweight Dashboard (no Streamlit dependency) ──────────────────
 
@@ -282,50 +308,23 @@ def integrate_hitl(
     """
     Wire HITL callbacks into a MutaLambdaAgent.
 
-    Parameters
-    ----------
-    agent : MutaLambdaAgent
-        The evolution agent to instrument.
-    dashboard : DashboardState | None
-        If provided, use this state; otherwise create new.
-    console : bool
-        Enable console dashboard (non-Streamlit fallback).
-
-    Returns
-    -------
-    DashboardState
-        The shared state object.
+    Nota:
+    - El core ya soporta `agent.inject_hint(code)` y luego lo inyecta
+      en el loop evolutivo via `_process_hitl_hints()`.
+    - Aquí hacemos integración segura usando esa API, evitando tocar
+      internamente `island.population` (frágil y dependiente del seed timing).
     """
     if dashboard is None:
         dashboard = DashboardState()
 
-    # Monkey-patch hints integration: check for pending hints each generation
     original_run = agent.run
 
     def _hitl_run(task: str = "") -> Any:
-        # Pre-generation: inject hints if available
         hints = dashboard.get_hints()
-        if hints:
+        if hints and hasattr(agent, "inject_hint"):
             for hint in hints:
-                _inject_hint(agent, hint)
-
-        # Run evolution normally
+                agent.inject_hint(hint)
         return original_run(task)
 
     agent.run = _hitl_run  # type: ignore[method-assign]
-
     return dashboard
-
-
-def _inject_hint(agent: Any, code: str) -> None:
-    """
-    Inject expert code into a random island as a seed individual.
-    """
-    import random as _random
-    island = _random.choice(agent.islands)
-    new_ind = type(agent.islands[0].population[0])(
-        code=code, score=0.0
-    )
-    island.population.append(new_ind)
-    if hasattr(agent, '_island_pool'):
-        pass  # IslandPool will pick up on next generation

@@ -15,7 +15,7 @@ from __future__ import annotations
 import threading
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 
 @dataclass
@@ -173,17 +173,39 @@ class IslandPool:
             mean_score=mean_score,
         )
 
-    def get_cross_island_diversity(self) -> float:
+    def get_cross_island_diversity(self, islands: Optional[List] = None) -> float:
         """
-        Diversidad entre islas: fracción de código único entre
-        todos los individuos de todas las islas en la última generación.
+        Diversidad entre islas usando Jaccard sobre tokens de código.
+
+        ``1.0`` significa conjuntos de tokens completamente disjuntos;
+        ``0.0`` significa poblaciones idénticas o no comparables.
         """
-        if not self._generation_snapshots:
+        if not islands:
             return 0.0
-        # Usamos el último snapshot para aproximar
-        # (no tenemos acceso directo a las poblaciones desde aquí,
-        #  pero el caller puede acceder a los objetos Island)
-        return 1.0  # placeholder — el agente principal lo calcula
+
+        island_tokens: List[Set[str]] = []
+        for island in islands:
+            tokens: Set[str] = set()
+            for ind in island.population:
+                tokens.update(ind.code.split())
+            island_tokens.append(tokens)
+
+        total_jaccard = 0.0
+        pairs = 0
+        for i in range(len(island_tokens)):
+            for j in range(i + 1, len(island_tokens)):
+                a, b = island_tokens[i], island_tokens[j]
+                if not a and not b:
+                    continue
+                union = len(a | b)
+                if union == 0:
+                    continue
+                total_jaccard += len(a & b) / union
+                pairs += 1
+
+        if pairs == 0:
+            return 0.0
+        return 1.0 - (total_jaccard / pairs)
 
     @property
     def generation_count(self) -> int:
