@@ -710,8 +710,8 @@ class MutaLambdaAgent:
                     active_branch_ids = set(self._lineage.get_ancestors(global_best.id))
                     active_branch_ids.add(global_best.id)
                     compressor.compress_inactive(active_branch_ids)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Lineage compression failed: %s", e)
 
             if (self.config.resurrection_enabled
                     and self._early_stop.stagnant_generations

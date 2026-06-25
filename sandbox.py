@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import atexit
 import json
 import logging
 import multiprocessing
@@ -85,8 +86,18 @@ def _eval_worker(args: Tuple[str, List[Dict], float, int]) -> EvalResult:
         parsimony = 1.0 / (1.0 + cyclomatic / code_kb)
 
         try:
-            last_line = proc.stdout.strip().split('\n')[-1]
-            report = json.loads(last_line)
+            lines = proc.stdout.strip().split('\n')
+            report = None
+            for line in reversed(lines):
+                line = line.strip()
+                if line.startswith("{"):
+                    try:
+                        report = json.loads(line)
+                        break
+                    except json.JSONDecodeError:
+                        continue
+            if report is None:
+                raise ValueError("No valid JSON line found in subprocess stdout")
             passed = report.get("passed", 0)
             total = report.get("total", 1)
             correctness = passed / max(total, 1)
@@ -192,6 +203,7 @@ class SandboxEvaluator:
                 multiprocessing.cpu_count(),
             )
         self._pool = ProcessPoolExecutor(max_workers=self.parallelism)
+        atexit.register(self.shutdown)
 
     def evaluate_batch(self, codes: List[str]) -> List[EvalResult]:
         """Evaluación paralela con pool persistente."""
@@ -226,9 +238,3 @@ class SandboxEvaluator:
     def shutdown(self, wait: bool = True) -> None:
         """Apaga el pool de procesos de forma controlada."""
         self._pool.shutdown(wait=wait)
-
-    def __del__(self) -> None:
-        try:
-            self.shutdown(wait=False)
-        except Exception:
-            pass
