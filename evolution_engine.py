@@ -479,3 +479,27 @@ RULES:
         if end == -1:
             return None
         return text[content_start + 1:end]
+
+
+def ast_crossover(parent_a: str, parent_b: str, rng: random.Random = random) -> str:
+    """Recombina funciones compartidas entre dos fragmentos de código AST."""
+    try:
+        tree_a = ast.parse(parent_a)
+        tree_b = ast.parse(parent_b)
+        funcs_a = {n.name: n for n in ast.walk(tree_a) if isinstance(n, ast.FunctionDef)}
+        funcs_b = {n.name: n for n in ast.walk(tree_b) if isinstance(n, ast.FunctionDef)}
+        common = set(funcs_a) & set(funcs_b)
+        if not common:
+            return parent_a
+        for node in ast.walk(tree_a):
+            if isinstance(node, ast.FunctionDef) and node.name in common:
+                if rng.random() < 0.5:
+                    replacement = copy.deepcopy(funcs_b[node.name])
+                    node.body = replacement.body
+                    node.args = replacement.args
+        ast.fix_missing_locations(tree_a)
+        result = ast.unparse(tree_a)
+        ast.parse(result)
+        return result
+    except Exception:
+        return parent_a

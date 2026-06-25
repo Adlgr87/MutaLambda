@@ -9,7 +9,7 @@ import logging
 import random
 from typing import Any, Callable, Dict, List, Optional
 
-from evolution_engine import ASTMutator, CoreEvolutionEngine
+from evolution_engine import ASTMutator, CoreEvolutionEngine, ast_crossover
 from models import EvalResult, Individual, IslandConfig
 from sandbox import SandboxEvaluator
 
@@ -208,27 +208,7 @@ class Island:
         generated = self.core_engine.crossover_with_llm(parent_a, parent_b, self.llm_fn)
         if generated is not None:
             return self._dialectic_refine(parent_a, generated)
-
-        try:
-            tree_a = ast.parse(parent_a)
-            tree_b = ast.parse(parent_b)
-            funcs_a = {n.name: n for n in ast.walk(tree_a) if isinstance(n, ast.FunctionDef)}
-            funcs_b = {n.name: n for n in ast.walk(tree_b) if isinstance(n, ast.FunctionDef)}
-            common = set(funcs_a.keys()) & set(funcs_b.keys())
-            if not common:
-                return parent_a
-            for node in ast.walk(tree_a):
-                if isinstance(node, ast.FunctionDef) and node.name in common:
-                    if random.random() < 0.5:
-                        b_func = copy.deepcopy(funcs_b[node.name])
-                        node.body = b_func.body
-                        node.args = b_func.args
-            ast.fix_missing_locations(tree_a)
-            result = ast.unparse(tree_a)
-            ast.parse(result)
-            return result
-        except Exception:
-            return parent_a
+        return ast_crossover(parent_a, parent_b)
 
     def _dialectic_refine(self, base_code: str, candidate_code: str) -> str:
         """Run optional dialectic synthesis before a candidate reaches sandbox."""

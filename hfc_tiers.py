@@ -21,7 +21,7 @@ import random
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
-from evolution_engine import ASTMutator, CoreEvolutionEngine
+from evolution_engine import ASTMutator, CoreEvolutionEngine, ast_crossover
 from fitness_vector import FitnessVector
 from models import EvalResult, Individual
 
@@ -395,34 +395,7 @@ RULES:
         return self._ast_crossover(parent_a.code, parent_b.code)
 
     def _ast_crossover(self, parent_a: str, parent_b: str) -> str:
-        try:
-            tree_a = ast.parse(parent_a)
-            tree_b = ast.parse(parent_b)
-            funcs_a = {
-                node.name: node
-                for node in ast.walk(tree_a)
-                if isinstance(node, ast.FunctionDef)
-            }
-            funcs_b = {
-                node.name: node
-                for node in ast.walk(tree_b)
-                if isinstance(node, ast.FunctionDef)
-            }
-            common = set(funcs_a) & set(funcs_b)
-            if not common:
-                return parent_a
-            for node in ast.walk(tree_a):
-                if isinstance(node, ast.FunctionDef) and node.name in common:
-                    if self.rng.random() < 0.5:
-                        replacement = copy.deepcopy(funcs_b[node.name])
-                        node.body = replacement.body
-                        node.args = replacement.args
-            ast.fix_missing_locations(tree_a)
-            result = ast.unparse(tree_a)
-            ast.parse(result)
-            return result
-        except Exception:
-            return ASTMutator.apply_random_mutation(parent_a)
+        return ast_crossover(parent_a, parent_b, self.rng)
 
     def _process_migrations(
         self,

@@ -31,7 +31,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from fitness_vector import FitnessVector
-from muta_lambda import Individual, logger
+from models import Individual
+from muta_lambda import logger
 
 
 @dataclass

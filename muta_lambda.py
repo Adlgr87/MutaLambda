@@ -329,6 +329,7 @@ class MutaLambdaAgent:
             self._seed_islands_differentiated(config.seed_codes)
 
         self.archive: Optional[SolutionArchive] = None
+        self._embed_cache: Dict = {}
         if config.archive_solutions:
             try:
                 self.archive = SolutionArchive()
@@ -467,11 +468,16 @@ class MutaLambdaAgent:
 
         if self.archive is not None:
             try:
+                code_key = (code_a, code_b)
+                if code_key in self._embed_cache:
+                    return self._embed_cache[code_key]
                 emb_a = self.archive._encode_normalized([code_a])[0]
                 emb_b = self.archive._encode_normalized([code_b])[0]
-                return max(0.0, float(np.dot(emb_a, emb_b)))
-            except Exception:
-                pass
+                score = max(0.0, float(np.dot(emb_a, emb_b)))
+                self._embed_cache[code_key] = score
+                return score
+            except Exception as e:
+                logger.warning("Embed cache similarity failed: %s", e)
 
         tokens_a = set(code_a.split())
         tokens_b = set(code_b.split())
