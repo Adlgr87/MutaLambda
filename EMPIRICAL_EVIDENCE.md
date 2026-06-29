@@ -334,13 +334,19 @@ cat reports/self_evolution/dominates_report.md
 - Multiplicative impact: called O(N²) times per generation
 - Estimated savings: ~3-5 seconds per evolution run (typical workload)
 
+**Original Migration Implementation (Retained):**
+- Ring topology: 92.2% useful migrations, 7.1% harmful
+- Simple, predictable, effective
+- Superior to attempted fitness-directed approach
+
 ### Failed Experiments (Not for Production)
 
 **Fitness-Directed Migration:**
 - ❌ **Hypothesis disproven**: Original ring topology outperformed gradient-based approach
 - ❌ 57.6% success rate vs ring's 92.2%
 - ❌ 41.1% harmful migrations vs ring's 7.1%
-- **Recommendation**: Do NOT use in production. Keep original ring topology.
+- ✅ **Action taken**: Reverted to original implementation
+- **Recommendation**: Keep ring topology as default
 
 **AST Mutations (Extended Self-Evolution):**
 - Produced false speedups (+97%, +100%) due to semantic bugs
