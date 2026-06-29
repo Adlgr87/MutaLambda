@@ -9,6 +9,8 @@
 [![CLI](https://img.shields.io/badge/CLI-v3.1.0-orange)]()
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-success)]()
 
+**English** | **[Español](README_ES.md)**
+
 </div>
 
 ---
@@ -21,7 +23,7 @@ MutaLambda is an evolutionary code optimization system that uses Large Language 
 
 ✅ **`_get_fitness()` optimization** — +10.2% speedup validated with 147/147 tests passing  
 ✅ **Interactive CLI** — Full-featured command-line interface with retro animations  
-✅ **Checkpoint system** — Save and resume evolution runs seamlessly
+✅ **Checkpoint system** — Save and resume evolution runs seamlessly  
 
 ---
 
@@ -63,38 +65,38 @@ def _get_fitness(ind: Individual) -> FitnessVector:
 ## 🏗️ Architecture
 
 ```
-cli.py                   Entry point CLI (Click)
+cli.py                   CLI entry point (Click)
 ├── cli/                 CLI package
-│   ├── main.py          Lógica principal: MutaLambdaCLI, InteractiveREPL
-│   ├── animator.py      Animaciones retro (ASCII art, progress bars)
-│   ├── config_manager.py  Gestión de configuraciones (templates: basic/advanced/research)
-│   └── checkpoint_manager.py  Gestión de checkpoints (pickle + gzip)
+│   ├── main.py          Main logic: MutaLambdaCLI, InteractiveREPL
+│   ├── animator.py      Retro animations (ASCII art, progress bars)
+│   ├── config_manager.py  Configuration management (templates: basic/advanced/research)
+│   └── checkpoint_manager.py  Checkpoint management (pickle + gzip)
 
-muta_lambda.py           Núcleo: Multi-Objective Evolution (v3.1)
-├── models.py            Datos: Individual, FitnessVector, EvoStats
-├── island.py            Evolución: mutaciones AST + selección NSGA-II
-├── sandbox.py           Evaluación segura (Docker)
-├── nsga2.py             Selección multi-objetivo (Pareto + Crowding)
-├── fitness_vector.py    Vector 6D: correctness, latency, memory, parsimony
-├── interpretability.py  Salvaguardas de interpretabilidad (3 capas)
-├── meta_evolution.py    Auto-ajuste de hiperparámetros
-└── mutation_operators.py  Operadores genéticos (crossover, mutación)
+muta_lambda.py           Core: Multi-Objective Evolution (v3.1)
+├── models.py            Data: Individual, FitnessVector, EvoStats
+├── island.py            Evolution: AST mutations + NSGA-II selection
+├── sandbox.py           Secure evaluation (Docker)
+├── nsga2.py             Multi-objective selection (Pareto + Crowding)
+├── fitness_vector.py    6D vector: correctness, latency, memory, parsimony
+├── interpretability.py  Interpretability safeguards (3 layers)
+├── meta_evolution.py    Hyperparameter auto-tuning
+└── mutation_operators.py  Genetic operators (crossover, mutation)
 
-evolution_engine.py      Motor principal de evolución
-├── pattern_memory.py    Memoria de patrones AST
-├── tipping_points.py    Detección de transiciones de fase
-└── thc_engine.py        Transferencia Horizontal de Código
+evolution_engine.py      Main evolution engine
+├── pattern_memory.py    AST pattern memory
+├── tipping_points.py    Phase transition detection
+└── thc_engine.py        Horizontal Code Transfer
 
-muta_ext/                Extensiones científicas
-├── migration.py         Bus de migración entre islas
-├── lineage_graph.py     Genealogía completa (DAG)
-├── convergence.py       Monitoreo multi-escala
-├── early_stop_monitor.py  Criterios de parada
-├── hfc.py               Competencia jerárquica (HFC)
-├── spatial_topology.py  Topología espacial (grid)
+muta_ext/                Scientific extensions
+├── migration.py         Inter-island migration bus
+├── lineage_graph.py     Complete genealogy (DAG)
+├── convergence.py       Multi-scale monitoring
+├── early_stop_monitor.py  Stopping criteria
+├── hfc.py               Hierarchical Fair Competition (HFC)
+├── spatial_topology.py  Spatial topology (grid)
 ├── advanced_selection.py  UCB, Thompson Sampling, ε-greedy
-├── prompt_evolver.py    Evolución de prompts
-└── benchmarking/        Sistema de benchmarking robusto
+├── prompt_evolver.py    Prompt evolution
+└── benchmarking/        Robust benchmarking system
 ```
 
 ---
@@ -158,19 +160,19 @@ All 147 tests should pass.
 ### Run CLI
 
 ```bash
-# Ver ayuda general
+# View general help
 python cli.py --help
 
-# Ejecutar evolución con configuración
+# Run evolution with configuration
 python cli.py run --config config.yaml --generations 50
 
-# Crear configuración desde plantilla
+# Create configuration from template
 python cli.py config create --output config.yaml --template basic
 
-# Reanudar desde checkpoint
+# Resume from checkpoint
 python cli.py resume --checkpoint checkpoints/gen_50.json --additional-gens 30
 
-# Modo interactivo
+# Interactive mode
 python cli.py interactive
 ```
 
@@ -178,69 +180,69 @@ python cli.py interactive
 
 ## 🖥️ Command-Line Interface (CLI)
 
-MutaLambda incluye una CLI completa con animaciones retro, gestión de configuraciones y checkpoints.
+MutaLambda includes a complete CLI with retro animations, configuration management, and checkpoints.
 
-### Comandos Disponibles
+### Available Commands
 
-| Comando | Descripción |
+| Command | Description |
 |---------|-------------|
-| `run` | Ejecutar corrida evolutiva completa |
-| `resume` | Reanudar evolución desde checkpoint |
-| `config create` | Crear configuración desde plantilla |
-| `config validate` | Validar archivo de configuración |
-| `config show` | Mostrar resumen de configuración |
-| `stats` | Mostrar estadísticas de ejecuciones anteriores |
-| `evaluate` | Evaluar y resumir resultados |
-| `mutate` | Operaciones de mutación (prompts, operadores, hiperparámetros) |
-| `interactive` | Modo interactivo tipo REPL |
-| `checkpoints` | Gestionar checkpoints |
+| `run` | Execute complete evolutionary run |
+| `resume` | Resume evolution from checkpoint |
+| `config create` | Create configuration from template |
+| `config validate` | Validate configuration file |
+| `config show` | Display configuration summary |
+| `stats` | Show statistics from previous runs |
+| `evaluate` | Evaluate and summarize results |
+| `mutate` | Mutation operations (prompts, operators, hyperparameters) |
+| `interactive` | Interactive REPL mode |
+| `checkpoints` | Manage checkpoints |
 
-### Ejemplos de Uso
+### Usage Examples
 
-**Ejecutar evolución con animaciones retro:**
+**Run evolution with retro animations:**
 ```bash
 python cli.py run --config config.yaml --generations 100 --animation retro
 ```
 
-**Crear configuración avanzada:**
+**Create advanced configuration:**
 ```bash
 python cli.py config create --output advanced.yaml --template advanced
 ```
 
-**Reanudar desde checkpoint:**
+**Resume from checkpoint:**
 ```bash
 python cli.py resume --checkpoint checkpoints/checkpoint_0050.json --additional-gens 50
 ```
 
-**Modo interactivo:**
+**Interactive mode:**
 ```bash
 python cli.py interactive
 ```
 
-### Plantillas de Configuración
+### Configuration Templates
 
-La CLI incluye tres plantillas predefinidas:
+The CLI includes three predefined templates:
 
-- **basic** — Configuración mínima para pruebas rápidas (50 generaciones, 4 islas)
-- **advanced** — Configuración para producción (100 generaciones, 8 islas, fully_connected)
-- **research** — Configuración experimental (200 generaciones, 12 islas, tracking completo)
+- **basic** — Minimal configuration for quick tests (50 generations, 4 islands)
+- **advanced** — Production configuration (100 generations, 8 islands, fully_connected)
+- **research** — Experimental configuration (200 generations, 12 islands, complete tracking)
 
-### Gestión de Checkpoints
+### Checkpoint Management
 
-Los checkpoints se guardan automáticamente cada N generaciones (configurable):
+Checkpoints are saved automatically every N generations (configurable):
 
 ```bash
-# Listar checkpoints disponibles
+# List available checkpoints
 python cli.py checkpoints --list
 
-# Limpiar checkpoints antiguos
+# Clean old checkpoints
 python cli.py checkpoints --clean --max-age 7
 
-# Reanudar desde checkpoint específico
+# Resume from specific checkpoint
 python cli.py resume --checkpoint checkpoints/checkpoint_0050.json --additional-gens 30
 ```
 
-**Documentación completa:** [docs/CLI.md](docs/CLI.md)
+**Complete documentation:** [docs/CLI.md](docs/CLI.md)
 
 ---
 
@@ -267,20 +269,20 @@ python cli.py resume --checkpoint checkpoints/checkpoint_0050.json --additional-
 
 ### User Documentation
 
-- **[docs/CLI.md](docs/CLI.md)** — Guía completa de la CLI: comandos, configuración, checkpoints, modo interactivo
-- **[docs/METRICS.md](docs/METRICS.md)** — Métricas de rendimiento, benchmarks validados y análisis de eficiencia
+- **[docs/CLI.md](docs/CLI.md)** — Complete CLI guide: commands, configuration, checkpoints, interactive mode
+- **[docs/METRICS.md](docs/METRICS.md)** — Performance metrics, validated benchmarks, and efficiency analysis
 
 ### Core Documentation
 
-- **[EMPIRICAL_EVIDENCE.md](EMPIRICAL_EVIDENCE.md)** — Reporte comprensivo de optimizaciones validadas y experimentos fallidos
-- **[PLANS/AUTO_IMPROVEMENT_PLAN.md](PLANS/AUTO_IMPROVEMENT_PLAN.md)** — Plan de auto-mejora en 6 fases
+- **[EMPIRICAL_EVIDENCE.md](EMPIRICAL_EVIDENCE.md)** — Comprehensive report of validated optimizations and failed experiments
+- **[PLANS/AUTO_IMPROVEMENT_PLAN.md](PLANS/AUTO_IMPROVEMENT_PLAN.md)** — 6-phase self-improvement plan
 
 ### Code Documentation
 
 - **`nsga2.py`** — NSGA-II multi-objective selection with optimized `_get_fitness()`
 - **`fitness_vector.py`** — 6-dimensional fitness vector for Pareto optimization
 - **`interpretability.py`** — 3-layer safeguards against "alien code" from recursive self-improvement
-- **`cli/main.py`** — Lógica principal de la CLI con integración al core evolutivo
+- **`cli/main.py`** — Main CLI logic with evolutionary core integration
 
 ---
 
@@ -347,7 +349,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Version:** 3.1.0 (CLI)  
 **Last Updated:** 2026-06-29  
-**Maintainer:** MutaLambda Development Team
+**Maintainer:** MutaLambda Development Team  
 
 ### Current Capabilities
 
@@ -357,7 +359,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ✅ **Validated optimizations** with comprehensive test coverage (147/147 tests)  
 ✅ **Interpretability safeguards** for future self-evolution work  
 ✅ **Checkpoint system** for resuming long evolution runs  
-✅ **Configuration templates** for different use cases (basic/advanced/research)
+✅ **Configuration templates** for different use cases (basic/advanced/research)  
 
 ### Validated Performance Improvements
 
@@ -372,7 +374,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ❌ Fitness-directed migration (57.6% success vs 92.2% ring)  
 ❌ `dominates()` loop unrolling (-15.6% performance)  
 ❌ `weighted_sum()` fast path (-13.4% performance)  
-❌ Aggressive AST mutations (semantic bugs)
+❌ Aggressive AST mutations (semantic bugs)  
 
 ### Roadmap
 
@@ -388,7 +390,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Total optimizations attempted:** 7  
 **Validated improvements:** 1 (+10.2% speedup)  
 **Failed experiments:** 4 (reverted)  
-**Tests passing:** 147/147 (100%)
+**Tests passing:** 147/147 (100%)  
 
 **Impact on production runs:**
 - Saves ~17 seconds per evolution run (50 generations, 4 islands, 32 individuals)
@@ -405,7 +407,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Date:** 2026-06-29  
 **Status:** Production Ready  
 **Tests:** 147/147 passing ✅  
-**Validated Optimization:** `_get_fitness()` +10.2% speedup
+**Validated Optimization:** `_get_fitness()` +10.2% speedup  
 
 ---
 
