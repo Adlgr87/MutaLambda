@@ -1,12 +1,11 @@
-# MutaLambda: Evolutionary Code Optimization for Scientific Systems
+# MutaLambda: Evolutionary Code Optimization System
 
 <div align="center">
 
-**Validated Performance Improvements in Agent-Based Social Simulation**
+**Validated Performance Improvements through Evolutionary Optimization**
 
-[![Performance](https://img.shields.io/badge/Performance-3.6x%20faster-blue)]()
-[![Correctness](https://img.shields.io/badge/Correctness-100%25-green)]()
-[![Modules](https://img.shields.io/badge/Modules-4%20optimized-orange)]()
+[![Performance](https://img.shields.io/badge/Performance-+10.2%25%20speedup-blue)]()
+[![Correctness](https://img.shields.io/badge/Correctness-147%2F147%20tests-green)]()
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-success)]()
 
 </div>
@@ -15,255 +14,244 @@
 
 ## 🎯 Overview
 
-MutaLambda is an evolutionary code optimization system that uses Large Language Models (LLMs) to automatically improve performance-critical components of scientific software. This repository documents the successful application of MutaLambda to the MASSIVE framework, achieving **50-263% speedups** while maintaining **100% scientific correctness**.
+MutaLambda is an evolutionary code optimization system that uses Large Language Models (LLMs) to automatically improve performance-critical components of scientific software. The system employs genetic algorithms with AST-based mutations to evolve Python functions for better performance while maintaining correctness.
 
-### Key Achievements
+### Key Achievement
 
-✅ **4 modules optimized** with measurable improvements  
-✅ **3.6x faster** social pressure calculations  
-✅ **2.3x faster** thermodynamic energy computations  
-✅ **100% correctness** maintained across all optimizations  
-✅ **25.8% code reduction** in intervention optimizer  
+✅ **`_get_fitness()` optimization** — +10.2% speedup validated with 147/147 tests passing
 
 ---
 
-## 📊 Results Summary
+## 📊 Validated Optimization
 
-### Performance Improvements
+### `_get_fitness()` — +10.2% speedup
 
-| Module | Speedup | Impact |
-|--------|---------|--------|
-| **utility_logic** | **3.6x faster** | Social pressure calculations |
-| **energy_engine_pure** | **2.3x faster** | Thermodynamic energy engine |
-| **social_architect_pure** | **1.5x faster** | Polarization analysis |
-| **intervention_optimizer** | **25.8% simpler** | Strategy optimization |
+**Problem:** The `_get_fitness()` helper function is called O(N²) times during NSGA-II selection. It extracts a `FitnessVector` from an `Individual`, checking if the `.fitness` attribute exists.
 
-### Real-World Impact
+**Solution:** Replace `hasattr()` check with `getattr()` using default `None`. This avoids double attribute lookup overhead.
 
-For simulations with 10,000+ agents:
-- **35% faster** simulation runtime
-- **60% faster** large-scale experiments (50K agents)
-- **50% faster** real-time analytics
+```python
+# Before
+def _get_fitness(ind: Individual) -> FitnessVector:
+    if hasattr(ind, 'fitness') and ind.fitness is not None:
+        return ind.fitness
+    return FitnessVector(
+        correctness=max(0.0, min(1.0, ind.score / 100.0)),
+        parsimony=0.5,
+    )
 
----
+# After
+def _get_fitness(ind: Individual) -> FitnessVector:
+    fitness = getattr(ind, 'fitness', None)
+    if fitness is not None:
+        return fitness
+    return FitnessVector(
+        correctness=max(0.0, min(1.0, ind.score / 100.0)),
+        parsimony=0.5,
+    )
+```
 
-## 📚 Documentation
+**Impact:** ~17 seconds saved per typical evolution run (50 generations, 4 islands, 32 individuals).
 
-### Complete Documentation Package
-
-1. **[Experimental Results](MutaLambda_Experimental_Results.md)**
-   - Comprehensive technical report with all benchmarks
-   - Statistical analysis and validation methodology
-   - Model comparison (Phi-4-mini vs Mistral Large)
-   - Coverage analysis and limitations
-
-2. **[Optimized Modules](MutaLambda_Optimized_Modules.md)**
-   - Detailed before/after code comparisons
-   - Optimization techniques explained
-   - Integration guides for each module
-   - Performance verification scripts
-
-3. **[Paper Section](MutaLambda_Paper_Section.md)**
-   - Publication-ready section for academic papers
-   - Formal experimental methodology
-   - Statistical rigor and validation
-   - Discussion of implications
+**Validation:** 13/13 nsga2 tests, 14/14 fitness_vector tests, 147/147 total tests ✅
 
 ---
 
-## 🔬 Scientific Validation
+## 🏗️ Architecture
 
-### Correctness Guarantee
+```
+muta_lambda.py         Núcleo: Multi-Objective Evolution (v3.1)
+├── models.py          Datos: Individual, FitnessVector, EvoStats
+├── island.py          Evolución: mutaciones AST + selección NSGA-II
+├── sandbox.py         Evaluación segura (Docker)
+├── nsga2.py           Selección multi-objetivo (Pareto + Crowding)
+├── fitness_vector.py  Vector 6D: correctness, latency, memory, parsimony
+├── interpretability.py Salvaguardas de interpretabilidad (3 capas)
+├── meta_evolution.py  Auto-ajuste de hiperparámetros
+└── mutation_operators.py  Operadores genéticos (crossover, mutación)
 
-All optimized modules maintain **100% scientific correctness**:
-- ✅ Numerical equivalence: ε < 1e-10
-- ✅ Unit tests: 100% pass rate
-- ✅ Integration testing: Identical simulation results
-- ✅ Peer review: Domain expert approval
+evolution_engine.py    Motor principal de evolución
+├── pattern_memory.py  Memoria de patrones AST
+├── tipping_points.py  Detección de transiciones de fase
+└── thc_engine.py      Transferencia Horizontal de Código
 
-### Statistical Rigor
+muta_ext/              Extensiones científicas
+├── migration.py       Bus de migración entre islas
+├── lineage_graph.py   Genealogía completa (DAG)
+├── convergence.py     Monitoreo multi-escala
+├── early_stop_monitor.py  Criterios de parada
+├── hfc.py             Competencia jerárquica (HFC)
+├── spatial_topology.py  Topología espacial (grid)
+├── advanced_selection.py  UCB, Thompson Sampling, ε-greedy
+├── prompt_evolver.py  Evolución de prompts
+└── benchmarking/      Sistema de benchmarking robusto
+```
 
-- **Confidence level**: 95%
-- **P-value**: < 0.001 for all improvements
-- **Effect size**: Large (Cohen's d > 0.8)
-- **Iterations**: 1,000 runs per module
+---
+
+## 📚 Lessons Learned
+
+### 1. Measure Before and After
+
+Never assume an optimization helps — benchmark it. We attempted several optimizations that actually **degraded** performance:
+
+- `dominates()` loop unrolling: **-15.6%** performance (reverted)
+- `weighted_sum()` fast path: **-13.4%** performance (reverted)
+- Fitness-directed migration: **57.6%** success rate vs ring topology's **92.2%** (reverted)
+
+### 2. Simplicity Beats Complexity
+
+Ring topology (92.2% success) outperformed our gradient-based migration system (57.6%). The simpler algorithm was more effective because:
+
+- Predictable genetic flow
+- No overhead from complex selection logic
+- Better diversity preservation
+
+### 3. Python Built-ins Are Fast
+
+`zip()`, `all()`, `any()` are implemented in C and often faster than manual alternatives. Our attempts to "optimize" `dominates()` with explicit variable assignments actually added overhead.
+
+### 4. Validation Is Non-Negotiable
+
+Performance measurement without correctness validation produces false positives. We saw AST mutations produce **+97% and +100% speedups** that were actually semantic bugs:
+
+- Off-by-one errors that made functions return early
+- Missing individuals in population fronts
+- Incorrect dominance relationships
+
+### 5. Small Improvements Compound
+
+A 10.2% speedup in a hot path saves 17 seconds per evolution run. Over 100 runs, that's **28 minutes saved**. Small, validated improvements are worth pursuing.
 
 ---
 
 ## 🚀 Quick Start
 
-### Verify Optimizations
+### Installation
 
 ```bash
-# Clone the repository
-git clone <repository-url>
+git clone https://github.com/Adlgr87/MutaLambda
 cd MutaLambda
-
-# Verify optimized modules are loaded
-python -c "from massive.core import utility_logic; print('✓ Optimized modules active')"
-
-# Run performance benchmark
-python benchmarks/verify_performance.py
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-### Expected Output
+### Run Tests
 
+```bash
+python -m pytest tests/ -v
 ```
-Testing utility_logic optimization...
-  Baseline: 0.030 ms
-  Optimized: 0.008 ms
-  Speedup: 3.6x ✓
 
-Testing energy_engine_pure optimization...
-  Baseline: 0.619 ms
-  Optimized: 0.270 ms
-  Speedup: 2.3x ✓
-
-All optimizations verified! ✓
-```
+All 147 tests should pass.
 
 ---
 
-## 🧪 Model Comparison
+## 🔬 Methodology
 
-### Why Model Scale Matters
+### Optimization Process
 
-| Model | Parameters | Success Rate | Time/Attempt |
-|-------|-----------|--------------|--------------|
-| Phi-4-mini | 3.8B | 17% | 5-10 min |
-| Mistral Large | ~123B | **80%** | 1-2 min |
+1. **Identify hot paths** — Profile code to find functions called frequently
+2. **Benchmark baseline** — Measure current performance with statistical rigor
+3. **Apply mutations** — Use AST transformations (loop unrolling, variable inlining, etc.)
+4. **Validate correctness** — Ensure outputs are identical (ε < 1e-10)
+5. **Measure improvement** — Only integrate if speedup is real and validated
 
-**Key Insight**: Models below ~10B parameters fail on complex mathematical code (game theory, linear algebra, differential equations).
+### Validation Requirements
 
----
-
-## 📈 Code Coverage Analysis
-
-### What Can Be Optimized?
-
-```
-MASSIVE Framework (100%)
-├── Optimizable (15%) ← Performance-critical paths
-├── Conditioned (24%) ← Requires special wrappers
-└── Protected (61%) ← Scientific foundations (cannot touch)
-```
-
-**Protected Code** (61%):
-- Differential equations
-- Kalman filter implementations
-- Thermodynamic formulations
-- Game theory models
-
-These represent validated scientific formulations that cannot be modified without compromising theoretical foundations.
+- ✅ Numerical equivalence: ε < 1e-10
+- ✅ Unit tests: 100% pass rate
+- ✅ Integration testing: Identical results
+- ✅ Performance improvement: Statistically significant (p < 0.05)
 
 ---
 
-## 🔧 Optimization Techniques
+## 📖 Documentation
 
-### Applied Patterns
+### Core Documentation
 
-1. **Vectorization**: Replace Python loops with NumPy operations
-2. **Matrix Operations**: Use BLAS-optimized linear algebra
-3. **Memoization**: Pre-compute expensive values once
-4. **Algorithmic Simplification**: Reduce O(n²) to O(n)
-5. **Code Consolidation**: Eliminate redundant logic
+- **[EMPIRICAL_EVIDENCE.md](EMPIRICAL_EVIDENCE.md)** — Comprehensive report of optimization attempts, including validated improvements and honest assessment of failed experiments
+- **[PLANS/AUTO_IMPROVEMENT_PLAN.md](PLANS/AUTO_IMPROVEMENT_PLAN.md)** — Original 6-phase self-improvement plan
 
-### Example: Vectorization
+### Code Documentation
 
-```python
-# Before: O(n²) Python loops
-for i in range(n):
-    for j in neighbors(i):
-        pressure[i] += influence(i, j)
-
-# After: Vectorized NumPy (3.6x faster)
-pressure = np.sum(opinion_diffs * adjacency_matrix, axis=1)
-```
+- **`nsga2.py`** — NSGA-II multi-objective selection with optimized `_get_fitness()`
+- **`fitness_vector.py`** — 6-dimensional fitness vector for Pareto optimization
+- **`interpretability.py`** — 3-layer safeguards against "alien code" from recursive self-improvement
 
 ---
 
-## 📦 Repository Structure
+## 🎓 Key Insights
 
-```
-MutaLambda/
-├── README.md                           # This file
-├── MutaLambda_Experimental_Results.md  # Complete technical report
-├── MutaLambda_Optimized_Modules.md     # Module documentation
-├── MutaLambda_Paper_Section.md         # Academic paper section
-├── benchmarks/                         # Performance data
-│   ├── baseline_measurements.json
-│   ├── mistral_results.json
-│   └── phi4mini_results.json
-├── scripts/                            # Verification tools
-│   ├── verify_performance.py
-│   └── validate_correctness.py
-└── optimized_modules/                  # Optimized code
-    ├── utility_logic.py
-    ├── energy_engine_pure.py
-    ├── social_architect_pure.py
-    └── intervention_optimizer.py
-```
+### What Works
 
----
+✅ **Small, targeted optimizations** in hot paths  
+✅ **`getattr()` instead of `hasattr()`** for attribute access  
+✅ **Simple algorithms** (ring topology) over complex ones (gradient migration)  
+✅ **Rigorous validation** before integration  
+✅ **Honest benchmarking** with before/after measurements  
 
-## 🎓 Citation
+### What Doesn't Work
 
-If you use MutaLambda in your research, please cite:
-
-```bibtex
-@software{mutalambda2026,
-  title={MutaLambda: Evolutionary Code Optimization for Scientific Systems},
-  author={MutaLambda Research Team},
-  year={2026},
-  version={1.0},
-  url={https://github.com/your-repo/mutalambda}
-}
-```
+❌ **Aggressive AST mutations** without semantic validation  
+❌ **Complex "intelligent" systems** that outperform simple alternatives  
+❌ **Loop unrolling** in Python (C-level optimizations don't apply)  
+❌ **Premature optimization** without measurement  
+❌ **Automatic deployment** of evolved code without human review  
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+### Adding Optimizations
 
-### Areas for Contribution
+1. Identify a hot path with profiling
+2. Benchmark baseline performance
+3. Apply optimization
+4. Validate correctness (all tests must pass)
+5. Measure improvement (must be statistically significant)
+6. Update EMPIRICAL_EVIDENCE.md with results
+7. Submit pull request with benchmarks
 
-- Extend optimization to conditioned code (24%)
-- Support for additional LLM providers
-- Cross-domain validation studies
-- Performance benchmarks for other ABM frameworks
+### Reporting Issues
+
+If you find a performance regression or correctness issue:
+
+1. Run `python -m pytest tests/ -v` to confirm
+2. Check EMPIRICAL_EVIDENCE.md for known limitations
+3. Open issue with reproduction steps
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🏆 Key Takeaways
+## 🙏 Acknowledgments
 
-1. **LLM-driven evolution works** for scientific code (80% success rate)
-2. **Model scale is critical** - large models (~100B+) required for complex math
-3. **Performance gains are real** - 50-263% speedups in critical components
-4. **Scientific validity is preservable** - 100% correctness maintained
-5. **Not all code is optimizable** - 61% represents scientific foundations
+- **NSGA-II algorithm** — Deb et al., 2002
+- **Python AST module** — Standard library
+- **Pytest framework** — Testing infrastructure
+- **Docker** — Secure sandbox execution
 
 ---
 
-## 📞 Contact
+## 📊 Project Status
 
-For questions, issues, or collaboration opportunities:
-- Open an issue on GitHub
-- Email: mutalambda@research.org
-- Documentation: [Full docs](docs/index.md)
+**Version:** 3.1 (Hot-Path Optimization)  
+**Date:** 2026-06-29  
+**Status:** Production Ready  
+**Tests:** 147/147 passing ✅  
+**Validated Optimization:** `_get_fitness()` +10.2% speedup
 
 ---
 
 <div align="center">
 
-**Built with 🧬 Evolutionary Intelligence**
+**Built with evolutionary algorithms, validated with empirical evidence.**
 
-*MutaLambda: Where AI improves AI-generated science*
+[Report Bug](https://github.com/Adlgr87/MutaLambda/issues) · [Request Feature](https://github.com/Adlgr87/MutaLambda/issues)
 
 </div>
