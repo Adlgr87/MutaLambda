@@ -178,9 +178,13 @@ def nsga2_tournament_select(
 # ── Helpers ────────────────────────────────────────────────────────────
 
 def _get_fitness(ind: Individual) -> FitnessVector:
-    """Extract FitnessVector from Individual, falling back to constructing one."""
-    if hasattr(ind, 'fitness') and ind.fitness is not None:
-        return ind.fitness  # type: ignore[return-value]
+    """Extract FitnessVector from Individual, optimized for hot path.
+    
+    Optimized: use getattr with default None instead of hasattr() check.
+    """
+    fitness = getattr(ind, 'fitness', None)
+    if fitness is not None:
+        return fitness
     # Fallback: treat scalar score as correctness, rest unknown
     return FitnessVector(
         correctness=max(0.0, min(1.0, ind.score / 100.0)),
