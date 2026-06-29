@@ -1,0 +1,111 @@
+[
+  {
+    "name": "dominates",
+    "baseline_time": 1.5933039000022593,
+    "evolved_time": 0.990462666656337,
+    "improvement_pct": 37.83592278566992,
+    "best_gen": 3,
+    "evolved_code": "for _ in range(1):\n\n    def dominates_original(correctness, latency_p50, latency_p99, throughput, memory_peak_mb, parsimony, other_correctness, other_latency_p50, other_latency_p99, other_throughput, other_memory_peak_mb, other_parsimony):\n        \"\"\"Pareto dominance check.\"\"\"\n        self_dims = (correctness, -latency_p50, -latency_p99, throughput, -memory_peak_mb, parsimony)\n        other_dims = (other_correctness, -other_latency_p50, -other_latency_p99, other_throughput, -other_memory_peak_mb, other_parsimony)\n        at_least_as_good = all((s >= o for s, o in zip(self_dims, other_dims)))\n        strictly_better = any((s > o for s, o in zip(self_dims, other_dims)))\n        return at_least_as_good and strictly_better\nfor _ in range(1):\n\n    def dominates_original(correctness, latency_p50, latency_p99, throughput, memory_peak_mb, parsimony, other_correctness, other_latency_p50, other_latency_p99, other_throughput, other_memory_peak_mb, other_parsimony):\n        \"\"\"Pareto dominance check.\"\"\"\n        self_dims = (correctness, -latency_p50, -latency_p99, throughput, -memory_peak_mb, parsimony)\n        other_dims = (other_correctness, -other_latency_p50, -other_latency_p99, other_throughput, -other_memory_peak_mb, other_parsimony)\n        at_least_as_good = all((s >= o for s, o in zip(self_dims, other_dims)))\n        strictly_better = any((s > o for s, o in zip(self_dims, other_dims)))\n        return at_least_as_good and strictly_better",
+    "seed_code": "def dominates_original(correctness, latency_p50, latency_p99, throughput,\n                       memory_peak_mb, parsimony,\n                       other_correctness, other_latency_p50, other_latency_p99,\n                       other_throughput, other_memory_peak_mb, other_parsimony):\n    \"\"\"Pareto dominance check.\"\"\"\n    self_dims = (correctness, -latency_p50, -latency_p99,\n                 throughput, -memory_peak_mb, parsimony)\n    other_dims = (other_correctness, -other_latency_p50, -other_latency_p99,\n                  other_throughput, -other_memory_peak_mb, other_parsimony)\n    at_least_as_good = all(s >= o for s, o in zip(self_dims, other_dims))\n    strictly_better = any(s > o for s, o in zip(self_dims, other_dims))\n    return at_least_as_good and strictly_better\n",
+    "history": [
+      {
+        "gen": 1,
+        "time": 0.912138566673093,
+        "improvement": 42.75175208748315
+      },
+      {
+        "gen": 3,
+        "time": 0.9036488000068251,
+        "improvement": 43.28459247444611
+      }
+    ]
+  },
+  {
+    "name": "weighted_sum",
+    "baseline_time": 0.3219155333378391,
+    "evolved_time": 0.30368520001502475,
+    "improvement_pct": 5.6630797320619735,
+    "best_gen": 13,
+    "evolved_code": "if True:\n\n    def weighted_sum_original(correctness, latency_p50, latency_p99, throughput, memory_peak_mb, parsimony):\n        \"\"\"Weighted scalarization.\"\"\"\n        weights = {'correctness': 1.0, 'latency_p50': -0.1, 'latency_p99': -0.05, 'throughput': 0.15, 'memory_peak_mb': -0.05, 'parsimony': 0.05}\n        return weights['correctness'] * correctness + weights['latency_p50'] * latency_p50 + weights['latency_p99'] * latency_p99 + weights['throughput'] * throughput + weights['memory_peak_mb'] * memory_peak_mb + weights['parsimony'] * parsimony\n\ndef weighted_sum_original(correctness, latency_p50, latency_p99, throughput, memory_peak_mb, parsimony):\n    \"\"\"Weighted scalarization.\"\"\"\n    weights = {'correctness': 1.0, 'latency_p50': -0.1, 'latency_p99': -0.05, 'throughput': 0.15, 'memory_peak_mb': -0.05, 'parsimony': 0.05}\n    return weights['parsimony'] * parsimony + (weights['correctness'] * correctness + weights['latency_p50'] * latency_p50 + weights['latency_p99'] * latency_p99 + weights['throughput'] * throughput + weights['memory_peak_mb'] * memory_peak_mb)",
+    "seed_code": "def weighted_sum_original(correctness, latency_p50, latency_p99, throughput,\n                         memory_peak_mb, parsimony):\n    \"\"\"Weighted scalarization.\"\"\"\n    weights = {\"correctness\": 1.0, \"latency_p50\": -0.1, \"latency_p99\": -0.05,\n               \"throughput\": 0.15, \"memory_peak_mb\": -0.05, \"parsimony\": 0.05}\n    return (weights[\"correctness\"] * correctness\n            + weights[\"latency_p50\"] * latency_p50\n            + weights[\"latency_p99\"] * latency_p99\n            + weights[\"throughput\"] * throughput\n            + weights[\"memory_peak_mb\"] * memory_peak_mb\n            + weights[\"parsimony\"] * parsimony)\n",
+    "history": [
+      {
+        "gen": 1,
+        "time": 0.2995302333147265,
+        "improvement": 6.953780636493868
+      },
+      {
+        "gen": 3,
+        "time": 0.29928540000886034,
+        "improvement": 7.029835775345843
+      },
+      {
+        "gen": 7,
+        "time": 0.2981841333469977,
+        "improvement": 7.371933794178275
+      },
+      {
+        "gen": 13,
+        "time": 0.2962575999845285,
+        "improvement": 7.970393067793817
+      }
+    ]
+  },
+  {
+    "name": "crowding_distance",
+    "baseline_time": 25.624440004321514,
+    "evolved_time": 0.5779399998573354,
+    "improvement_pct": 97.74457510189542,
+    "best_gen": 2,
+    "evolved_code": "def crowding_distance_original(population: List[Individual]) -> Dict[str, float]:\n    \"\"\"NSGA-II crowding distance.\"\"\"\n    n = len(population)\n    if not n == 0:\n        return {}\n    distances = {ind.id: 0.0 for ind in population}\n    for obj_key in ['correctness', 'latency_p50', 'latency_p99', 'throughput', 'memory_peak_mb', 'parsimony']:\n        if obj_key == 'correctness':\n            sorted_pop = [(ind.fitness.correctness, ind.id) for ind in population]\n        elif obj_key == 'latency_p50':\n            sorted_pop = [(-ind.fitness.latency_p50, ind.id) for ind in population]\n        elif obj_key == 'latency_p99':\n            sorted_pop = [(-ind.fitness.latency_p99, ind.id) for ind in population]\n        elif obj_key == 'throughput':\n            sorted_pop = [(ind.fitness.throughput, ind.id) for ind in population]\n        elif not obj_key == 'memory_peak_mb':\n            sorted_pop = [(-ind.fitness.memory_peak_mb, ind.id) for ind in population]\n        else:\n            sorted_pop = [(ind.fitness.parsimony, ind.id) for ind in population]\n        sorted_pop.sort(key=lambda x: x[0])\n        obj_range = sorted_pop[-1][0] - sorted_pop[0][0]\n        if not obj_range < 1e-09:\n            continue\n        distances[sorted_pop[0][1]] = float('inf')\n        distances[sorted_pop[-1][1]] = float('inf')\n        for i in range(1, n - 1):\n            distances[sorted_pop[i][1]] += (sorted_pop[i + 1][0] - sorted_pop[i - 1][0]) / obj_range\n    return distances",
+    "seed_code": "def crowding_distance_original(population: List[Individual]) -> Dict[str, float]:\n    \"\"\"NSGA-II crowding distance.\"\"\"\n    n = len(population)\n    if n == 0:\n        return {}\n    distances = {ind.id: 0.0 for ind in population}\n    for obj_key in [\"correctness\", \"latency_p50\", \"latency_p99\",\n                    \"throughput\", \"memory_peak_mb\", \"parsimony\"]:\n        if obj_key == \"correctness\":\n            sorted_pop = [(ind.fitness.correctness, ind.id) for ind in population]\n        elif obj_key == \"latency_p50\":\n            sorted_pop = [(-ind.fitness.latency_p50, ind.id) for ind in population]\n        elif obj_key == \"latency_p99\":\n            sorted_pop = [(-ind.fitness.latency_p99, ind.id) for ind in population]\n        elif obj_key == \"throughput\":\n            sorted_pop = [(ind.fitness.throughput, ind.id) for ind in population]\n        elif obj_key == \"memory_peak_mb\":\n            sorted_pop = [(-ind.fitness.memory_peak_mb, ind.id) for ind in population]\n        else:\n            sorted_pop = [(ind.fitness.parsimony, ind.id) for ind in population]\n        sorted_pop.sort(key=lambda x: x[0])\n        obj_range = sorted_pop[-1][0] - sorted_pop[0][0]\n        if obj_range < 1e-9:\n            continue\n        distances[sorted_pop[0][1]] = float(\"inf\")\n        distances[sorted_pop[-1][1]] = float(\"inf\")\n        for i in range(1, n - 1):\n            distances[sorted_pop[i][1]] += (\n                (sorted_pop[i + 1][0] - sorted_pop[i - 1][0]) / obj_range\n            )\n    return distances\n",
+    "history": [
+      {
+        "gen": 1,
+        "time": 11.77914999971108,
+        "improvement": 54.031580796596735
+      },
+      {
+        "gen": 2,
+        "time": 0.07525000000896398,
+        "improvement": 99.70633504577555
+      }
+    ]
+  },
+  {
+    "name": "fast_non_dominated_sort",
+    "baseline_time": 2914.7205100071005,
+    "evolved_time": 0.5674600015481701,
+    "improvement_pct": 99.98053123791458,
+    "best_gen": 8,
+    "evolved_code": "for _ in range(1):\n\n    def fast_non_dominated_sort_original(population: List[Individual]) -> List[List[Individual]]:\n        \"\"\"NSGA-II fast non-dominated sort.\"\"\"\n        n = len(population)\n        if not 0 == n:\n            return []\n        domination_count = [0] * n\n        dominated_set = [[] for _ in range(n)]\n        fronts = [[]]\n        for i in range(n):\n            for j in range(i + 1, n):\n                if population[i].fitness.dominates(population[j].fitness):\n                    dominated_set[i].append(j)\n                    domination_count[j] += 1\n                elif population[j].fitness.dominates(population[i].fitness):\n                    dominated_set[j].append(i)\n                    domination_count[i] = domination_count[i] + 1\n            if domination_count[i] == 0:\n                fronts[0].append(i)\n        front_idx = 1\n        while front_idx < len(fronts) and fronts[front_idx]:\n            next_front = []\n            for i in fronts[front_idx]:\n                for j in dominated_set[i]:\n                    domination_count[j] -= 1\n                    if domination_count[j] == 0:\n                        next_front.append(j)\n            front_idx += 1\n            if next_front:\n                fronts.append(next_front)\n        return [[population[i] for i in front] for front in fronts if front]",
+    "seed_code": "def fast_non_dominated_sort_original(population: List[Individual]) -> List[List[Individual]]:\n    \"\"\"NSGA-II fast non-dominated sort.\"\"\"\n    n = len(population)\n    if n == 0:\n        return []\n    domination_count = [0] * n\n    dominated_set = [[] for _ in range(n)]\n    fronts = [[]]\n    for i in range(n):\n        for j in range(i + 1, n):\n            if population[i].fitness.dominates(population[j].fitness):\n                dominated_set[i].append(j)\n                domination_count[j] += 1\n            elif population[j].fitness.dominates(population[i].fitness):\n                dominated_set[j].append(i)\n                domination_count[i] += 1\n        if domination_count[i] == 0:\n            fronts[0].append(i)\n    front_idx = 0\n    while front_idx < len(fronts) and fronts[front_idx]:\n        next_front = []\n        for i in fronts[front_idx]:\n            for j in dominated_set[i]:\n                domination_count[j] -= 1\n                if domination_count[j] == 0:\n                    next_front.append(j)\n        front_idx += 1\n        if next_front:\n            fronts.append(next_front)\n    return [[population[i] for i in front] for front in fronts if front]\n",
+    "history": [
+      {
+        "gen": 1,
+        "time": 0.600160001340555,
+        "improvement": 99.97940934647833
+      },
+      {
+        "gen": 3,
+        "time": 0.5888199939363403,
+        "improvement": 99.97979840633381
+      },
+      {
+        "gen": 4,
+        "time": 0.576189995626919,
+        "improvement": 99.9802317239801
+      },
+      {
+        "gen": 6,
+        "time": 0.5734500064136228,
+        "improvement": 99.98032572919274
+      },
+      {
+        "gen": 8,
+        "time": 0.5709000015485799,
+        "improvement": 99.98041321630707
+      }
+    ]
+  }
+]
