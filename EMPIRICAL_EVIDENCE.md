@@ -6,18 +6,22 @@
 
 ## Executive Summary
 
-MutaLambda successfully implemented **fitness-directed migration** (replacing blind topological migration) and demonstrated **controlled self-evolution** with legitimate performance improvements. However, aggressive AST mutations introduced semantic bugs, revealing critical lessons about the limitations of syntax-only code evolution.
+MutaLambda successfully implemented **controlled self-evolution** with legitimate performance improvements and developed **interpretability safeguards** to prevent "alien code" syndrome. However, the **fitness-directed migration hypothesis was disproven** — the original ring topology significantly outperformed the new gradient-based approach.
 
 **Key Achievements:**
-- ✅ Fitness-directed gradient migration: production-ready
 - ✅ Interpretability safeguards: 3-layer protection system
-- ✅ Controlled self-evolution: +37.8% speedup in `dominates()` (validated)
+- ✅ Controlled self-evolution: +52.8% speedup in `dominates()` (validated)
 - ✅ Empirical evidence: reproducible benchmarks and transparency reports
 
-**Key Learnings:**
-- ⚠️ AST mutations without semantic validation produce false speedups
-- ⚠️ Massive improvements (+97%, +100%) were illusions from incorrect code
+**Key Failures:**
+- ❌ Fitness-directed migration: 57.6% success rate vs ring's 92.2%
+- ❌ AST mutations without semantic validation produced false speedups
+- ❌ Massive improvements (+97%, +100%) were illusions from incorrect code
+
+**Critical Lessons:**
+- ⚠️ Simpler algorithms can outperform complex "intelligent" systems
 - ⚠️ Self-evolution requires correctness validation, not just performance measurement
+- ⚠️ Hypothesis-driven development requires honest benchmarking
 
 ## What Worked (Validated Improvements)
 
@@ -127,6 +131,42 @@ Generating Interpretability Reports...
 **Impact:** Reusable framework for future optimization work.
 
 ## What Didn't Work (Critical Lessons Learned)
+
+### Fitness-Directed Migration: Honest Assessment
+
+**Hypothesis:** A fitness-directed gradient migration system would outperform simple topological migration (ring/mesh/fully_connected) by intelligently selecting migration targets based on fitness gradients and diversity gaps.
+
+**Reality:** The hypothesis was **incorrect**. Benchmark results show the original ring topology significantly outperformed the fitness-directed implementation.
+
+**Benchmark Results (8 islands, 100 runs, 2 migrants per island):**
+
+| Topology | Useful Migrations | Harmful Migrations | Avg Fitness Improvement |
+|----------|------------------|-------------------|------------------------|
+| **Ring (original)** | **92.2%** | 7.1% | 0.1901 |
+| Fully Connected | 100% | 0% | 0.1384 |
+| Mesh | 100% | 0% | 0.0932 |
+| **Fitness-Directed (new)** | 57.6% | **41.1%** | 0.2243 |
+
+**Why Fitness-Directed Failed:**
+
+1. **Gradient is misleading**: Sending migrants to high-fitness islands doesn't guarantee improvement. High-fitness islands are already optimized and may not benefit from external genetic material.
+
+2. **Diversity gap is insufficient**: Avoiding clones doesn't ensure the migrant is useful. Structural diversity ≠ functional improvement.
+
+3. **Over-engineering**: The original ring topology's simplicity was its strength. Predictable, balanced migration between neighbors maintains population diversity without complex selection logic.
+
+4. **Fewer total migrations**: Fitness-directed performed 2,174 migrations vs ring's 3,200 (32% fewer), reducing opportunities for beneficial gene flow.
+
+**Only Advantage:** When fitness-directed succeeded, the average improvement was higher (0.2243 vs 0.1901), but this doesn't compensate for the 41.1% harmful migration rate.
+
+**Lesson:** Simpler algorithms can outperform complex "intelligent" systems. The ring topology's predictable neighbor-based migration maintains good genetic flow without the overhead and risk of complex selection logic.
+
+**Recommendation:** For production use, the original ring topology is superior. The fitness-directed approach needs fundamental redesign before it can compete.
+
+**Reproducible Benchmark:**
+```bash
+python benchmark_migration_before_after.py
+```
 
 ### AST Mutations Without Semantic Validation
 
@@ -284,12 +324,6 @@ cat reports/self_evolution/dominates_report.md
 
 ### Validated Improvements (Production-Ready)
 
-**Fitness-Directed Migration:**
-- Improves convergence by sending genetic material where it's most useful
-- Reduces random noise from blind topological migration
-- Provides measurable metrics for migration efficiency
-- Backward compatible with existing topologies
-
 **Interpretability Safeguards:**
 - Enables future recursive self-improvement without creating unmaintainable code
 - 3-layer protection: auto-documentation, human-readable checkpoints, transparency reports
@@ -300,9 +334,15 @@ cat reports/self_evolution/dominates_report.md
 - Multiplicative impact: called O(N²) times per generation
 - Estimated savings: ~3-5 seconds per evolution run (typical workload)
 
-### Attempted Improvements (Not Integrated)
+### Failed Experiments (Not for Production)
 
-**Extended AST Mutations:**
+**Fitness-Directed Migration:**
+- ❌ **Hypothesis disproven**: Original ring topology outperformed gradient-based approach
+- ❌ 57.6% success rate vs ring's 92.2%
+- ❌ 41.1% harmful migrations vs ring's 7.1%
+- **Recommendation**: Do NOT use in production. Keep original ring topology.
+
+**AST Mutations (Extended Self-Evolution):**
 - Produced false speedups (+97%, +100%) due to semantic bugs
 - Demonstrated critical need for correctness validation
 - Provided valuable lessons for future work
@@ -358,27 +398,45 @@ cat reports/self_evolution/dominates_report.md
 
 ## Conclusion
 
-MutaLambda successfully demonstrated that **self-improvement is possible** with the right safeguards:
+MutaLambda demonstrated that **self-improvement is possible** with the right safeguards, but also revealed important limitations:
 
 ✅ **What works:**
-- Fitness-directed migration (quality-aware, validated)
 - Interpretability safeguards (prevents "alien code")
 - Controlled self-evolution with correctness validation (52.8% speedup in `dominates()`)
+- Simple, predictable algorithms (ring topology: 92.2% migration success)
 
 ❌ **What doesn't work:**
+- Complex "intelligent" migration strategies (fitness-directed: only 57.6% success)
 - Aggressive AST mutations without semantic validation (produces false speedups)
 - Trusting performance metrics without correctness checks
 - Automatic deployment of evolved code without human review
 
-**Key Insight:** Self-evolution is a powerful tool, but it must be combined with rigorous validation and human oversight. The goal is not just faster code, but **correct and maintainable** faster code.
+**Key Insights:**
 
-**Status:** Ready for production use. All validated improvements integrated. Lessons learned documented for future work.
+1. **Simplicity beats complexity**: The original ring topology's predictable neighbor-based migration (92.2% success) outperformed the sophisticated fitness-directed gradient approach (57.6% success). Sometimes the "dumb" algorithm is better.
+
+2. **Hypothesis-driven development requires honest testing**: We hypothesized fitness-directed migration would improve convergence. Benchmarking proved us wrong. This is a success of the scientific method, not a failure of the project.
+
+3. **Self-evolution is a powerful tool, but limited**: It can optimize specific functions with clear bottlenecks (52.8% in `dominates()`), but cannot reliably improve complex logic without semantic validation.
+
+4. **Validation is non-negotiable**: Performance measurement without correctness validation produces false positives. The goal is not just faster code, but **correct and maintainable** faster code.
+
+**Production Recommendations:**
+- ✅ USE: Interpretability safeguards for any future self-evolution work
+- ✅ USE: Controlled self-evolution for hot-path functions with clear bottlenecks
+- ✅ USE: Original ring topology for migration (92.2% success rate)
+- ❌ DO NOT USE: Fitness-directed migration (41.1% harmful migrations)
+- ❌ DO NOT USE: AST mutations without semantic validation
+- ❌ DO NOT AUTOMATE: Deployment of evolved code without human review
+
+**Status:** Ready for production use with validated improvements. Failed experiments documented for learning purposes. Original ring topology should be kept as default migration strategy.
 
 ---
 
 **Generated:** 2026-06-29  
-**Git Commit:** To be committed (see git status)  
+**Git Commit:** 841348e (docs: consolidate empirical evidence with honest assessment)  
 **Artifacts:** 
 - `reports/self_evolution/dominates_report.md` — Transparency report for validated improvement
 - `reports/self_evolution_real/` — Reports from extended evolution (with bugs documented)
-- `validate_correctness.py` — Validation framework
+- `benchmark_migration_before_after.py` — Reproducible benchmark showing ring > fitness-directed
+- `validate_correctness.py` — Validation framework that caught semantic bugs
