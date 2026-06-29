@@ -1,123 +1,117 @@
-# MutaLambda — Configuración Declarativa de Referencia
-# =====================================================
-# Este archivo define TODOS los parámetros del motor evolutivo.
-# Cópialo, modifícalo y pásalo con:
-#   python muta_lambda.py --config my_config.yaml
+# MutaLambda Configuration v3.0
+# Fitness-Directed Gradient Migration + Multi-Objective Evolution
 
-# ── Motor evolutivo ─────────────────────────────────────────────────
 evolution:
-  num_islands: 4              # Número de islas semi‑aisladas
-  generations: 50             # Generaciones totales
-  topology: ring              # ring | fully_connected | random | mesh
-  early_stop_patience: 15     # Generaciones sin mejora para parada temprana
-  early_stop_delta: 0.001     # Mejora relativa mínima (0 = desactivado)
-  novelty_alpha: 0.15         # Peso del bonus de novedad (0.0–1.0)
+  generations: 30
+  early_stop: 15
 
-  # ── Convergent Evolution Boost ──────────────────────────────────
-  convergent_boost:
-    enabled: true             # Activar refuerzo de convergencia entre islas
-    threshold: 0.85           # Similitud coseno mínima para considerar convergencia
-    factor: 0.15              # Multiplicador del score (score *= 1 + factor * sim)
-
-  # ── Resurrection (time-travel backtracking, Fase 7) ──────────────
-  resurrection:
-    enabled: true               # Activar resurrección de ramas abandonadas
-    threshold: 8                # Generaciones estancadas antes del primer intento
-    max_attempts: 3             # Máximo de resurrecciones por run
-    min_score_ratio: 0.3        # Score mínimo (ratio vs global_best)
-
-  # ── Cross-branch crossover (Fase 7) ──────────────────────────────
-  cross_branch_crossover:
-    enabled: true               # Activar crossover entre ramas distantes
-    prob: 0.05                  # Probabilidad de usar cross-branch por hijo
-    min_distance: 3             # Distancia genealógica mínima
-
-# ── Evolution Upgrade v2.0 (opt-in) ─────────────────────────────────
-advanced_selection:
-  enabled: false               # Fitness + novelty + entropy + discovery score
-  fitness_weight: 1.0
-  novelty_weight: 0.15
-  entropy_weight: 0.20
-  discovery_weight: 0.35
-
-thc:
-  enabled: false               # Transferencia horizontal de código entre individuos
-  max_transfers_per_generation: 1
-  min_donor_score: 0.0
-  validate_in_sandbox: true
-
-dialectic:
-  enabled: false               # Tesis → crítica → síntesis antes de sandbox
-  critique_intensity: medium
-
-spatial:
-  enabled: false               # Grid 2D/Moore para migración local estructurada
-  neighborhood: moore          # moore | von_neumann
-
-pattern_memory:
-  enabled: false               # Almacenar patrones reutilizables, no individuos completos
-
-# ── Población por isla ──────────────────────────────────────────────
 population:
-  size: 8                     # Individuos por isla
-  top_k: 3                    # Elite size (≤ population.size)
-  migration_interval: 10      # Cada cuántas generaciones migrar
-  migrants_per_island: 2      # Cuántos emigrantes por isla
+  size: 30
+  init_size: 60
+  top_k: 15
 
-# ── Sandbox ─────────────────────────────────────────────────────────
+fitness:
+  # Multi-objective weights (6D FitnessVector)
+  correctness: 2.5
+  latency: 1.2
+  memory: 0.5
+  parsimony: 0.8
+  # Fitness components (internal normalization)
+  accuracy: 2.0
+  throughput: 1.0
+  # Benchmark configuration
+  benchmark_timeout: 10.0
+  benchmark_warmup_runs: 1
+  benchmark_timed_runs: 3
+  benchmark_max_input_size: 1000
+  # NSGA-II Pareto selection (Phase 1)
+  nsga2_selection: true
+  # Tournament selection parameters
+  tournament_size: 3
+  # Adaptive selection pressure
+  adaptive_pressure: true
+  pressure_min: 0.8
+  pressure_max: 1.5
+
 sandbox:
-  timeout_sec: 10.0           # Timeout por evaluación (segundos)
-  max_workers: 4              # Workers paralelos en ProcessPoolExecutor
+  timeout: 60
+  max_output: 10000
+  docker_image: python:3.11-slim
 
-# ── HFC / Ligas evolutivas ─────────────────────────────────────────
-hfc:
-  enabled: false                # Activar HFC: Tier1 exploración, Tier2 refinamiento bacteriano, Tier3 élite
-  tier1_size: 100               # Laboratorio experimental
-  tier2_size: 50                # Fábrica de clones 1 -> lambda
-  tier3_size: 10                # Élite estática con validación pesada futura
-  lambda_clones: 8              # Clones bacterianos por individuo Tier2
-  top_down_distillation: true   # Extraer concepto de Tier3 para inyectarlo en Tier1
-  top_down_interval: 5          # Cada cuántas generaciones destilar élite
-  promotion_correctness: 1.0    # Umbral duro para pasar de Laboratorio a Fábrica
+island:
+  count: 4
+  migrants_per_island: 3
+  migration_interval: 5
 
-# ── Archivo de soluciones ───────────────────────────────────────────
-archive:
-  enabled: true               # Activar SolutionArchive + FAISS
-  max_size: 10000             # Máximo de soluciones en el archivo
-  prune_threshold: 50         # Purgas diferidas antes de rebuild
-  embedder_model: all-MiniLM-L6-v2  # Modelo de sentence-transformers
+migration:
+  # NEW: fitness_gradient topology for quality-aware migration
+  topology: fitness_gradient
+  # Gradient migration parameters
+  gradient_alpha: 0.7          # Weight for fitness gradient
+  gradient_beta: 0.3           # Weight for diversity gap
+  top_k_targets: 2             # Max destination islands per migration
+  stagnation_threshold: 0.05   # Min improvement ratio before "stagnant"
+  elite_injection: true        # Inject top 5% as directed seeds
+  min_diversity_gap: 0.15      # Minimum code diversity to allow migration
+  max_diversity_gap: 0.85      # Maximum diversity (avoid incompatible code)
+  fitness_window: 5            # Generations for fitness trend averaging
 
-# ── Evolución de prompts ────────────────────────────────────────────
-prompt_evolution:
-  enabled: true               # Activar meta‑evolución de prompts
-  pop_size: 6                 # Tamaño de población de prompts
-  elite_frac: 0.5             # Fracción de élite preservada
-
-# ── Checkpointing ───────────────────────────────────────────────────
-checkpoint:
-  interval: 10                # Cada cuántas generaciones guardar
-  dir: checkpoints            # Directorio de checkpoints
-  save_archive: true          # Guardar archivo en checkpoint
-  save_prompts: true          # Guardar prompts en checkpoint
-
-# ── Logging ─────────────────────────────────────────────────────────
-logging:
-  level: INFO                 # DEBUG | INFO | WARNING | ERROR
-  log_file: null              # Archivo de log (null = stderr)
-
-# ── Proveedor LLM ───────────────────────────────────────────────────
 llm:
-  backend: ollama             # ollama | openai | anthropic | openrouter | mistral | microsoft_cpp | huggingface_cli
-  model: llama3.2:3b          # Nombre del modelo en el backend seleccionado
-  timeout_sec: 60.0           # Timeout por llamada al LLM
-  temperature: 0.2            # Temperatura de generación para APIs compatibles
-  # Variables opcionales:
-  #   MUTALAMBDA_OLLAMA_URL, MUTALAMBDA_OPENAI_URL, MUTALAMBDA_ANTHROPIC_URL,
-  #   MUTALAMBDA_OPENROUTER_URL, MUTALAMBDA_MISTRAL_URL, MUTALAMBDA_LLM_TIMEOUT_SEC,
-  #   MUTALAMBDA_LLM_TEMPERATURE, OPENAI_API_KEY, ANTHROPIC_API_KEY,
-  #   OPENROUTER_API_KEY, MISTRAL_API_KEY
+  provider: ollama             # openai | anthropic | ollama | local | mock
+  model: qwen2.5-coder:7b
+  base_url: http://localhost:11434
+  api_key: ""
+  temperature: 0.8
+  max_tokens: 4096
+  # Fallback config
+  fallback_model: deepseek-v4-flash
+  fallback_provider: deepseek
+  fallback_base_url: http://127.0.0.1:8787/v1
 
-# ── Reproducibilidad ────────────────────────────────────────────────
-reproducibility:
-  seed: null                  # Semilla RNG (null = aleatorio)
-  track_git_commit: true      # Guardar hash de commit en checkpoint
+# Lineage graph: full genealogy DAG
+lineage:
+  enabled: true
+  export_format: json          # json | dot | both
+  compress_ratio: 0.1          # keep top 10% nodes in compressed archive
+
+# Advanced selection strategies (Phase 1)
+selection:
+  strategy: ucb                 # ucb | thompson | epsilon_greedy | pareto | hybrid
+  epsilon: 0.15                 # for epsilon_greedy
+  c_explore: 1.41               # UCB exploration constant (sqrt(2))
+  window_size: 20               # sliding window for reward estimation
+
+# Meta-evolution: self-tuning hyperparameters
+meta_evolution:
+  enabled: true
+  tune_interval: 10             # re-tune every N generations
+  population_size: 8            # EvoParams population
+  mutation_rate: 0.3            # EvoParams mutation rate
+  elitism: 2                    # top N EvoParams survive unchanged
+
+# HFC (Hierarchical Fair Competition) tier management
+hfc:
+  enabled: true
+  tiers:
+    laboratory: 0.0             # everything starts here
+    proven: 0.7                 # promote at 70% of best score
+    archive: 0.9                # archive at 90% of best score
+  demote_threshold: 0.3         # demote if score drops below 30% of best
+  max_archive_size: 50
+
+# Convergent evolution: directed pressure toward target
+convergent:
+  enabled: false
+  target: null                  # target code or description
+  target_weight: 2.0            # weight for target similarity bonus
+  decay: 0.98                   # per-generation decay of convergent pressure
+
+# Advanced features
+advanced:
+  pattern_memory: true          # learn AST mutation patterns from success
+  tipping_points: true          # detect phase transitions in evolution
+  thc_enabled: true             # Transferencia Horizontal de Código
+  thc_min_fitness: 0.5          # min normalized fitness for THC donor
+  thc_max_size: 0.4             # max 40% of recipient code
+  thc_compatibility: 0.3        # min structural similarity
+  mascot: true                  # auto-generate visual mascot from code DNA

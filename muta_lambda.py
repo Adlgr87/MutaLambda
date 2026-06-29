@@ -58,7 +58,7 @@ from archive import SolutionArchive
 from evolution_engine import ASTMutator, CodeRegion, CoreEvolutionEngine
 from island import Island
 from llm_backend import LLMBackend, _resolve_llm_backend
-from migration import MigrationBus
+from migration import MigrationBus, GradientConfig
 from models import (
     ArchivedSolution,
     EvalResult,
@@ -130,6 +130,15 @@ class EvolveConfig:
     spatial_enabled: bool = False
     spatial_neighborhood: str = "moore"
     pattern_memory_enabled: bool = False
+    # ── Fitness-Directed Gradient Migration ──
+    gradient_alpha: float = 0.7
+    gradient_beta: float = 0.3
+    gradient_top_k_targets: int = 2
+    gradient_stagnation_threshold: float = 0.05
+    gradient_elite_injection: bool = True
+    gradient_min_diversity_gap: float = 0.15
+    gradient_max_diversity_gap: float = 0.85
+    gradient_fitness_window: int = 5
 
     @classmethod
     def from_yaml(cls, path: str) -> "EvolveConfig":
@@ -153,11 +162,12 @@ class EvolveConfig:
         dialectic = cfg.get("dialectic", {})
         spatial = cfg.get("spatial", {})
         patterns = cfg.get("pattern_memory", {})
+        migration = cfg.get("migration", {})
 
         config = cls(
             num_islands=evo.get("num_islands", 4),
             generations=evo.get("generations", 50),
-            topology=evo.get("topology", "ring"),
+            topology=migration.get("topology", evo.get("topology", "ring")),
             population_size=pop.get("size", 8),
             top_k=pop.get("top_k", 3),
             migration_interval=pop.get("migration_interval", 10),
@@ -208,6 +218,14 @@ class EvolveConfig:
             spatial_enabled=spatial.get("enabled", False),
             spatial_neighborhood=spatial.get("neighborhood", "moore"),
             pattern_memory_enabled=patterns.get("enabled", False),
+            gradient_alpha=migration.get("gradient_alpha", 0.7),
+            gradient_beta=migration.get("gradient_beta", 0.3),
+            gradient_top_k_targets=migration.get("top_k_targets", 2),
+            gradient_stagnation_threshold=migration.get("stagnation_threshold", 0.05),
+            gradient_elite_injection=migration.get("elite_injection", True),
+            gradient_min_diversity_gap=migration.get("min_diversity_gap", 0.15),
+            gradient_max_diversity_gap=migration.get("max_diversity_gap", 0.85),
+            gradient_fitness_window=migration.get("fitness_window", 5),
         )
 
         config.sandbox_timeout = sand.get("timeout_sec", 10.0)
@@ -284,6 +302,26 @@ class MutaLambdaAgent:
         )
         topology = "spatial_grid" if config.spatial_enabled else config.topology
         self.migration_bus = MigrationBus(topology=topology)
+
+        # ── Configure Fitness-Directed Gradient Migration ──
+        if topology == "fitness_gradient":
+            gradient_config = GradientConfig(
+                alpha=config.gradient_alpha,
+                beta=config.gradient_beta,
+                top_k_targets=config.gradient_top_k_targets,
+                stagnation_threshold=config.gradient_stagnation_threshold,
+                elite_injection=config.gradient_elite_injection,
+                min_diversity_gap=config.gradient_min_diversity_gap,
+                max_diversity_gap=config.gradient_max_diversity_gap,
+                fitness_window=config.gradient_fitness_window,
+            )
+            self.migration_bus.configure_gradient(gradient_config)
+            logger.info(
+                "Fitness-Directed Gradient Migration enabled "
+                "(α=%.2f, β=%.2f, top_k=%d, elite=%s)",
+                gradient_config.alpha, gradient_config.beta,
+                gradient_config.top_k_targets, gradient_config.elite_injection,
+            )
         if config.spatial_enabled:
             from muta_ext.spatial_topology import SpatialConfig, SpatialTopology
 
@@ -784,13 +822,23 @@ class MutaLambdaAgent:
                     sum(self._generation_times[-5:]) /
                     min(5, len(self._generation_times[-5:]))
                 )
+                # ── Migration Metrics Report (for benchmark evidence) ──
+                migration_report = ""
+                if self.migration_bus.topology == "fitness_gradient":
+                    metrics = self.migration_bus.get_migration_metrics()
+                    migration_report = (
+                        f" | mig: {metrics.get('total_migrations', 0)} total, "
+                        f"{metrics.get('success_rate', 0.0):.0%} success, "
+                        f"Δ={metrics.get('mean_improvement', 0.0):.4f}"
+                    )
                 logger.info(
                     "Gen %d/%d | best=%.4f | avg_time=%.2fs | "
-                    "archive=%d | stagnant=%d",
+                    "archive=%d | stagnant=%d%s",
                     gen + 1, self.config.generations, current_score,
                     avg_time,
                     self.archive.size if self.archive else 0,
                     self._early_stop.stagnant_generations,
+                    migration_report,
                 )
 
             if (
