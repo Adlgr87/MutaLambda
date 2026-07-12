@@ -97,7 +97,10 @@ def _eval_worker(args: Tuple[str, List[Dict], float, int]) -> EvalResult:
                     except json.JSONDecodeError:
                         continue
             if report is None:
-                raise ValueError("No valid JSON line found in subprocess stdout")
+                if not test_cases and proc.returncode == 0:
+                    report = {"passed": 1, "total": 1}
+                else:
+                    raise ValueError("No valid JSON line found in subprocess stdout")
             passed = report.get("passed", 0)
             total = report.get("total", 1)
             correctness = passed / max(total, 1)

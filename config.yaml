@@ -32,6 +32,15 @@ evolution:
     prob: 0.05                  # Probabilidad de usar cross-branch por hijo
     min_distance: 3             # Distancia genealógica mínima
 
+# ── Workflow protocolar integrado ──────────────────────────────────────
+workflow:
+  enabled: true                 # Ejecuta gates secuenciales por candidato
+  max_retries: 1                # Reintentos automáticos ante fallos retryable
+  correctness_threshold: 1.0    # Umbral de tests/correctitud para promoción
+  require_score_improvement: false  # Si true, rechaza candidatos peores que su padre
+  enforce_security: true        # Bloquea eval/exec/subprocess/os.system en candidatos
+  trace_limit: 200              # Máximo de trazas recientes retenidas en métricas
+
 # ── Evolution Upgrade v2.0 (opt-in) ─────────────────────────────────
 advanced_selection:
   enabled: false               # Fitness + novelty + entropy + discovery score
