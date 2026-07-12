@@ -6,7 +6,7 @@
 
 [![Rendimiento](https://img.shields.io/badge/Rendimiento-50--263%25%20speedup-blue)]()
 [![Módulos](https://img.shields.io/badge/Módulos-5%20optimizados-orange)]()
-[![Correctitud](https://img.shields.io/badge/Correctitud-147%2F147%20tests-green)]()
+[![Correctitud](https://img.shields.io/badge/Correctitud-149%2F149%20tests-green)]()
 [![CLI](https://img.shields.io/badge/CLI-v3.1.0-orange)]()
 [![Estado](https://img.shields.io/badge/Estado-Listo%20para%20Producción-success)]()
 
@@ -23,7 +23,7 @@ MutaLambda es un sistema de optimización evolutiva de código que utiliza Model
 ### Logros Clave
 
 ✅ **Integración con MASSIVE Framework** — 50-263% de speedup en 4 módulos científicos, 100% correctitud
-✅ **Optimización de `_get_fitness()`** — +10.2% de speedup validado con 147/147 tests pasando
+✅ **Optimización de `_get_fitness()`** — +10.2% de speedup validado con 149/149 tests pasando
 ✅ **CLI Interactiva** — Interfaz de línea de comandos completa con animaciones retro
 ✅ **Sistema de Checkpoints** — Guarda y reanuda ejecuciones evolutivas sin problemas
 
@@ -88,48 +88,166 @@ def _get_fitness(ind: Individual) -> FitnessVector:
 
 **Impacto:** ~17 segundos ahorrados por ejecución evolutiva típica (50 generaciones, 4 islas, 32 individuos).
 
-**Validación:** 13/13 tests de nsga2, 14/14 tests de fitness_vector, 147/147 tests totales ✅
+**Validación:** 13/13 tests de nsga2, 14/14 tests de fitness_vector, 149/149 tests totales ✅
 
 ---
 
 ## 🏗️ Arquitectura
 
 ```
-cli.py                   Punto de entrada CLI (Click)
-├── cli/                 Paquete CLI
-│   ├── main.py          Lógica principal: MutaLambdaCLI, InteractiveREPL
-│   ├── animator.py      Animaciones retro (ASCII art, barras de progreso)
-│   ├── config_manager.py  Gestión de configuraciones (plantillas: basic/advanced/research)
-│   └── checkpoint_manager.py  Gestión de checkpoints (pickle + gzip)
+cli.py                         Punto de entrada CLI (Click)
+└── cli/                       Paquete CLI
+    ├── main.py                Lógica principal: MutaLambdaCLI, InteractiveREPL
+    ├── animator.py            Animaciones retro (ASCII art, barras de progreso)
+    ├── config_manager.py      Gestión de configuraciones (plantillas: basic/advanced/research)
+    └── checkpoint_manager.py  Gestión de checkpoints (pickle + gzip)
 
-muta_lambda.py           Núcleo: Evolución Multi-Objetivo (v3.1)
-├── models.py            Datos: Individual, FitnessVector, EvoStats
-├── island.py            Evolución: mutaciones AST + selección NSGA-II
-├── sandbox.py           Evaluación segura (Docker)
-├── nsga2.py             Selección multi-objetivo (Pareto + Crowding)
-├── fitness_vector.py    Vector 6D: correctness, latency, memory, parsimony
-├── interpretability.py  Salvaguardas de interpretabilidad (3 capas)
-├── meta_evolution.py    Auto-ajuste de hiperparámetros
-└── mutation_operators.py  Operadores genéticos (crossover, mutación)
+muta_lambda.py                 Orquestador principal — conecta todos los módulos
+├── models.py                  Datos: Individual, FitnessVector, LineageGraph, PromptGenome
+├── evolution_engine.py        Mutaciones AST + generación LLM (ASTMutator, CoreEvolutionEngine)
+├── island.py                  Unidad de evolución por isla (población + workflow protocolar)
+├── island_evolution.py        Coordinador paralelo: IslandPool (hilos/procesos), IslandDiversity
+├── migration.py               Bus de migración inter-islas (ring, fully_connected, mesh)
+├── sandbox.py                 Evaluación en subproceso con límites duros (timeout, memoria)
+├── archive.py                 SolutionArchive (deduplicación semántica con FAISS, opcional)
+├── nsga2.py                   Selección multi-objetivo NSGA-II (frentes Pareto + distancia crowding)
+├── fitness_vector.py          Vector 6 objetivos: correctness, latency_p50, latency_p99, throughput,
+│                                  memory_peak_mb, parsimony
+├── hfc_tiers.py               Especiación HFC por niveles: Laboratorio → Fábrica → Élite
+├── workflow_protocol.py       Gates secuenciales: build → security → sandbox → tests → perf → decisión
+├── interpretability.py        Salvaguardas de interpretabilidad (3 capas) para código auto-evolucionado
+├── llm_backend.py             Adaptadores LLM: ollama, openai, anthropic, openrouter, mistral,
+│                                  microsoft_cpp, huggingface_cli
+├── prompt_evolver.py          Evolución básica de PromptGenome
+├── prompt_evolution.py        RichPromptEvolver — 15 operadores de mutación + crossover
+├── config_loader.py           Cargador declarativo de configuración YAML con validación
+├── checkpoint_manager.py      Guardado y reanudación de checkpoints (pickle + gzip)
+└── property_testing.py        Harness de property-based testing
 
-evolution_engine.py      Motor principal de evolución
-├── pattern_memory.py    Memoria de patrones AST
-├── tipping_points.py    Detección de transiciones de fase
-└── thc_engine.py        Transferencia Horizontal de Código
+muta_ext/                      Extensiones y subsistemas avanzados
+├── advanced_selection.py      Selección multi-armed bandit: UCB, Thompson Sampling, ε-greedy
+├── dialectic_engine.py        Filtro LLM pre-sandbox: Tesis → Crítica → Síntesis
+├── pattern_memory.py          Memoria de patrones AST reutilizables
+├── spatial_topology.py        Grid 2D (Moore/Von Neumann) para migración local estructurada
+├── thc_engine.py              Transferencia Horizontal de Código (extracción + inyección de fragmentos)
+├── config/
+│   └── scientific_extension.py  Config de extensión científica
+├── diagnostics/
+│   ├── evolution_report.py    Entropía de Shannon, exponente de Lyapunov, estabilidad espectral
+│   └── tipping.py             Detección de tipping points / transiciones de fase
+├── evaluation/
+│   ├── cache.py               Caché de evaluación por hash AST canónico
+│   └── numerical_health.py    Comprobaciones de salud numérica
+├── lineage/
+│   └── compression.py         Compresión del DAG genealógico para runs largos
+└── mutation/
+    └── stepper_protocol.py    Protocolo de steppers de mutación composables (patrón Strategy)
 
-muta_ext/                Extensiones científicas
-├── migration.py         Bus de migración entre islas
-├── lineage_graph.py     Genealogía completa (DAG)
-├── convergence.py       Monitoreo multi-escala
-├── early_stop_monitor.py  Criterios de parada
-├── hfc.py               Competencia jerárquica (HFC)
-├── spatial_topology.py  Topología espacial (grid)
-├── advanced_selection.py  UCB, Thompson Sampling, ε-greedy
-├── prompt_evolver.py    Evolución de prompts
-└── benchmarking/        Sistema de benchmarking robusto
+tests/
+├── benchmarks/                Suite de benchmarks de rendimiento
+└── test_*.py                  Tests unitarios (149 en total)
 ```
 
 ---
+
+## 🔄 Flujo de Ejecución
+
+### Workflow protocolar por candidato
+
+Cada candidato generado pasa por un pipeline obligatorio antes de ser promovido:
+
+```text
+seleccionar padre(s) élite
+  -> generar candidato (mutación AST o prompt LLM)
+  -> gate de build (parse + compilación)
+  -> gate de seguridad (bloquea eval/exec/compile/os.system/subprocess.*)
+  -> evaluación en sandbox (subproceso con límite de tiempo y memoria)
+  -> gate de tests/correctitud (umbral configurable, por defecto 100%)
+  -> gate de rendimiento
+  -> gate de decisión (promover / reintentar / rechazar)
+```
+
+Notas operacionales:
+- cada ejecución tiene un `run_id`; trazas recientes disponibles en `agent.get_metrics()["protocol"]`
+- fallos reintentables vuelven automáticamente a una mutación AST más segura
+- el gate de seguridad bloquea `eval`, `exec`, `compile`, `__import__`, `os.system` y `subprocess.*`
+- el workflow se configura con la clave `workflow:` en `config.yaml`
+
+---
+
+## ⚙️ Funcionalidades Avanzadas
+
+### HFC — Competencia Jerárquica (`hfc_tiers.py`)
+
+Especiación en tres niveles para evitar convergencia prematura:
+
+| Nivel | Nombre | Rol |
+|-------|--------|-----|
+| 1 | **Laboratorio** | Exploración caótica — crossover LLM + mutación AST completa |
+| 2 | **Fábrica** | Reproducción bacteriana (1 → λ clones) con micro-mutadores |
+| 3 | **Élite** | Frontera de Pareto estática — solo por promoción |
+
+La destilación top-down extrae conceptos élite y los reinyecta en el Laboratorio. La promoción exige 100% de correctitud por defecto.
+
+### Convergent Evolution Boost
+
+Cuando varias islas convergen en código similar (similitud coseno ≥ umbral), el sistema amplifica el score multiplicativamente (`score *= 1 + factor × similitud`).
+
+### Resurrección — Backtracking Temporal
+
+Tras N generaciones estancadas, el motor revive la mejor rama abandonada del DAG genealógico. Máximo 3 intentos por ejecución (configurable).
+
+### Crossover entre Ramas
+
+Individuos separados ≥ 3 saltos genealógicos pueden cruzarse, inyectando diversidad. Probabilidad: 5% por descendiente.
+
+### THC — Transferencia Horizontal de Código (`muta_ext/thc_engine.py`)
+
+Extrae fragmentos AST de individuos de alto rendimiento y los inyecta en individuos no relacionados (análogo a la transferencia génica horizontal bacteriana).
+
+### Motor Dialéctico (`muta_ext/dialectic_engine.py`)
+
+Antes del sandbox, el código candidato pasa por:
+1. **Tesis** — mutación propuesta
+2. **Crítica** — el LLM identifica problemas de correctitud / seguridad
+3. **Síntesis** — el LLM reescribe incorporando la crítica
+
+Ahorra llamadas al sandbox rechazando candidatos inválidos sintácticamente de forma temprana.
+
+### Selección Avanzada (`muta_ext/advanced_selection.py`)
+
+Estrategias multi-armed bandit para selección de operadores por isla:
+- **UCB** (Upper Confidence Bound)
+- **Thompson Sampling**
+- **ε-greedy**
+
+Combina scores de fitness + novedad + entropía + descubrimiento.
+
+### Topología Espacial (`muta_ext/spatial_topology.py`)
+
+Organiza las islas en un grid 2D. La migración solo ocurre entre vecinos geográficos (vecindad Moore o Von Neumann).
+
+### Caché de Evaluación (`muta_ext/evaluation/cache.py`)
+
+Cachea resultados de fitness por hash AST canónico (independiente de nombres de variables y espaciado). Si una mutación produce código estructuralmente idéntico a uno ya evaluado, devuelve el `FitnessVector` cacheado sin ejecutar el sandbox.
+
+---
+
+## 🤖 Backends LLM
+
+MutaLambda soporta múltiples proveedores LLM, configurados con `llm.backend` en `config.yaml` o variables de entorno `MUTALAMBDA_*`:
+
+| Backend | Clave | Notas |
+|---------|-------|-------|
+| **Ollama** | `ollama` | Por defecto — servidor de modelos local |
+| **OpenAI** | `openai` | Requiere `OPENAI_API_KEY` |
+| **Anthropic** | `anthropic` | Requiere `ANTHROPIC_API_KEY` |
+| **OpenRouter** | `openrouter` | Requiere `OPENROUTER_API_KEY` |
+| **Mistral** | `mistral` | Requiere `MISTRAL_API_KEY` |
+| **llama.cpp (MS fork)** | `microsoft_cpp` | Servidor local vía fork de Microsoft |
+| **HuggingFace CLI** | `huggingface_cli` | Modelo de HF Hub vía subprocess |
+
+Variables de entorno: `MUTALAMBDA_OLLAMA_URL`, `MUTALAMBDA_OPENAI_URL`, `MUTALAMBDA_LLM_TIMEOUT_SEC`, `MUTALAMBDA_LLM_TEMPERATURE`.
 
 ## 📚 Lecciones Aprendidas
 
@@ -185,7 +303,7 @@ pip install -r requirements.txt
 python -m pytest tests/ -v
 ```
 
-Todos los 147 tests deben pasar.
+Todos los 149 tests deben pasar.
 
 ### Ejecutar CLI
 
@@ -310,8 +428,11 @@ python cli.py resume --checkpoint checkpoints/checkpoint_0050.json --additional-
 ### Documentación del Código
 
 - **`nsga2.py`** — Selección multi-objetivo NSGA-II con `_get_fitness()` optimizado
-- **`fitness_vector.py`** — Vector de fitness 6-dimensional para optimización Pareto
+- **`fitness_vector.py`** — 6 objetivos de fitness: correctness, latency_p50, latency_p99, throughput, memory_peak_mb, parsimony
 - **`interpretability.py`** — Salvaguardas de 3 capas contra "código alienígena" de auto-mejora recursiva
+- **`workflow_protocol.py`** — Gates protocolar, `ProtocolWorkflow`, `ProtocolTrace`, escáner de seguridad
+- **`hfc_tiers.py`** — Especiación HFC en tres niveles (Laboratorio / Fábrica / Élite)
+- **`island_evolution.py`** — Coordinador paralelo `IslandPool` con métricas de diversidad
 - **`cli/main.py`** — Lógica principal de la CLI con integración al core evolutivo
 
 ---
@@ -378,18 +499,27 @@ Este proyecto está licenciado bajo la Licencia MIT - ver el archivo [LICENSE](L
 ## 📊 Estado del Proyecto
 
 **Versión:** 3.1.0 (CLI)
-**Última Actualización:** 2026-06-29
+**Última Actualización:** 2026-07-12
 **Mantenedor:** Equipo de Desarrollo MutaLambda
 
 ### Capacidades Actuales
 
-✅ **Evolución multi-objetivo** con selección NSGA-II
-✅ **Ejecución en sandbox seguro** con aislamiento Docker
+✅ **Evolución multi-objetivo** con selección NSGA-II (6 objetivos: correctness, latency_p50, latency_p99, throughput, memory_peak_mb, parsimony)
+✅ **Evaluación en sandbox seguro** con aislamiento en subproceso con límites duros
 ✅ **CLI interactiva** con animaciones retro y gestión de checkpoints
-✅ **Optimizaciones validadas** con cobertura de tests comprehensiva (147/147 tests)
+✅ **Optimizaciones validadas** con cobertura de tests comprehensiva (149/149 tests)
 ✅ **Salvaguardas de interpretabilidad** para trabajo futuro de auto-evolución
 ✅ **Sistema de checkpoints** para reanudar ejecuciones largas
 ✅ **Plantillas de configuración** para diferentes casos de uso (basic/advanced/research)
+✅ **Workflow protocolar** con gates secuenciales (build → security → sandbox → tests → perf)
+✅ **Niveles HFC** — especiación Laboratorio / Fábrica / Élite (opt-in)
+✅ **Convergent Evolution Boost** — amplificación de score para islas convergentes
+✅ **Resurrección** — backtracking temporal para revivir ramas del linaje abandonadas
+✅ **Crossover entre ramas** — inyección de diversidad desde individuos genealógicamente distantes
+✅ **Múltiples backends LLM** — ollama, openai, anthropic, openrouter, mistral, microsoft_cpp, huggingface_cli
+✅ **Motor Dialéctico** — filtro tesis/crítica/síntesis pre-sandbox (opt-in)
+✅ **Transferencia Horizontal de Código (THC)** — extracción e inyección de fragmentos (opt-in)
+✅ **Caché de evaluación** — caché por hash AST canónico para evitar llamadas redundantes al sandbox
 
 ### Mejoras de Rendimiento Validadas
 
@@ -421,7 +551,7 @@ Este proyecto está licenciado bajo la Licencia MIT - ver el archivo [LICENSE](L
 **Total de optimizaciones intentadas:** 11
 **Mejoras validadas:** 5 (MASSIVE: 4 módulos, Core: 1 función)
 **Experimentos fallidos:** 4 (revertidos)
-**Tests pasando:** 147/147 (100%)
+**Tests pasando:** 149/149 (100%)
 
 **Impacto en ejecuciones de producción:**
 - MASSIVE: **35-60% más rápido** runtime de simulación
