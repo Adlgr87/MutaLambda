@@ -6,7 +6,7 @@
 
 [![Performance](https://img.shields.io/badge/Performance-50--263%25%20speedup-blue)]()
 [![Modules](https://img.shields.io/badge/Modules-5%20optimized-orange)]()
-[![Correctness](https://img.shields.io/badge/Correctness-147%2F147%20tests-green)]()
+[![Correctness](https://img.shields.io/badge/Correctness-149%2F149%20tests-green)]()
 [![CLI](https://img.shields.io/badge/CLI-v3.1.0-orange)]()
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-success)]()
 
@@ -23,7 +23,7 @@ MutaLambda is an evolutionary code optimization system that uses Large Language 
 ### Key Achievements
 
 ✅ **MASSIVE Framework integration** — 50-263% speedups across 4 scientific modules, 100% correctness
-✅ **`_get_fitness()` optimization** — +10.2% speedup validated with 147/147 tests passing
+✅ **`_get_fitness()` optimization** — +10.2% speedup validated with 149/149 tests passing
 ✅ **Interactive CLI** — Full-featured command-line interface with retro animations
 ✅ **Checkpoint system** — Save and resume evolution runs seamlessly
 
@@ -88,68 +88,167 @@ def _get_fitness(ind: Individual) -> FitnessVector:
 
 **Impact:** ~17 seconds saved per typical evolution run (50 generations, 4 islands, 32 individuals).
 
-**Validation:** 13/13 nsga2 tests, 14/14 fitness_vector tests, 147/147 total tests ✅
+**Validation:** 13/13 nsga2 tests, 14/14 fitness_vector tests, 149/149 total tests ✅
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-cli.py                   CLI entry point (Click)
-├── cli/                 CLI package
-│   ├── main.py          Main logic: MutaLambdaCLI, InteractiveREPL
-│   ├── animator.py      Retro animations (ASCII art, progress bars)
-│   ├── config_manager.py  Configuration management (templates: basic/advanced/research)
-│   └── checkpoint_manager.py  Checkpoint management (pickle + gzip)
+cli.py                       CLI entry point (Click)
+└── cli/                     CLI package
+    ├── main.py              Main logic: MutaLambdaCLI, InteractiveREPL
+    ├── animator.py          Retro animations (ASCII art, progress bars)
+    ├── config_manager.py    Configuration management (templates: basic/advanced/research)
+    └── checkpoint_manager.py  Checkpoint management (pickle + gzip)
 
-muta_lambda.py           Core: Multi-Objective Evolution (v3.1)
-├── models.py            Data: Individual, FitnessVector, EvoStats
-├── island.py            Evolution: AST mutations + NSGA-II selection
-├── sandbox.py           Secure evaluation (Docker)
-├── nsga2.py             Multi-objective selection (Pareto + Crowding)
-├── fitness_vector.py    6D vector: correctness, latency, memory, parsimony
-├── interpretability.py  Interpretability safeguards (3 layers)
-├── meta_evolution.py    Hyperparameter auto-tuning
-└── mutation_operators.py  Genetic operators (crossover, mutation)
+muta_lambda.py               Slim orchestrator — wires all modules together
+├── models.py                Data: Individual, FitnessVector, LineageGraph, PromptGenome
+├── evolution_engine.py      AST mutations + LLM-guided code generation (ASTMutator, CoreEvolutionEngine)
+├── island.py                Island evolution unit (per-island population + protocol workflow)
+├── island_evolution.py      Parallel coordinator: IslandPool (thread/process), IslandDiversity
+├── migration.py             Inter-island migration bus (ring, fully_connected, mesh topologies)
+├── sandbox.py               Hard-limited subprocess evaluation (timeout, memory)
+├── archive.py               SolutionArchive (FAISS-backed semantic dedup, optional)
+├── nsga2.py                 NSGA-II multi-objective selection (Pareto fronts + crowding distance)
+├── fitness_vector.py        6-objective vector: correctness, latency_p50, latency_p99, throughput,
+│                                memory_peak_mb, parsimony
+├── hfc_tiers.py             HFC tiered speciation: Laboratory → Factory (bacterial clones) → Elite
+├── workflow_protocol.py     Protocol-driven gates: build → security → sandbox → tests → perf → decision
+├── interpretability.py      3-layer interpretability safeguards for self-evolved code
+├── llm_backend.py           LLM adapters: ollama, openai, anthropic, openrouter, mistral,
+│                                microsoft_cpp, huggingface_cli
+├── prompt_evolver.py        Basic PromptGenome evolution
+├── prompt_evolution.py      RichPromptEvolver — 15 mutation operators + crossover + archive-aware
+├── config_loader.py         Declarative YAML config loader with validation
+├── checkpoint_manager.py    Checkpoint save/resume (pickle + gzip)
+└── property_testing.py      Property-based test harness
 
-evolution_engine.py      Main evolution engine
-├── pattern_memory.py    AST pattern memory
-├── tipping_points.py    Phase transition detection
-└── thc_engine.py        Horizontal Code Transfer
+muta_ext/                    Extensions & advanced subsystems
+├── advanced_selection.py    UCB, Thompson Sampling, ε-greedy multi-armed bandit selection
+├── dialectic_engine.py      Thesis → Critique → Synthesis pre-sandbox LLM filter
+├── pattern_memory.py        Reusable AST pattern memory
+├── spatial_topology.py      2D grid (Moore/Von Neumann) structured migration
+├── thc_engine.py            Horizontal Code Transfer (fragment extraction + injection)
+├── config/
+│   └── scientific_extension.py  Scientific extension config
+├── diagnostics/
+│   ├── evolution_report.py  Shannon entropy, Lyapunov exponent, spectral stability report
+│   └── tipping.py           Phase-transition / tipping-point detection
+├── evaluation/
+│   ├── cache.py             AST-canonical evaluation cache (avoids re-running sandbox)
+│   └── numerical_health.py  Numerical stability health checks
+├── lineage/
+│   └── compression.py       Lineage DAG compression for long runs
+└── mutation/
+    └── stepper_protocol.py  Composable mutation stepper protocol (Strategy pattern)
 
-muta_ext/                Scientific extensions
-├── migration.py         Inter-island migration bus
-├── lineage_graph.py     Complete genealogy (DAG)
-├── convergence.py       Multi-scale monitoring
-├── early_stop_monitor.py  Stopping criteria
-├── hfc.py               Hierarchical Fair Competition (HFC)
-├── spatial_topology.py  Spatial topology (grid)
-├── advanced_selection.py  UCB, Thompson Sampling, ε-greedy
-├── prompt_evolver.py    Prompt evolution
-└── benchmarking/        Robust benchmarking system
+tests/
+├── benchmarks/              Performance benchmark suite
+└── test_*.py                Unit tests (149 total)
 ```
 
 ### Protocol-driven evolution workflow
 
-Every generated candidate now moves through one mandatory pipeline before it is
+Every generated candidate moves through one mandatory pipeline before it is
 allowed to progress:
 
 ```text
 select elite parent(s)
-  -> generate candidate
+  -> generate candidate (AST mutation or LLM prompt)
   -> build gate (parse + compile)
-  -> security gate
-  -> sandbox evaluation
-  -> tests/correctness gate
+  -> security gate (blocks eval/exec/compile/os.system/subprocess.*)
+  -> sandbox evaluation (hard-limited subprocess, timeout + memory)
+  -> tests/correctness gate (configurable threshold, default 100%)
   -> performance gate
   -> decision gate (promote / retry / reject)
 ```
 
 Operational notes:
-- each run has a `run_id`
-- recent per-stage traces are exposed in `agent.get_metrics()["protocol"]`
+- each run has a `run_id`; recent per-stage traces exposed in `agent.get_metrics()["protocol"]`
 - retryable failures automatically fall back to a safer AST retry
-- security gates block `eval`, `exec`, `compile`, `os.system`, and `subprocess.*`
+- security gate blocks `eval`, `exec`, `compile`, `__import__`, `os.system`, and `subprocess.*`
+- workflow configurable via `config.yaml` under the `workflow:` key
+
+---
+
+## ⚙️ Advanced Features
+
+### HFC — Hierarchical Fair Competition (`hfc_tiers.py`)
+
+Three-tier speciation prevents premature convergence by separating populations by fitness level:
+
+| Tier | Name | Role |
+|------|------|------|
+| 1 | **Laboratory** | Chaotic exploration — LLM crossover + full AST mutation |
+| 2 | **Factory** | Bacterial reproduction (1 → λ clones) with micro-mutators |
+| 3 | **Elite** | Static Pareto frontier — validated, promotion-only |
+
+Top-down distillation extracts elite concepts and injects them back into the Laboratory (configurable interval). Promotion from Laboratory → Factory requires 100% correctness by default.
+
+### Convergent Evolution Boost
+
+When multiple islands converge on similar code (cosine similarity ≥ threshold), the system amplifies the score multiplicatively (`score *= 1 + factor × similarity`). Encourages consensus solutions.
+
+### Resurrection — Time-Travel Backtracking
+
+After N stalled generations, the engine revives the best abandoned branch from the lineage DAG and re-enters it into the population. Up to 3 resurrection attempts per run (configurable).
+
+### Cross-Branch Crossover
+
+Individuals separated by ≥ 3 genealogical hops can be crossed over, injecting diversity when the population converges. Probability: 5% per offspring.
+
+### THC — Horizontal Code Transfer (`muta_ext/thc_engine.py`)
+
+Extracts successful AST fragments from high-scoring individuals and injects them into unrelated individuals, analogous to horizontal gene transfer in bacteria.
+
+### Dialectic Engine (`muta_ext/dialectic_engine.py`)
+
+Before sandbox evaluation, candidate code goes through:
+1. **Thesis** — proposed mutation
+2. **Critique** — LLM identifies correctness / safety issues
+3. **Synthesis** — LLM rewrites taking critique into account
+
+Saves sandbox calls by rejecting syntactically invalid candidates early.
+
+### Advanced Selection (`muta_ext/advanced_selection.py`)
+
+Multi-armed bandit strategies for island operator selection:
+- **UCB** (Upper Confidence Bound)
+- **Thompson Sampling**
+- **ε-greedy**
+
+Combines fitness + novelty + entropy + discovery scores.
+
+### Spatial Topology (`muta_ext/spatial_topology.py`)
+
+Arranges islands on a 2D grid. Migration only between geographic neighbors (Moore or Von Neumann neighborhoods), creating spatial diversity gradients.
+
+### Pattern Memory (`muta_ext/pattern_memory.py`)
+
+Stores reusable AST patterns from successful individuals so future mutations can replay proven transformations rather than re-discovering them.
+
+### Evaluation Cache (`muta_ext/evaluation/cache.py`)
+
+Caches fitness results keyed by canonical AST hash (variable-name and whitespace independent). If a mutation produces structurally identical code to a previously evaluated individual, the cached `FitnessVector` is returned without running the sandbox.
+
+---
+
+## 🤖 LLM Backends
+
+MutaLambda supports multiple LLM providers, configured via `llm.backend` in `config.yaml` or the `MUTALAMBDA_*` environment variables:
+
+| Backend | Key | Notes |
+|---------|-----|-------|
+| **Ollama** | `ollama` | Default — local model server |
+| **OpenAI** | `openai` | Requires `OPENAI_API_KEY` |
+| **Anthropic** | `anthropic` | Requires `ANTHROPIC_API_KEY` |
+| **OpenRouter** | `openrouter` | Requires `OPENROUTER_API_KEY` |
+| **Mistral** | `mistral` | Requires `MISTRAL_API_KEY` |
+| **llama.cpp (MS fork)** | `microsoft_cpp` | Local server via Microsoft fork |
+| **HuggingFace CLI** | `huggingface_cli` | HF Hub model via subprocess |
+
+Environment overrides: `MUTALAMBDA_OLLAMA_URL`, `MUTALAMBDA_OPENAI_URL`, `MUTALAMBDA_LLM_TIMEOUT_SEC`, `MUTALAMBDA_LLM_TEMPERATURE`.
 
 ---
 
@@ -207,7 +306,7 @@ pip install -r requirements.txt
 python -m pytest tests/ -v
 ```
 
-All 147 tests should pass.
+All 149 tests should pass.
 
 ### Run CLI
 
@@ -332,8 +431,11 @@ python cli.py resume --checkpoint checkpoints/checkpoint_0050.json --additional-
 ### Code Documentation
 
 - **`nsga2.py`** — NSGA-II multi-objective selection with optimized `_get_fitness()`
-- **`fitness_vector.py`** — 6-dimensional fitness vector for Pareto optimization
+- **`fitness_vector.py`** — 6-objective fitness: correctness, latency_p50, latency_p99, throughput, memory_peak_mb, parsimony
 - **`interpretability.py`** — 3-layer safeguards against "alien code" from recursive self-improvement
+- **`workflow_protocol.py`** — Protocol gates, `ProtocolWorkflow`, `ProtocolTrace`, security scanner
+- **`hfc_tiers.py`** — HFC three-tier speciation (Laboratory / Factory / Elite)
+- **`island_evolution.py`** — Parallel `IslandPool` coordinator with diversity metrics
 - **`cli/main.py`** — Main CLI logic with evolutionary core integration
 
 ---
@@ -400,18 +502,27 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📊 Project Status
 
 **Version:** 3.1.0 (CLI)
-**Last Updated:** 2026-06-29
+**Last Updated:** 2026-07-12
 **Maintainer:** MutaLambda Development Team
 
 ### Current Capabilities
 
-✅ **Multi-objective evolution** with NSGA-II selection
-✅ **Secure sandbox execution** with Docker isolation
+✅ **Multi-objective evolution** with NSGA-II selection (6 objectives: correctness, latency_p50, latency_p99, throughput, memory_peak_mb, parsimony)
+✅ **Secure sandbox execution** with hard-limited subprocess isolation
 ✅ **Interactive CLI** with retro animations and checkpoint management
-✅ **Validated optimizations** with comprehensive test coverage (147/147 tests)
+✅ **Validated optimizations** with comprehensive test coverage (149/149 tests)
 ✅ **Interpretability safeguards** for future self-evolution work
 ✅ **Checkpoint system** for resuming long evolution runs
 ✅ **Configuration templates** for different use cases (basic/advanced/research)
+✅ **Protocol-driven workflow** with sequential gates (build → security → sandbox → tests → perf)
+✅ **HFC tiers** — Laboratory / Factory / Elite speciation (opt-in)
+✅ **Convergent Evolution Boost** — score amplification for converging islands
+✅ **Resurrection** — time-travel backtracking to revive abandoned lineage branches
+✅ **Cross-branch crossover** — diversity injection from genealogically distant individuals
+✅ **Multiple LLM backends** — ollama, openai, anthropic, openrouter, mistral, microsoft_cpp, huggingface_cli
+✅ **Dialectic Engine** — thesis/critique/synthesis pre-sandbox filter (opt-in)
+✅ **Horizontal Code Transfer (THC)** — fragment extraction and injection (opt-in)
+✅ **Evaluation cache** — canonical AST hash cache to skip redundant sandbox calls
 
 ### Validated Performance Improvements
 
@@ -421,7 +532,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 | `_get_fitness()` | `getattr()` instead of `hasattr()` | **+10.2%** | ✅ Production |
 | Ring topology | Simple migration pattern | **92.2% success** | ✅ Production |
 | NSGA-II selection | Optimized hot paths | **Validated** | ✅ Production |
-
 ### Failed Experiments (Reverted)
 
 ❌ Fitness-directed migration (57.6% success vs 92.2% ring)
@@ -443,7 +553,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Total optimizations attempted:** 11
 **Validated improvements:** 5 (MASSIVE: 4 modules, Core: 1 function)
 **Failed experiments:** 4 (reverted)
-**Tests passing:** 147/147 (100%)
+**Tests passing:** 149/149 (100%)
 
 **Impact on production runs:**
 - MASSIVE: **35-60% faster** simulation runtime
