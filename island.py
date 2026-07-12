@@ -7,11 +7,22 @@ import copy
 import heapq
 import logging
 import random
+import time
 from typing import Any, Callable, Dict, List, Optional
 
 from evolution_engine import ASTMutator, CoreEvolutionEngine, ast_crossover
 from models import EvalResult, Individual, IslandConfig
 from sandbox import SandboxEvaluator
+from workflow_protocol import (
+    PASS,
+    RETRYABLE_FAIL,
+    ProtocolStage,
+    ProtocolTrace,
+    ProtocolWorkflow,
+    artifact_ref,
+    make_stage_result,
+    security_findings,
+)
 
 logger = logging.getLogger("MutaLambda")
 
@@ -38,8 +49,40 @@ class Island:
         self.generation: int = 0
         self.local_best: Optional[Individual] = None
         self._history: List[float] = []
+        self._protocol_run_id: str = "unbound"
+        self._protocol_trace_sink: Optional[Callable[[ProtocolTrace], None]] = None
+        self._protocol_agent: Any = None
+        self._workflow_enabled: bool = True
+        self._workflow_max_retries: int = 1
+        self._workflow_correctness_threshold: float = 1.0
+        self._workflow_require_score_improvement: bool = False
+        self._workflow_enforce_security: bool = True
 
         self.migration_bus.register_island(island_id, self)
+
+    def configure_protocol(
+        self,
+        *,
+        run_id: str,
+        trace_sink: Optional[Callable[[ProtocolTrace], None]],
+        agent: Any,
+        config: Any,
+    ) -> None:
+        """Attach run-scoped workflow state for traceability and gates."""
+        self._protocol_run_id = run_id
+        self._protocol_trace_sink = trace_sink
+        self._protocol_agent = agent
+        self._workflow_enabled = getattr(config, "workflow_enabled", True)
+        self._workflow_max_retries = max(0, int(getattr(config, "workflow_max_retries", 1)))
+        self._workflow_correctness_threshold = float(
+            getattr(config, "workflow_correctness_threshold", 1.0)
+        )
+        self._workflow_require_score_improvement = bool(
+            getattr(config, "workflow_require_score_improvement", False)
+        )
+        self._workflow_enforce_security = bool(
+            getattr(config, "workflow_enforce_security", True)
+        )
 
     def seed_population(self, codes: List[str]) -> None:
         """Inicializa la población con semillas de código."""
@@ -131,13 +174,14 @@ class Island:
             )
             use_nsga2 = False
 
-        error_map: Dict[int, str] = {}
+        error_map: Dict[str, str] = {}
         for ind, res in zip(self.population, results):
             if res.stderr and not res.passed:
                 error_map[ind.id] = "\n".join(res.stderr.splitlines()[:3])
 
         new_pop: List[Individual] = list(elites)
         while len(new_pop) < self.config.population_size:
+            strategy = "mutation"
             if use_nsga2 and len(elites) >= 2 and random.random() < 0.7:
                 parents = nsga2_tournament_select(elites, 1)
                 parent = parents[0] if parents else random.choice(elites)
@@ -146,8 +190,10 @@ class Island:
 
             child_parents: List[Individual] = [parent]
             if parent.score < 0 and random.random() < 0.10:
+                strategy = "redesign"
                 mutated_code = self._redesign(parent.code, parent.score)
             elif random.random() < 0.15 and len(elites) >= 2:
+                strategy = "crossover"
                 other = random.choice([e for e in elites if e != parent])
                 mutated_code = self._crossover(parent.code, other.code)
                 child_parents.append(other)
@@ -157,9 +203,13 @@ class Island:
                     parent.code, parent.score, error_info
                 )
 
-            child = Individual(code=mutated_code, tier="laboratory", record_lineage=True)
-            if self.migration_bus is not None and getattr(self.migration_bus, "lineage_graph", None) is not None:
-                child.parent_ids = [p.id for p in child_parents]
+            child = self._build_child_candidate(
+                parent=parent,
+                child_parents=child_parents,
+                mutated_code=mutated_code,
+                strategy=strategy,
+                candidate_index=len(new_pop),
+            )
             new_pop.append(child)
 
         self.population = new_pop
@@ -251,3 +301,235 @@ class Island:
             )
             if individual.score > self.population[worst_idx].score:
                 self.population[worst_idx] = individual
+
+    def _build_child_candidate(
+        self,
+        *,
+        parent: Individual,
+        child_parents: List[Individual],
+        mutated_code: str,
+        strategy: str,
+        candidate_index: int,
+    ) -> Individual:
+        if not self._workflow_enabled:
+            child = Individual(code=mutated_code, tier="laboratory", record_lineage=True)
+            if self.migration_bus is not None and getattr(self.migration_bus, "lineage_graph", None) is not None:
+                child.parent_ids = [p.id for p in child_parents]
+            child.creation_reason = strategy
+            return child
+
+        trace = ProtocolTrace(
+            run_id=self._protocol_run_id,
+            subject_id=(
+                f"island-{self.id}-gen-{self.generation}-candidate-{candidate_index}"
+            ),
+            metadata={
+                "island_id": self.id,
+                "generation": self.generation,
+                "parent_ids": [p.id for p in child_parents],
+                "strategy": strategy,
+            },
+        )
+        base_code = parent.code
+        attempts = self._workflow_max_retries + 1
+        candidate_code = mutated_code
+
+        for attempt in range(1, attempts + 1):
+            trace.attempts = attempt
+            attempt_strategy = strategy if attempt == 1 else f"{strategy}_retry"
+            context: Dict[str, Any] = {
+                "attempt": attempt,
+                "strategy": attempt_strategy,
+                "parent": parent,
+                "candidate_code": candidate_code,
+                "candidate_result": None,
+            }
+            workflow = ProtocolWorkflow(
+                [
+                    ProtocolStage("generate_candidate", self._stage_generate_candidate),
+                    ProtocolStage("build_gate", self._stage_build_gate),
+                    ProtocolStage("security_gate", self._stage_security_gate),
+                    ProtocolStage("evaluate_candidate", self._stage_evaluate_candidate),
+                    ProtocolStage("tests_gate", self._stage_tests_gate),
+                    ProtocolStage("performance_gate", self._stage_performance_gate),
+                    ProtocolStage("decision_gate", self._stage_decision_gate),
+                ]
+            )
+            if workflow.execute(context, trace):
+                result = context["candidate_result"]
+                child = Individual(
+                    code=context["candidate_code"],
+                    tier="laboratory",
+                    record_lineage=True,
+                )
+                child.score = result.score
+                child.fitness = result.fitness
+                child.passed = bool(
+                    result.passed
+                    and result.fitness.correctness >= self._workflow_correctness_threshold
+                )
+                child.creation_reason = attempt_strategy
+                if self.migration_bus is not None and getattr(self.migration_bus, "lineage_graph", None) is not None:
+                    child.parent_ids = [p.id for p in child_parents]
+                child.workflow_trace = trace.to_dict()
+                self._emit_protocol_trace(trace)
+                return child
+
+            candidate_code = ASTMutator.apply_random_mutation(base_code)
+            logger.debug(
+                "[run=%s] island=%d gen=%d candidate retry=%d decision=%s",
+                self._protocol_run_id,
+                self.id,
+                self.generation,
+                attempt,
+                trace.decision,
+            )
+
+        trace.decision = "reject"
+        self._emit_protocol_trace(trace)
+        child = Individual(code=base_code, tier=parent.tier, record_lineage=True)
+        child.score = parent.score
+        child.fitness = copy.deepcopy(parent.fitness)
+        child.passed = parent.passed
+        child.creation_reason = f"{strategy}_rejected"
+        if self.migration_bus is not None and getattr(self.migration_bus, "lineage_graph", None) is not None:
+            child.parent_ids = [p.id for p in child_parents]
+        child.workflow_trace = trace.to_dict()
+        return child
+
+    def _stage_generate_candidate(self, context: Dict[str, Any]):
+        code = context["candidate_code"]
+        attempt = context["attempt"]
+        strategy = context["strategy"]
+        return make_stage_result(
+            "generate_candidate",
+            PASS,
+            f"{strategy} generated candidate",
+            metadata={"attempt": attempt, "strategy": strategy},
+            artifacts={"candidate_ref": artifact_ref(code)},
+        )
+
+    def _stage_build_gate(self, context: Dict[str, Any]):
+        attempt = context["attempt"]
+        code = context["candidate_code"]
+        stage_start = time.perf_counter()
+        try:
+            ast.parse(code)
+            compile(code, "<candidate>", "exec")
+            return make_stage_result(
+                "build_gate",
+                PASS,
+                "candidate parses and compiles",
+                metadata={"attempt": attempt},
+                artifacts={"candidate_ref": artifact_ref(code)},
+                started_at=stage_start,
+            )
+        except SyntaxError as exc:
+            return make_stage_result(
+                "build_gate",
+                RETRYABLE_FAIL,
+                f"syntax error: {exc.msg}",
+                metadata={"attempt": attempt},
+                artifacts={"candidate_ref": artifact_ref(code)},
+                started_at=stage_start,
+            )
+
+    def _stage_security_gate(self, context: Dict[str, Any]):
+        code = context["candidate_code"]
+        attempt = context["attempt"]
+        findings = security_findings(code)
+        if findings and self._workflow_enforce_security:
+            return make_stage_result(
+                "security_gate",
+                RETRYABLE_FAIL,
+                ", ".join(findings),
+                metadata={"attempt": attempt, "findings": findings},
+                artifacts={"candidate_ref": artifact_ref(code)},
+            )
+        return make_stage_result(
+            "security_gate",
+            PASS,
+            "no high-confidence security findings",
+            metadata={"attempt": attempt, "findings": findings},
+            artifacts={"candidate_ref": artifact_ref(code)},
+        )
+
+    def _stage_evaluate_candidate(self, context: Dict[str, Any]):
+        code = context["candidate_code"]
+        attempt = context["attempt"]
+        stage_start = time.perf_counter()
+        result = self.evaluator.evaluate_batch([code])[0]
+        context["candidate_result"] = result
+        return make_stage_result(
+            "evaluate_candidate",
+            PASS,
+            "sandbox evaluation complete",
+            metadata={
+                "attempt": attempt,
+                "score": round(result.score, 6),
+                "correctness": round(result.fitness.correctness, 6),
+                "timed_out": result.timed_out,
+            },
+            artifacts={"candidate_ref": artifact_ref(code)},
+            started_at=stage_start,
+        )
+
+    def _stage_tests_gate(self, context: Dict[str, Any]):
+        result = context["candidate_result"]
+        attempt = context["attempt"]
+        status = PASS
+        message = "candidate passed correctness gate"
+        if not result.passed or result.fitness.correctness < self._workflow_correctness_threshold:
+            status = RETRYABLE_FAIL
+            message = "sandbox/tests gate failed"
+        return make_stage_result(
+            "tests_gate",
+            status,
+            message,
+            metadata={
+                "attempt": attempt,
+                "passed": result.passed,
+                "correctness": round(result.fitness.correctness, 6),
+            },
+            artifacts={"stderr_preview": result.stderr[:120]},
+        )
+
+    def _stage_performance_gate(self, context: Dict[str, Any]):
+        result = context["candidate_result"]
+        parent = context["parent"]
+        attempt = context["attempt"]
+        score_delta = result.score - parent.score
+        status = PASS
+        message = "candidate accepted by performance gate"
+        if self._workflow_require_score_improvement and score_delta < 0:
+            status = RETRYABLE_FAIL
+            message = "candidate regressed versus parent"
+        return make_stage_result(
+            "performance_gate",
+            status,
+            message,
+            metadata={
+                "attempt": attempt,
+                "score_delta": round(score_delta, 6),
+                "parent_score": round(parent.score, 6),
+                "candidate_score": round(result.score, 6),
+            },
+            artifacts={"candidate_ref": artifact_ref(context["candidate_code"])},
+        )
+
+    def _stage_decision_gate(self, context: Dict[str, Any]):
+        result = context["candidate_result"]
+        return make_stage_result(
+            "decision_gate",
+            PASS,
+            "promote candidate",
+            metadata={
+                "candidate_score": round(result.score, 6),
+                "correctness": round(result.fitness.correctness, 6),
+            },
+            artifacts={"candidate_ref": artifact_ref(context["candidate_code"])},
+        )
+
+    def _emit_protocol_trace(self, trace: ProtocolTrace) -> None:
+        if self._protocol_trace_sink is not None:
+            self._protocol_trace_sink(trace)

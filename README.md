@@ -129,6 +129,28 @@ muta_ext/                Scientific extensions
 └── benchmarking/        Robust benchmarking system
 ```
 
+### Protocol-driven evolution workflow
+
+Every generated candidate now moves through one mandatory pipeline before it is
+allowed to progress:
+
+```text
+select elite parent(s)
+  -> generate candidate
+  -> build gate (parse + compile)
+  -> security gate
+  -> sandbox evaluation
+  -> tests/correctness gate
+  -> performance gate
+  -> decision gate (promote / retry / reject)
+```
+
+Operational notes:
+- each run has a `run_id`
+- recent per-stage traces are exposed in `agent.get_metrics()["protocol"]`
+- retryable failures automatically fall back to a safer AST retry
+- security gates block `eval`, `exec`, `compile`, `os.system`, and `subprocess.*`
+
 ---
 
 ## 📚 Lessons Learned

@@ -24,6 +24,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from uuid import uuid4
 
 import numpy as np
 
@@ -70,6 +71,7 @@ from models import (
 )
 from prompt_evolver import PromptEvolver
 from sandbox import SandboxEvaluator
+from workflow_protocol import ProtocolTrace
 
 
 @dataclass
@@ -86,11 +88,18 @@ class EvolveConfig:
     migrants_per_island: int = 2
     archive_solutions: bool = True
     prompt_evolution: bool = True
+    checkpoint_enabled: bool = True
     checkpoint_interval: int = 10
     checkpoint_dir: str = "checkpoints"
     early_stop_patience: int = 15
     early_stop_delta: float = 0.001
     novelty_alpha: float = 0.15
+    workflow_enabled: bool = True
+    workflow_max_retries: int = 1
+    workflow_correctness_threshold: float = 1.0
+    workflow_require_score_improvement: bool = False
+    workflow_enforce_security: bool = True
+    workflow_trace_limit: int = 200
     convergent_boost_enabled: bool = True
     convergent_boost_threshold: float = 0.85
     convergent_boost_factor: float = 0.15
@@ -164,11 +173,18 @@ class EvolveConfig:
             migrants_per_island=pop.get("migrants_per_island", 2),
             archive_solutions=arch.get("enabled", True),
             prompt_evolution=prompt.get("enabled", True),
+            checkpoint_enabled=chk.get("enabled", True),
             checkpoint_interval=chk.get("interval", 10),
             checkpoint_dir=chk.get("dir", "checkpoints"),
             early_stop_patience=evo.get("early_stop_patience", 15),
             early_stop_delta=evo.get("early_stop_delta", 0.001),
             novelty_alpha=evo.get("novelty_alpha", 0.15),
+            workflow_enabled=cfg.get("workflow", {}).get("enabled", True),
+            workflow_max_retries=cfg.get("workflow", {}).get("max_retries", 1),
+            workflow_correctness_threshold=cfg.get("workflow", {}).get("correctness_threshold", 1.0),
+            workflow_require_score_improvement=cfg.get("workflow", {}).get("require_score_improvement", False),
+            workflow_enforce_security=cfg.get("workflow", {}).get("enforce_security", True),
+            workflow_trace_limit=cfg.get("workflow", {}).get("trace_limit", 200),
             convergent_boost_enabled=evo.get("convergent_boost", {}).get("enabled", True),
             convergent_boost_threshold=evo.get("convergent_boost", {}).get("threshold", 0.85),
             convergent_boost_factor=evo.get("convergent_boost", {}).get("factor", 0.15),
@@ -262,11 +278,21 @@ class MutaLambdaAgent:
     def __init__(
         self,
         config: EvolveConfig,
-        test_cases: List[Dict],
+        test_cases: Optional[List[Dict]] = None,
         llm_fn: Optional[Callable[[str], str]] = None,
         timeout_sec: float = 10.0,
+        task: str = "",
     ):
         self.config = config
+        self.task = task
+        self.run_id = uuid4().hex[:12]
+        self._protocol_traces: List[Dict[str, Any]] = []
+        self._protocol_metrics: Dict[str, Any] = {
+            "promoted": 0,
+            "rejected": 0,
+            "retried": 0,
+            "gate_failures": {},
+        }
         self.llm_fn = (
             _resolve_llm_backend(
                 backend=config.llm_backend,
@@ -279,7 +305,7 @@ class MutaLambdaAgent:
         )
 
         self.evaluator = SandboxEvaluator(
-            test_cases=test_cases,
+            test_cases=test_cases or [],
             timeout_sec=timeout_sec,
         )
         topology = "spatial_grid" if config.spatial_enabled else config.topology
@@ -308,6 +334,13 @@ class MutaLambdaAgent:
             )
             for i in range(config.num_islands)
         ]
+        for island in self.islands:
+            island.configure_protocol(
+                run_id=self.run_id,
+                trace_sink=self._record_protocol_trace,
+                agent=self,
+                config=config,
+            )
         self._hfc: Optional[HFCLeagueEngine] = None
         if config.hfc_enabled:
             self._hfc = HFCLeagueEngine(
@@ -414,6 +447,35 @@ class MutaLambdaAgent:
         self.migration_bus.lineage_graph = self._lineage
         if self._advanced_selection is not None:
             self._advanced_selection.lineage_graph = self._lineage
+
+    def _record_protocol_trace(self, trace: ProtocolTrace) -> None:
+        trace_dict = trace.to_dict()
+        self._protocol_traces.append(trace_dict)
+        if len(self._protocol_traces) > self.config.workflow_trace_limit:
+            self._protocol_traces = self._protocol_traces[-self.config.workflow_trace_limit:]
+
+        decision = trace_dict.get("decision", "pending")
+        if decision == "promote":
+            self._protocol_metrics["promoted"] += 1
+        elif decision == "reject":
+            self._protocol_metrics["rejected"] += 1
+
+        for stage in trace_dict.get("stages", []):
+            if stage["status"] == "RETRYABLE_FAIL":
+                self._protocol_metrics["retried"] += 1
+                failures = self._protocol_metrics["gate_failures"]
+                failures[stage["name"]] = failures.get(stage["name"], 0) + 1
+
+        logger.debug(
+            "[run=%s] protocol candidate=%s decision=%s stages=%s",
+            self.run_id,
+            trace_dict.get("subject_id"),
+            decision,
+            " -> ".join(
+                f"{stage['name']}:{stage['status']}"
+                for stage in trace_dict.get("stages", [])
+            ),
+        )
 
     def _seed_islands_differentiated(self, seed_codes: List[str]) -> None:
         for i, island in enumerate(self.islands):
@@ -641,9 +703,12 @@ class MutaLambdaAgent:
         return (1.0 - alpha) * individual.score + alpha * novelty * 100.0
 
     def run(self, task: str = "") -> Individual:
+        if not task:
+            task = self.task
         self._start_time = time.perf_counter()
         logger.info(
-            "MutaLambda starting: %d islands × %d generations",
+            "MutaLambda starting: run=%s %d islands × %d generations",
+            self.run_id,
             self.config.num_islands,
             self.config.generations,
         )
@@ -786,14 +851,18 @@ class MutaLambdaAgent:
                 )
                 logger.info(
                     "Gen %d/%d | best=%.4f | avg_time=%.2fs | "
-                    "archive=%d | stagnant=%d",
+                    "archive=%d | stagnant=%d | protocol(promote=%d reject=%d)",
                     gen + 1, self.config.generations, current_score,
                     avg_time,
                     self.archive.size if self.archive else 0,
                     self._early_stop.stagnant_generations,
+                    self._protocol_metrics["promoted"],
+                    self._protocol_metrics["rejected"],
                 )
 
             if (
+                self.config.checkpoint_enabled
+                and
                 self.config.checkpoint_interval > 0
                 and (gen + 1) % self.config.checkpoint_interval == 0
             ):
@@ -809,7 +878,8 @@ class MutaLambdaAgent:
 
         total_time = time.perf_counter() - self._start_time
         logger.info(
-            "Evolution complete in %.1fs. Best score: %.4f",
+            "Evolution complete: run=%s in %.1fs. Best score: %.4f",
+            self.run_id,
             total_time,
             global_best.score if global_best else float("-inf"),
         )
@@ -870,6 +940,7 @@ class MutaLambdaAgent:
             if self._pattern_memory is not None else 0
         )
         return {
+            "run_id": self.run_id,
             "total_generations": len(self._generation_times),
             "total_time_sec": round(sum(self._generation_times), 4),
             "avg_generation_time_sec": round(
@@ -890,6 +961,11 @@ class MutaLambdaAgent:
             "dialectic": dialectic_metrics,
             "spatial": spatial_metrics,
             "pattern_memory_size": pattern_count,
+            "protocol": {
+                **self._protocol_metrics,
+                "enabled": self.config.workflow_enabled,
+                "recent_traces": list(self._protocol_traces),
+            },
         }
 
 

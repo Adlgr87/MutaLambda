@@ -62,9 +62,16 @@ _DEFAULTS: Dict[str, Any] = {
     "prompt_evolution.pop_size": 6,
     "prompt_evolution.elite_frac": 0.5,
     "checkpoint.interval": 10,
+    "checkpoint.enabled": True,
     "checkpoint.dir": "checkpoints",
     "checkpoint.save_archive": True,
     "checkpoint.save_prompts": True,
+    "workflow.enabled": True,
+    "workflow.max_retries": 1,
+    "workflow.correctness_threshold": 1.0,
+    "workflow.require_score_improvement": False,
+    "workflow.enforce_security": True,
+    "workflow.trace_limit": 200,
     "logging.level": "INFO",
     "logging.log_file": None,
     "llm.backend": "ollama",
@@ -187,6 +194,18 @@ def validate_config(raw: Dict[str, Any]) -> list:
     correctness = _get_nested(raw, "hfc.promotion_correctness")
     if correctness is not None and not (0.0 <= correctness <= 1.0):
         errors.append("hfc.promotion_correctness must be between 0.0 and 1.0")
+
+    workflow_retries = _get_nested(raw, "workflow.max_retries")
+    if workflow_retries is not None and workflow_retries < 0:
+        errors.append("workflow.max_retries must be non-negative")
+
+    workflow_threshold = _get_nested(raw, "workflow.correctness_threshold")
+    if workflow_threshold is not None and not (0.0 <= workflow_threshold <= 1.0):
+        errors.append("workflow.correctness_threshold must be between 0.0 and 1.0")
+
+    workflow_trace_limit = _get_nested(raw, "workflow.trace_limit")
+    if workflow_trace_limit is not None and workflow_trace_limit <= 0:
+        errors.append("workflow.trace_limit must be positive")
 
     thc_transfers = _get_nested(raw, "thc.max_transfers_per_generation")
     if thc_transfers is not None and thc_transfers < 0:
