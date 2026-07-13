@@ -247,6 +247,8 @@ class Island:
             error_info=error_info,
             llm_fn=self.llm_fn,
         )
+        if candidate.strip() == code.strip():
+            candidate = self._mutate(code)
         return self._dialectic_refine(code, candidate)
 
     def _redesign(self, code: str, score: float) -> str:
@@ -298,16 +300,21 @@ class Island:
         return random.sample(self.population, min(count, len(self.population)))
 
     def receive_migrant(self, individual: Individual) -> None:
-        """Acepta un inmigrante: añade o reemplaza al peor si mejora."""
+        """Acepta un inmigrante sin reutilizar su score externo."""
+        migrant = copy.deepcopy(individual)
+        migrant.score = float("-inf")
+        migrant.fitness = None
+        migrant.passed = False
+
         if len(self.population) < self.config.population_size:
-            self.population.append(individual)
-        else:
-            worst_idx = min(
-                range(len(self.population)),
-                key=lambda i: self.population[i].score,
-            )
-            if individual.score > self.population[worst_idx].score:
-                self.population[worst_idx] = individual
+            self.population.append(migrant)
+            return
+
+        worst_idx = min(
+            range(len(self.population)),
+            key=lambda i: self.population[i].score,
+        )
+        self.population[worst_idx] = migrant
 
     def _build_child_candidate(
         self,

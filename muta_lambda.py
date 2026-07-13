@@ -614,6 +614,7 @@ class MutaLambdaAgent:
         node.resurrected = True
 
         base_code: Optional[str] = None
+        should_mutate = False
         if getattr(node, "code", ""):
             base_code = node.code
 
@@ -639,13 +640,15 @@ class MutaLambdaAgent:
                 if stagnant and stagnant.local_best
                 else "def solution():\n    pass"
             )
+            should_mutate = True
 
         code = base_code
-        for _ in range(3):
-            mutated = ASTMutator.apply_random_mutation(code)
-            if mutated.strip() != code.strip():
-                code = mutated
-                break
+        if should_mutate:
+            for _ in range(3):
+                mutated = ASTMutator.apply_random_mutation(code)
+                if mutated.strip() != code.strip():
+                    code = mutated
+                    break
 
         resurrected = Individual(
             code=code,
@@ -860,6 +863,11 @@ class MutaLambdaAgent:
             gen_elapsed = time.perf_counter() - gen_start
             self._generation_times.append(gen_elapsed)
             current_score = global_best.score if global_best else float("-inf")
+            current_combined_score = (
+                self._score_with_novelty(global_best)
+                if global_best is not None
+                else float("-inf")
+            )
             self._global_best_history.append(current_score)
 
             if gen % 5 == 0 or gen == self.config.generations - 1:
@@ -886,7 +894,7 @@ class MutaLambdaAgent:
             ):
                 self._save_checkpoint(gen + 1)
 
-            if self._early_stop.update(current_score):
+            if self._early_stop.update(current_combined_score):
                 logger.info(
                     "Early stop en gen %d: sin mejora ≥%.4f en %d generaciones.",
                     gen + 1, self.config.early_stop_delta,
