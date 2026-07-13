@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
 from typing import Callable
 
 logger = logging.getLogger("MutaLambda")
@@ -19,8 +18,6 @@ SUPPORTED_BACKENDS = {
     "anthropic",
     "openrouter",
     "mistral",
-    "microsoft_cpp",
-    "huggingface_cli",
 }
 
 
@@ -98,10 +95,11 @@ class LLMBackend:
             if not api_key:
                 raise ValueError("MISTRAL_API_KEY is required for backend=mistral")
             self._headers = {"Authorization": f"Bearer {api_key}"}
-        elif self.backend == "microsoft_cpp":
-            self._cmd = ["microsoft.cpp", "-m", self.model]
-        elif self.backend == "huggingface_cli":
-            self._cmd = ["huggingface-cli", "text-generation", "--model", self.model]
+        elif self.backend in {"microsoft_cpp", "huggingface_cli"}:
+            raise ValueError(
+                f"LLM backend '{self.backend}' is no longer supported. "
+                "Use one of: ollama, openai, anthropic, openrouter, mistral."
+            )
         else:
             raise ValueError(f"Unsupported LLM backend: {self.backend}")
 
@@ -187,33 +185,11 @@ class LLMBackend:
                 )
                 return text
 
-            if self.backend == "microsoft_cpp":
-                proc = subprocess.run(
-                    self._cmd,
-                    input=prompt.encode("utf-8"),
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=self.timeout_sec,
-                )
-                if proc.returncode != 0:
-                    raise RuntimeError(proc.stderr.decode("utf-8", errors="ignore"))
-                return proc.stdout.decode("utf-8", errors="ignore")
-
-            if self.backend == "huggingface_cli":
-                proc = subprocess.run(
-                    self._cmd,
-                    input=prompt.encode("utf-8"),
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=self.timeout_sec,
-                )
-                if proc.returncode != 0:
-                    raise RuntimeError(proc.stderr.decode("utf-8", errors="ignore"))
-                return proc.stdout.decode("utf-8", errors="ignore")
-
         except Exception as exc:
             logger.error("LLMBackend (%s) generation failed: %s", self.backend, exc)
-            return ""
+            raise LLMBackendError(
+                f"LLMBackend '{self.backend}' generation failed: {exc}"
+            ) from exc
 
 
 def _resolve_llm_backend(

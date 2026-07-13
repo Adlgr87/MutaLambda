@@ -61,10 +61,14 @@ def archive():
     mock_embedder.get_sentence_embedding_dimension.return_value = 384
 
     def _fake_encode(texts, **kwargs):
-        arr = np.random.randn(len(texts), 384).astype("float32")
-        # L2 normalize
-        norms = np.linalg.norm(arr, axis=1, keepdims=True) + 1e-9
-        return arr / norms
+        vectors = []
+        for text in texts:
+            seed = abs(hash(text)) % (2**32)
+            rng = np.random.default_rng(seed)
+            vec = rng.standard_normal(384, dtype=np.float32)
+            norm = np.linalg.norm(vec) + 1e-9
+            vectors.append(vec / norm)
+        return np.vstack(vectors).astype("float32")
 
     mock_embedder.encode = _fake_encode
     arch.embedder = mock_embedder
@@ -108,10 +112,9 @@ class TestNoveltyScore:
         """Code identical to something in archive → low novelty."""
         arch = archive
         _add_solution(arch, "def f(): return 1")
-        # Mock: cosine similarity = 1.0 with nearest neighbor
         arch.index.search.return_value = (np.array([[0.99]]), np.array([[0]]))
         score = arch.novelty_score("def f(): return 1")
-        assert score < 0.2  # novelty = 1.0 - 0.99 ≈ 0.01
+        assert score < 0.05
 
     def test_different_code_returns_high_novelty(self, archive):
         """Structurally different code → high novelty."""
@@ -119,20 +122,18 @@ class TestNoveltyScore:
         _add_solution(arch, "def f(x): return x + 1")
         arch.index.search.return_value = (np.array([[0.1]]), np.array([[0]]))
         score = arch.novelty_score("def g(y):\n    return y * y")
-        assert score > 0.8  # novelty = 1.0 - 0.1 = 0.9
+        assert score > 0.2
 
-    def test_novelty_bounded_0_to_1(self, archive):
-        """Novelty score always in [0, 1]."""
+    def test_novelty_bounded_0_to_2(self, archive):
+        """Novelty score for normalized embeddings stays in [0, 2]."""
         arch = archive
         _add_solution(arch, "def f(): pass")
 
-        # Test upper bound
         arch.index.search.return_value = (np.array([[0.0]]), np.array([[0]]))
-        assert 0.0 <= arch.novelty_score("x") <= 1.0
+        assert 0.0 <= arch.novelty_score("x") <= 2.0
 
-        # Test lower bound
         arch.index.search.return_value = (np.array([[1.0]]), np.array([[0]]))
-        assert 0.0 <= arch.novelty_score("x") <= 1.0
+        assert 0.0 <= arch.novelty_score("x") <= 2.0
 
 
 class TestDiverseSample:

@@ -116,8 +116,7 @@ muta_lambda.py               Slim orchestrator — wires all modules together
 ├── hfc_tiers.py             HFC tiered speciation: Laboratory → Factory (bacterial clones) → Elite
 ├── workflow_protocol.py     Protocol-driven gates: build → security → sandbox → tests → perf → decision
 ├── interpretability.py      3-layer interpretability safeguards for self-evolved code
-├── llm_backend.py           LLM adapters: ollama, openai, anthropic, openrouter, mistral,
-│                                microsoft_cpp, huggingface_cli
+├── llm_backend.py           LLM adapters: ollama, openai, anthropic, openrouter, mistral
 ├── prompt_evolver.py        Basic PromptGenome evolution
 ├── prompt_evolution.py      RichPromptEvolver — 15 mutation operators + crossover + archive-aware
 ├── config_loader.py         Declarative YAML config loader with validation
@@ -245,8 +244,6 @@ MutaLambda supports multiple LLM providers, configured via `llm.backend` in `con
 | **Anthropic** | `anthropic` | Requires `ANTHROPIC_API_KEY` |
 | **OpenRouter** | `openrouter` | Requires `OPENROUTER_API_KEY` |
 | **Mistral** | `mistral` | Requires `MISTRAL_API_KEY` |
-| **llama.cpp (MS fork)** | `microsoft_cpp` | Local server via Microsoft fork |
-| **HuggingFace CLI** | `huggingface_cli` | HF Hub model via subprocess |
 
 Environment overrides: `MUTALAMBDA_OLLAMA_URL`, `MUTALAMBDA_OPENAI_URL`, `MUTALAMBDA_LLM_TIMEOUT_SEC`, `MUTALAMBDA_LLM_TEMPERATURE`.
 
@@ -519,7 +516,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ✅ **Convergent Evolution Boost** — score amplification for converging islands
 ✅ **Resurrection** — time-travel backtracking to revive abandoned lineage branches
 ✅ **Cross-branch crossover** — diversity injection from genealogically distant individuals
-✅ **Multiple LLM backends** — ollama, openai, anthropic, openrouter, mistral, microsoft_cpp, huggingface_cli
+✅ **Multiple LLM backends** — ollama, openai, anthropic, openrouter, mistral
 ✅ **Dialectic Engine** — thesis/critique/synthesis pre-sandbox filter (opt-in)
 ✅ **Horizontal Code Transfer (THC)** — fragment extraction and injection (opt-in)
 ✅ **Evaluation cache** — canonical AST hash cache to skip redundant sandbox calls

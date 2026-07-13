@@ -303,6 +303,8 @@ class MutaLambdaAgent:
             if llm_fn is None
             else llm_fn
         )
+        self._base_llm_fn = self.llm_fn
+        self._active_prompt_genome: Optional[PromptGenome] = None
 
         self.evaluator = SandboxEvaluator(
             test_cases=test_cases or [],
@@ -328,7 +330,7 @@ class MutaLambdaAgent:
             Island(
                 island_id=i,
                 config=island_cfg,
-                llm_fn=self.llm_fn,
+                llm_fn=self._island_llm_fn,
                 evaluator=self.evaluator,
                 migration_bus=self.migration_bus,
             )
@@ -428,12 +430,15 @@ class MutaLambdaAgent:
             from prompt_evolution import RichPromptEvolver
 
             self.prompt_evolver = RichPromptEvolver(
-                self.llm_fn,
+                self._base_llm_fn,
                 self.evaluator,
                 archive=self.archive,
                 pop_size=config.prompt_pop_size,
                 elite_frac=config.prompt_elite_frac,
             )
+            initial_prompt = self.prompt_evolver.get_best_prompt()
+            if initial_prompt is not None:
+                self._active_prompt_genome = copy.deepcopy(initial_prompt)
 
         self._start_time: float = 0.0
         self._generation_times: List[float] = []
@@ -447,6 +452,14 @@ class MutaLambdaAgent:
         self.migration_bus.lineage_graph = self._lineage
         if self._advanced_selection is not None:
             self._advanced_selection.lineage_graph = self._lineage
+
+    def _island_llm_fn(self, prompt: str) -> str:
+        """LLM callable used by islands; steered by best evolved prompt if available."""
+        if self._active_prompt_genome is None:
+            return self._base_llm_fn(prompt)
+        steering_task = self.task or "Improve Python code for correctness and efficiency."
+        evolved_prompt = self._active_prompt_genome.render(steering_task, prompt)
+        return self._base_llm_fn(evolved_prompt)
 
     def _record_protocol_trace(self, trace: ProtocolTrace) -> None:
         trace_dict = trace.to_dict()
@@ -705,6 +718,8 @@ class MutaLambdaAgent:
     def run(self, task: str = "") -> Individual:
         if not task:
             task = self.task
+        elif task != self.task:
+            self.task = task
         self._start_time = time.perf_counter()
         logger.info(
             "MutaLambda starting: run=%s %d islands × %d generations",
@@ -826,6 +841,9 @@ class MutaLambdaAgent:
                 best_so_far = self._get_global_best()
                 base_code = best_so_far.code if best_so_far else ""
                 self.prompt_evolver.step(task, base_code)
+                best_prompt = self.prompt_evolver.get_best_prompt()
+                if best_prompt is not None:
+                    self._active_prompt_genome = copy.deepcopy(best_prompt)
 
             current_best = self._get_global_best()
             if current_best:

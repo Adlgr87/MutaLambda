@@ -65,7 +65,7 @@ class SolutionArchive:
         self.max_size = max_size
         self.prune_threshold = prune_threshold
         self._pending_prunes: int = 0
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def _encode_normalized(self, texts: List[str]) -> np.ndarray:
         """Encode + L2-normalize en batch."""
@@ -144,18 +144,19 @@ class SolutionArchive:
             return [solution_list[i] for i in indices[0] if 0 <= i < len(solution_list)]
 
     def novelty_score(self, code: str, k: int = 10) -> float:
-        """Novelty score: 1.0 — max_similarity a los k vecinos más cercanos."""
-        with self._lock:
-            if not self.solutions:
-                return 1.0
-            if self._pending_prunes > 0:
-                self._rebuild_index()
-                self._pending_prunes = 0
-            emb = self._encode_normalized([code])
-            k_actual = min(k, len(self.solutions))
-            distances, _ = self.index.search(emb, k_actual)
-            max_sim = float(distances[0][0]) if k_actual > 0 else 0.0
-            return 1.0 - max(0.0, min(1.0, max_sim))
+        """Devuelve la distancia promedio a los k vecinos más cercanos."""
+        neighbors = self.nearest(code, k=k)
+        if not neighbors:
+            return 1.0
+
+        emb = self._encode_normalized([code])[0]
+        distances = [
+            float(np.linalg.norm(emb - neighbor.embedding))
+            for neighbor in neighbors
+        ]
+        if not distances:
+            return 1.0
+        return float(np.mean(distances))
 
     def get_diverse_sample(self, k: int = 5) -> List[str]:
         """Curriculum Learning: retorna k soluciones diversas del archivo."""
@@ -232,7 +233,7 @@ class SolutionArchive:
             f"sentence-transformers/{embedder_model}"
         )
         archive._dim = archive.embedder.get_sentence_embedding_dimension()
-        archive._lock = threading.Lock()
+        archive._lock = threading.RLock()
         archive._pending_prunes = 0
 
         archive.index = faiss.read_index(f"{path}.index")

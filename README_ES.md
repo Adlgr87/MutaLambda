@@ -116,8 +116,7 @@ muta_lambda.py                 Orquestador principal — conecta todos los módu
 ├── hfc_tiers.py               Especiación HFC por niveles: Laboratorio → Fábrica → Élite
 ├── workflow_protocol.py       Gates secuenciales: build → security → sandbox → tests → perf → decisión
 ├── interpretability.py        Salvaguardas de interpretabilidad (3 capas) para código auto-evolucionado
-├── llm_backend.py             Adaptadores LLM: ollama, openai, anthropic, openrouter, mistral,
-│                                  microsoft_cpp, huggingface_cli
+├── llm_backend.py             Adaptadores LLM: ollama, openai, anthropic, openrouter, mistral
 ├── prompt_evolver.py          Evolución básica de PromptGenome
 ├── prompt_evolution.py        RichPromptEvolver — 15 operadores de mutación + crossover
 ├── config_loader.py           Cargador declarativo de configuración YAML con validación
@@ -244,8 +243,6 @@ MutaLambda soporta múltiples proveedores LLM, configurados con `llm.backend` en
 | **Anthropic** | `anthropic` | Requiere `ANTHROPIC_API_KEY` |
 | **OpenRouter** | `openrouter` | Requiere `OPENROUTER_API_KEY` |
 | **Mistral** | `mistral` | Requiere `MISTRAL_API_KEY` |
-| **llama.cpp (MS fork)** | `microsoft_cpp` | Servidor local vía fork de Microsoft |
-| **HuggingFace CLI** | `huggingface_cli` | Modelo de HF Hub vía subprocess |
 
 Variables de entorno: `MUTALAMBDA_OLLAMA_URL`, `MUTALAMBDA_OPENAI_URL`, `MUTALAMBDA_LLM_TIMEOUT_SEC`, `MUTALAMBDA_LLM_TEMPERATURE`.
 
@@ -516,7 +513,7 @@ Este proyecto está licenciado bajo la Licencia MIT - ver el archivo [LICENSE](L
 ✅ **Convergent Evolution Boost** — amplificación de score para islas convergentes
 ✅ **Resurrección** — backtracking temporal para revivir ramas del linaje abandonadas
 ✅ **Crossover entre ramas** — inyección de diversidad desde individuos genealógicamente distantes
-✅ **Múltiples backends LLM** — ollama, openai, anthropic, openrouter, mistral, microsoft_cpp, huggingface_cli
+✅ **Múltiples backends LLM** — ollama, openai, anthropic, openrouter, mistral
 ✅ **Motor Dialéctico** — filtro tesis/crítica/síntesis pre-sandbox (opt-in)
 ✅ **Transferencia Horizontal de Código (THC)** — extracción e inyección de fragmentos (opt-in)
 ✅ **Caché de evaluación** — caché por hash AST canónico para evitar llamadas redundantes al sandbox

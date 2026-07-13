@@ -19,13 +19,29 @@ class MigrationBus:
 
     def __init__(self, topology: str = "ring"):
         self.islands: Dict[int, Island] = {}
-        self.topology = topology
         self._lock = threading.RLock()
+        self._topology: str = topology
         self._neighbor_cache: Dict[int, List[int]] = {}
         self._cache_version: int = 0
         self._islands_version: int = 0
+        self._topology_version: int = 0
+        self._cache_topology_version: int = -1
         self._mesh_cols: int = 0
         self.lineage_graph = None
+
+    @property
+    def topology(self) -> str:
+        return self._topology
+
+    @topology.setter
+    def topology(self, value: str) -> None:
+        with self._lock:
+            if value == self._topology:
+                return
+            self._topology = value
+            self._topology_version += 1
+            self._neighbor_cache.clear()
+            logger.debug("Migration topology changed to %s; neighbor cache invalidated.", value)
 
     def register_island(self, island_id: int, island: Island) -> None:
         with self._lock:
@@ -36,7 +52,10 @@ class MigrationBus:
 
     def _get_neighbors(self, island_id: int) -> List[int]:
         """Calcula vecinos según topología. Debe llamarse con self._lock adquirido."""
-        if self._cache_version == self._islands_version:
+        if (
+            self._cache_version == self._islands_version
+            and self._cache_topology_version == self._topology_version
+        ):
             cached = self._neighbor_cache.get(island_id)
             if cached is not None:
                 return cached
@@ -67,11 +86,13 @@ class MigrationBus:
                 cols = max(1, int(n ** 0.5))
                 result = self._mesh_neighbors(island_id, ids, cols)
         else:
+            # Random topology is intentionally dynamic and never cached.
             candidates = [i for i in ids if i != island_id]
             return random.sample(candidates, min(2, len(candidates)))
 
         self._neighbor_cache[island_id] = result
         self._cache_version = self._islands_version
+        self._cache_topology_version = self._topology_version
         return result
 
     def _mesh_neighbors(

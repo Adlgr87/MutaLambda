@@ -2,7 +2,7 @@ import pytest
 
 import requests
 
-from llm_backend import LLMBackend, _resolve_llm_backend
+from llm_backend import LLMBackend, LLMBackendError, _resolve_llm_backend
 
 
 class FakeResponse:
@@ -119,3 +119,20 @@ def test_resolve_llm_backend_accepts_explicit_config(monkeypatch):
 def test_unsupported_backend_raises_value_error():
     with pytest.raises(ValueError, match="Unsupported LLM backend"):
         LLMBackend(backend="not-a-provider")
+
+
+@pytest.mark.parametrize("backend", ["microsoft_cpp", "huggingface_cli"])
+def test_legacy_cli_backends_raise_value_error(backend):
+    with pytest.raises(ValueError, match="no longer supported"):
+        LLMBackend(backend=backend)
+
+
+def test_generation_failure_raises_llm_backend_error(monkeypatch):
+    class FailingSession:
+        def post(self, *args, **kwargs):
+            raise requests.RequestException("network down")
+
+    monkeypatch.setattr(requests, "Session", lambda: FailingSession())
+    llm = LLMBackend(backend="ollama")
+    with pytest.raises(LLMBackendError, match="generation failed"):
+        llm.generate("prompt")

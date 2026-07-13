@@ -193,10 +193,17 @@ class Island:
                 strategy = "redesign"
                 mutated_code = self._redesign(parent.code, parent.score)
             elif random.random() < 0.15 and len(elites) >= 2:
-                strategy = "crossover"
-                other = random.choice([e for e in elites if e != parent])
-                mutated_code = self._crossover(parent.code, other.code)
-                child_parents.append(other)
+                mate_candidates = [e for e in elites if e.id != parent.id]
+                if mate_candidates:
+                    strategy = "crossover"
+                    other = random.choice(mate_candidates)
+                    mutated_code = self._crossover(parent.code, other.code)
+                    child_parents.append(other)
+                else:
+                    error_info = error_map.get(parent.id, "")
+                    mutated_code = self._mutate_with_context(
+                        parent.code, parent.score, error_info
+                    )
             else:
                 error_info = error_map.get(parent.id, "")
                 mutated_code = self._mutate_with_context(

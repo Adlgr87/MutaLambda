@@ -9,7 +9,7 @@ Diseño:
     - Sin dependencias obligatorias: cada parser se activa solo si la
       librería correspondiente está instalada. Fallback a texto plano.
     - Salidas validadas con Pydantic v2 antes de llegar al simulador.
-    - Totalmente agnóstico al proveedor LLM: usa llm_credentials.py.
+    - Totalmente agnóstico al proveedor LLM: recibe `llm_client` inyectado.
 
 Uso rápido::
 
@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 log = logging.getLogger("massive.document_intelligence")
 
@@ -131,6 +131,22 @@ class MASSIVEExtractedConfig(BaseModel):
             return max(-1.0, min(1.0, float(v)))
         return v
 
+    @model_validator(mode="after")
+    def _validate_multilayer_weights(self):
+        weights = [self.w_social, self.w_digital, self.w_economico]
+        provided = [w for w in weights if w is not None]
+        if provided and len(provided) != 3:
+            raise ValueError(
+                "w_social, w_digital y w_economico deben definirse en conjunto."
+            )
+        if len(provided) == 3:
+            total = float(self.w_social + self.w_digital + self.w_economico)  # type: ignore[operator]
+            if abs(total - 1.0) > 0.05:
+                raise ValueError(
+                    "w_social + w_digital + w_economico debe sumar ~1.0 (tolerancia ±0.05)."
+                )
+        return self
+
     def to_simular_kwargs(self) -> dict[str, Any]:
         """
         Convierte los campos extraídos al formato de kwargs de simular().
@@ -162,6 +178,7 @@ class DocumentContext(BaseModel):
     raw_text: str = ""               # texto plano extraído
     structured_data: dict = Field(default_factory=dict)  # datos tabulares/JSON
     image_b64: str | None = None     # imagen (portada, gráfica) en base64
+    images_b64: list[str] = Field(default_factory=list)  # múltiples imágenes para visión
     charts_description: str = ""     # descripción de gráficas detectadas
     time_series: list[ExtractedTimeSeries] = Field(default_factory=list)
     network_info: ExtractedNetworkInfo = Field(
@@ -209,6 +226,7 @@ class _PDFParser:
     @staticmethod
     def parse(path: Path) -> DocumentContext:
         ctx = DocumentContext(filename=path.name, file_type="pdf")
+        max_images = 5
         if _pdfplumber is None:
             ctx.parse_warnings.append(
                 "pdfplumber no instalado. Instala con: pip install pdfplumber"
@@ -224,13 +242,28 @@ class _PDFParser:
                     for table in page.extract_tables():
                         if table:
                             ctx.structured_data.setdefault("tables", []).append(table)
+                    if page.images and len(ctx.images_b64) < max_images:
+                        try:
+                            img = page.to_image(resolution=96).original
+                            buf = io.BytesIO()
+                            img.save(buf, format="PNG")
+                            encoded = base64.b64encode(buf.getvalue()).decode()
+                            ctx.images_b64.append(encoded)
+                            if ctx.image_b64 is None:
+                                ctx.image_b64 = encoded
+                        except Exception as exc:
+                            ctx.parse_warnings.append(
+                                f"No se pudo rasterizar página {len(ctx.images_b64) + 1}: {exc}"
+                            )
                 ctx.raw_text = "\n".join(texts)
                 # Primera página como imagen para visión LLM
-                if pdf.pages:
+                if pdf.pages and ctx.image_b64 is None:
                     img = pdf.pages[0].to_image(resolution=96).original
                     buf = io.BytesIO()
                     img.save(buf, format="PNG")
-                    ctx.image_b64 = base64.b64encode(buf.getvalue()).decode()
+                    encoded = base64.b64encode(buf.getvalue()).decode()
+                    ctx.image_b64 = encoded
+                    ctx.images_b64.append(encoded)
         except Exception as exc:
             ctx.parse_warnings.append(f"Error parseando PDF: {exc}")
         return ctx
@@ -310,7 +343,9 @@ class _ImageParser:
         ctx = DocumentContext(filename=path.name, file_type="image")
         try:
             with open(path, "rb") as f:
-                ctx.image_b64 = base64.b64encode(f.read()).decode()
+                encoded = base64.b64encode(f.read()).decode()
+                ctx.image_b64 = encoded
+                ctx.images_b64.append(encoded)
             ctx.raw_text = f"[Imagen: {path.name}]"
         except Exception as exc:
             ctx.parse_warnings.append(f"Error leyendo imagen: {exc}")
@@ -509,8 +544,14 @@ class DocumentIntelligence:
             merged.structured_data.update(ctx.structured_data)
             merged.time_series.extend(ctx.time_series)
             merged.parse_warnings.extend(ctx.parse_warnings)
+            if ctx.images_b64:
+                merged.images_b64.extend(ctx.images_b64)
+            elif ctx.image_b64:
+                merged.images_b64.append(ctx.image_b64)
             if not merged.image_b64 and ctx.image_b64:
                 merged.image_b64 = ctx.image_b64
+        if merged.images_b64 and merged.image_b64 is None:
+            merged.image_b64 = merged.images_b64[0]
         merged.raw_text = "\n\n---\n\n".join(texts)
         return merged
 
@@ -538,6 +579,9 @@ class DocumentIntelligence:
                 notas="Sin cliente LLM configurado.",
                 campos_faltantes=["todos"],
             )
+
+        if not ctx.charts_description and (ctx.images_b64 or ctx.image_b64):
+            self.describe_charts(ctx)
 
         user_prompt = ctx.summary_for_llm
         if extra_instructions:
@@ -601,36 +645,45 @@ class DocumentIntelligence:
 
         Devuelve descripción en texto que se añade a DocumentContext.charts_description.
         """
-        if self._client is None or not ctx.image_b64:
+        if self._client is None:
+            return ""
+        images = list(ctx.images_b64)
+        if not images and ctx.image_b64:
+            images = [ctx.image_b64]
+        if not images:
             return ""
         try:
-            resp = self._client.chat.completions.create(
-                model=self._vision_model,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{ctx.image_b64}"
+            descriptions: list[str] = []
+            for idx, image_b64 in enumerate(images[:5], start=1):
+                resp = self._client.chat.completions.create(
+                    model=self._vision_model,
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{image_b64}"
+                                },
                             },
-                        },
-                        {
-                            "type": "text",
-                            "text": (
-                                "Describe detalladamente las gráficas, tablas y "
-                                "visualizaciones que aparecen en esta imagen. "
-                                "Extrae todos los valores numéricos visibles. "
-                                "Responde en español."
-                            ),
-                        },
-                    ],
-                }],
-                max_tokens=800,
-            )
-            description = resp.choices[0].message.content
-            ctx.charts_description = description
-            return description
+                            {
+                                "type": "text",
+                                "text": (
+                                    "Describe detalladamente las gráficas, tablas y "
+                                    "visualizaciones que aparecen en esta imagen. "
+                                    "Extrae todos los valores numéricos visibles. "
+                                    "Responde en español."
+                                ),
+                            },
+                        ],
+                    }],
+                    max_tokens=800,
+                )
+                description = resp.choices[0].message.content
+                descriptions.append(f"[Gráfica {idx}]\n{description}")
+            merged = "\n\n".join(descriptions)
+            ctx.charts_description = merged
+            return merged
         except Exception as exc:
             log.warning(f"[DI] describe_charts falló: {exc}")
             return ""

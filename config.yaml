@@ -116,7 +116,7 @@ logging:
 
 # ── Proveedor LLM ───────────────────────────────────────────────────
 llm:
-  backend: ollama             # ollama | openai | anthropic | openrouter | mistral | microsoft_cpp | huggingface_cli
+  backend: ollama             # ollama | openai | anthropic | openrouter | mistral
   model: llama3.2:3b          # Nombre del modelo en el backend seleccionado
   timeout_sec: 60.0           # Timeout por llamada al LLM
   temperature: 0.2            # Temperatura de generación para APIs compatibles

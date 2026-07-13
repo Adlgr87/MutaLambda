@@ -36,8 +36,6 @@ _VALID_VALUES: Dict[str, list] = {
         "anthropic",
         "openrouter",
         "mistral",
-        "microsoft_cpp",
-        "huggingface_cli",
     ],
 }
 
