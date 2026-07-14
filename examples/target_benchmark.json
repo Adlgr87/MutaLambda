@@ -1,0 +1,8 @@
+{
+  "warmups": 5,
+  "samples": 30,
+  "operations_per_case": 1000,
+  "repetitions": 1,
+  "entrypoint": "solution",
+  "inputs": [[100], [1000], [5000]]
+}

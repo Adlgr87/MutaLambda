@@ -8,14 +8,18 @@ evitar la convergencia prematura mediante:
   • Differentiated seeding (cada isla recibe variantes mutadas)
   • Diversity tracking (varianza de longitud de código, distancia semántica)
   • Mesh topology support
+  • Generation barriers for safe migration (ML-CON01)
 """
 
 from __future__ import annotations
 
+import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
+
+logger = logging.getLogger("MutaLambda")
 
 
 @dataclass
@@ -29,6 +33,28 @@ class IslandSnapshot:
     mean_code_len: float
     num_migrants_sent: int = 0
     num_migrants_received: int = 0
+    failed: bool = False
+    failure: Optional["IslandFailure"] = None
+
+
+@dataclass
+class IslandFailure:
+    """Structured failure from an island step (ML-E03 / ML-CON03)."""
+
+    island_id: int
+    generation: int
+    error_type: str
+    message: str
+    policy: str = "continue_with_warning"  # retry | replace_island | abort_run | continue_with_warning
+
+    def to_dict(self) -> dict:
+        return {
+            "island_id": self.island_id,
+            "generation": self.generation,
+            "error_type": self.error_type,
+            "message": self.message,
+            "policy": self.policy,
+        }
 
 
 @dataclass
@@ -41,13 +67,27 @@ class IslandDiversity:
     mean_score: float
 
 
+@dataclass
+class GenerationBarriersResult:
+    """Result of a full barrier-synchronized generation."""
+
+    snapshots: List[IslandSnapshot] = field(default_factory=list)
+    failures: List[IslandFailure] = field(default_factory=list)
+    migrants_staged: int = 0
+    should_abort: bool = False
+
+
 class IslandPool:
     """
     Coordinador de evolución paralela para múltiples islas.
 
-    Usa ThreadPoolExecutor (default) o ProcessPoolExecutor para ejecutar
-    island.step() concurrentemente. Cada isla comparte el mismo MigrationBus
-    (thread‑safe vía RLock).
+    Generation pipeline (ML-CON01):
+      Phase A/B: local evolution (evaluate + select + mutate) in parallel
+      Barrier
+      Phase C: stage migrants into neighbor queues
+      Barrier
+      Phase D: applied at the start of the next generation via
+               ``Island.apply_pending_migrants()``
 
     Parameters
     ----------
@@ -58,21 +98,22 @@ class IslandPool:
         "process" para ProcessPoolExecutor (CPU-bound, sandbox pesada).
         NOTA: "process" requiere que Island sea pickleable — actualmente
         limitado a islas sin LLM callables complejos.
-
-    Warning
-    -------
-    ``backend="process"`` está en fase experimental. Las islas con LLM
-    callables (funciones lambda/closures) no son pickleables y causarán
-    errores. Se recomienda usar "thread" a menos que el sandbox sea el
-    cuello de botella principal.
+    failure_policy : str
+        Default policy when an island raises: continue_with_warning | abort_run.
     """
 
-    def __init__(self, max_workers: Optional[int] = None,
-                 backend: str = "thread"):
+    def __init__(
+        self,
+        max_workers: Optional[int] = None,
+        backend: str = "thread",
+        failure_policy: str = "continue_with_warning",
+    ):
         self._max_workers = max_workers
         self.backend = backend
+        self.failure_policy = failure_policy
         self._lock = threading.Lock()
         self._generation_snapshots: List[List[IslandSnapshot]] = []
+        self._failures: List[IslandFailure] = []
 
     def run_generation(
         self,
@@ -80,29 +121,37 @@ class IslandPool:
         generation: int,
     ) -> List[IslandSnapshot]:
         """
-        Ejecuta un paso evolutivo en paralelo para todas las islas.
-
-        Cada isla evoluciona independientemente en su propio thread;
-        el MigrationBus (compartido) maneja la sincronización de
-        migración internamente.
+        Ejecuta un paso evolutivo en paralelo para todas las islas con
+        barreras de migración.
 
         Returns
         -------
         List[IslandSnapshot]
             Snapshot del estado de cada isla tras el paso.
         """
+        result = self.run_generation_barriers(islands, generation)
+        return result.snapshots
+
+    def run_generation_barriers(
+        self,
+        islands: List,
+        generation: int,
+    ) -> GenerationBarriersResult:
+        """Full barrier pipeline with structured failures."""
         num_islands = len(islands)
         max_workers = self._max_workers or min(32, num_islands + 4)
+        out = GenerationBarriersResult()
 
         snapshots: Dict[int, IslandSnapshot] = {}
-
         ExecutorClass = (
             ProcessPoolExecutor if self.backend == "process"
             else ThreadPoolExecutor
         )
+
+        # ── Phase A/B: local evolution only ─────────────────────────────
         with ExecutorClass(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(self._step_island, island): island.id
+                executor.submit(self._step_island_local, island): island.id
                 for island in islands
             }
 
@@ -112,7 +161,20 @@ class IslandPool:
                     snapshot = future.result()
                     snapshots[island_id] = snapshot
                 except Exception as exc:
-                    # Nunca crashear el motor por fallo en una isla
+                    failure = IslandFailure(
+                        island_id=island_id,
+                        generation=generation,
+                        error_type=type(exc).__name__,
+                        message=str(exc)[:500],
+                        policy=self.failure_policy,
+                    )
+                    out.failures.append(failure)
+                    with self._lock:
+                        self._failures.append(failure)
+                    logger.warning(
+                        "Island %d failed at gen %d (%s): %s",
+                        island_id, generation, failure.error_type, failure.message,
+                    )
                     snapshots[island_id] = IslandSnapshot(
                         island_id=island_id,
                         generation=generation,
@@ -120,21 +182,49 @@ class IslandPool:
                         best_score=float("-inf"),
                         diversity=0.0,
                         mean_code_len=0.0,
+                        failed=True,
+                        failure=failure,
                     )
+                    if self.failure_policy == "abort_run":
+                        out.should_abort = True
 
-        # Ordenar por island_id para consistencia
-        result = [snapshots[i] for i in sorted(snapshots)]
+        # Barrier: all local steps finished before migration staging.
+
+        # ── Phase C: stage migrants into queues ─────────────────────────
+        if islands and not out.should_abort:
+            bus = getattr(islands[0], "migration_bus", None)
+            if bus is not None and hasattr(bus, "stage_all_migrations"):
+                # Use pre-increment generation index for interval checks.
+                # Islands already bumped generation in step_local, so pass generation.
+                out.migrants_staged = bus.stage_all_migrations(generation, deferred=True)
+            else:
+                # Fallback: legacy per-island migrate
+                for island in islands:
+                    try:
+                        island.migration_bus.migrate(island.id, generation)
+                    except Exception as exc:
+                        logger.warning("Legacy migrate failed island %s: %s", island.id, exc)
+
+        # Phase D happens at the start of the next generation (apply_pending_migrants).
+
+        result_list = [snapshots[i] for i in sorted(snapshots)]
+        out.snapshots = result_list
         with self._lock:
-            self._generation_snapshots.append(result)
-        return result
+            self._generation_snapshots.append(result_list)
+        return out
 
     @staticmethod
-    def _step_island(island) -> IslandSnapshot:
-        """Wrapper thread‑safe para island.step()."""
-        island.step()
+    def _step_island_local(island) -> IslandSnapshot:
+        """Wrapper thread‑safe para evolución local sin migración inmediata."""
+        if hasattr(island, "step_local"):
+            island.step_local()
+        else:
+            # Backward-compatible path for mocks without step_local.
+            island.step()
 
         diversity = IslandPool._compute_diversity(island)
         best = island.local_best
+        pending = len(getattr(island, "_pending_migrants", []) or [])
 
         return IslandSnapshot(
             island_id=island.id,
@@ -143,7 +233,13 @@ class IslandPool:
             best_score=best.score if best else float("-inf"),
             diversity=diversity.unique_ratio,
             mean_code_len=diversity.mean_code_length,
+            num_migrants_received=pending,
         )
+
+    @staticmethod
+    def _step_island(island) -> IslandSnapshot:
+        """Legacy wrapper retained for external callers."""
+        return IslandPool._step_island_local(island)
 
     @staticmethod
     def _compute_diversity(island) -> IslandDiversity:
@@ -161,7 +257,6 @@ class IslandPool:
         len_var = sum((l - mean_len) ** 2 for l in lengths) / n
         score_var = sum((s - mean_score) ** 2 for s in scores) / n
 
-        # Unique ratio: fracción de código único
         unique_codes = len({ind.code for ind in pop})
         unique_ratio = unique_codes / n
 
@@ -210,3 +305,8 @@ class IslandPool:
     @property
     def generation_count(self) -> int:
         return len(self._generation_snapshots)
+
+    @property
+    def failures(self) -> List[IslandFailure]:
+        with self._lock:
+            return list(self._failures)

@@ -144,6 +144,11 @@ class EvolveConfig:
     allow_expression_eval: bool = False
     enforce_ast_scan: bool = False
     require_tests: bool = False  # CLI sets True unless --allow-untested
+    enforce_api_fingerprint: bool = False
+    enforce_differential: bool = False
+    benchmark_warmups: int = 0
+    benchmark_samples: int = 1
+    benchmark_operations_per_case: int = 1
     privacy_allow_external_llm: bool = False
     privacy_redact_secrets: bool = True
     target_source_file: str = ""
@@ -239,6 +244,13 @@ class EvolveConfig:
             spatial_enabled=spatial.get("enabled", False),
             spatial_neighborhood=spatial.get("neighborhood", "moore"),
             pattern_memory_enabled=patterns.get("enabled", False),
+            enforce_api_fingerprint=cfg.get("workflow", {}).get("enforce_api_fingerprint",
+                cfg.get("target", {}).get("enforce_api_fingerprint", False)),
+            enforce_differential=cfg.get("workflow", {}).get("enforce_differential",
+                cfg.get("target", {}).get("enforce_differential", False)),
+            benchmark_warmups=cfg.get("benchmark", {}).get("warmups", 0),
+            benchmark_samples=cfg.get("benchmark", {}).get("samples", 1),
+            benchmark_operations_per_case=cfg.get("benchmark", {}).get("operations_per_case", 1),
             allow_untested=cfg.get("allow_untested", True),
             runner_mode=sand.get("runner", sand.get("mode", "subprocess")),
             allow_expression_eval=sand.get("allow_expression_eval", False),
@@ -365,6 +377,11 @@ class MutaLambdaAgent:
             runner_mode=getattr(config, "runner_mode", "subprocess"),
             allow_expression_eval=getattr(config, "allow_expression_eval", False),
             enforce_ast_scan=getattr(config, "enforce_ast_scan", False),
+            benchmark_warmups=int(getattr(config, "benchmark_warmups", 0) or 0),
+            benchmark_samples=int(getattr(config, "benchmark_samples", 1) or 1),
+            benchmark_operations_per_case=int(
+                getattr(config, "benchmark_operations_per_case", 1) or 1
+            ),
         )
         topology = "spatial_grid" if config.spatial_enabled else config.topology
         self.migration_bus = MigrationBus(topology=topology)

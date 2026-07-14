@@ -77,6 +77,9 @@ class SandboxEvaluator:
         allow_expression_eval: bool = False,
         enforce_ast_scan: bool = False,
         cache_enabled: bool = True,
+        benchmark_warmups: int = 0,
+        benchmark_samples: int = 1,
+        benchmark_operations_per_case: int = 1,
     ):
         self.test_cases = test_cases
         self.timeout_sec = timeout_sec
@@ -107,6 +110,9 @@ class SandboxEvaluator:
             allow_expression_eval=allow_expression_eval,
             enforce_ast_scan=enforce_ast_scan,
             cache_enabled=cache_enabled,
+            benchmark_warmups=benchmark_warmups,
+            benchmark_samples=benchmark_samples,
+            benchmark_operations_per_case=benchmark_operations_per_case,
         )
         atexit.register(self.shutdown)
 

@@ -18,6 +18,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
+from benchmarking import BenchmarkConfig, BenchmarkResult, percentiles_from_samples
 from fitness_vector import FitnessVector
 from models import EvalResult
 from runners import CandidateRunner, SubprocessRunner, create_runner, stable_code_hash, tests_hash
@@ -82,6 +83,9 @@ class EvaluationService:
     enforce_ast_scan: bool = True
     cache_enabled: bool = True
     benchmark_hash: str = ""
+    benchmark_warmups: int = 0
+    benchmark_samples: int = 1
+    benchmark_operations_per_case: int = 1
 
     def __post_init__(self) -> None:
         self._pool: Optional[ProcessPoolExecutor] = None
@@ -204,6 +208,12 @@ class EvaluationService:
                         timed_out=False,
                     )
 
+        # Optional multi-sample latency refinement (ML-F04).
+        if self.benchmark_samples > 1:
+            for i in pending_idx:
+                if results[i] is not None and results[i].passed:
+                    results[i] = self._refine_with_benchmark(codes[i], results[i])  # type: ignore[index]
+
         if self.cache_enabled:
             with self._cache_lock:
                 for i in pending_idx:
@@ -211,6 +221,64 @@ class EvaluationService:
                         self._cache[keys[i]] = results[i]  # type: ignore[assignment]
 
         return results  # type: ignore[return-value]
+
+    def _refine_with_benchmark(self, code: str, base: EvalResult) -> EvalResult:
+        """Re-run samples for real p50/p95/p99 when configured."""
+        samples_sec: List[float] = []
+        cfg = BenchmarkConfig(
+            warmups=self.benchmark_warmups,
+            samples=self.benchmark_samples,
+            operations_per_case=max(1, self.benchmark_operations_per_case),
+        )
+        # Warmups + samples via the primary runner (correctness already known).
+        runner = self._get_runner()
+        try:
+            for _ in range(cfg.warmups):
+                runner.run(code, self.test_cases)
+            for _ in range(cfg.samples):
+                r = runner.run(code, self.test_cases)
+                samples_sec.append(float(r.metrics.get("latency", r.fitness.latency_p50)))
+        except Exception as exc:
+            logger.debug("benchmark refine failed: %s", exc)
+            return base
+
+        if not samples_sec:
+            return base
+
+        stats = percentiles_from_samples(samples_sec)
+        br = BenchmarkResult(
+            samples_sec=samples_sec,
+            warmups=cfg.warmups,
+            operations_per_case=cfg.operations_per_case,
+        )
+        fitness = FitnessVector(
+            correctness=base.fitness.correctness,
+            latency_p50=stats["p50"],
+            latency_p99=stats["p99"],
+            throughput=br.throughput_ops_per_sec if br.throughput_ops_per_sec > 0 else base.fitness.throughput,
+            memory_peak_mb=base.fitness.memory_peak_mb,
+            parsimony=base.fitness.parsimony,
+        )
+        metrics = dict(base.metrics)
+        metrics.update(
+            {
+                "latency": stats["p50"],
+                "latency_p50": stats["p50"],
+                "latency_p95": br.p95,
+                "latency_p99": stats["p99"],
+                "latency_mean": stats["mean"],
+                "latency_samples": float(len(samples_sec)),
+                "throughput": fitness.throughput,
+            }
+        )
+        return EvalResult(
+            fitness=fitness,
+            passed=base.passed,
+            metrics=metrics,
+            stdout=base.stdout,
+            stderr=base.stderr,
+            timed_out=base.timed_out,
+        )
 
     def invalidate(self, code: Optional[str] = None) -> None:
         with self._cache_lock:

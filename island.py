@@ -57,6 +57,12 @@ class Island:
         self._workflow_correctness_threshold: float = 1.0
         self._workflow_require_score_improvement: bool = False
         self._workflow_enforce_security: bool = True
+        # Deferred migration queue (applied at start of next generation).
+        self._pending_migrants: List[Individual] = []
+        self._baseline_code: str = ""
+        self._api_policy: str = "strict"
+        self._enforce_api_fingerprint: bool = False
+        self._enforce_differential: bool = False
 
         self.migration_bus.register_island(island_id, self)
 
@@ -83,18 +89,58 @@ class Island:
         self._workflow_enforce_security = bool(
             getattr(config, "workflow_enforce_security", True)
         )
+        self._api_policy = str(getattr(config, "target_api_policy", "strict") or "strict")
+        self._enforce_api_fingerprint = bool(
+            getattr(config, "enforce_api_fingerprint", False)
+        )
+        self._enforce_differential = bool(
+            getattr(config, "enforce_differential", False)
+        )
+        seeds = getattr(config, "seed_codes", None) or []
+        if seeds and not self._baseline_code:
+            self._baseline_code = seeds[0]
 
     def seed_population(self, codes: List[str]) -> None:
         """Inicializa la población con semillas de código."""
         self.population = [
             Individual(code=c) for c in codes[: self.config.population_size]
         ]
+        if codes and not self._baseline_code:
+            self._baseline_code = codes[0]
 
     def step(self) -> None:
-        """Un paso: evolución local + migración."""
+        """Un paso completo (compat): evolución local + migración inmediata.
+
+        Preferir el pipeline por fases del IslandPool (barreras de generación)
+        que separa evolve / stage / apply para evitar races.
+        """
+        self.step_local()
+        self.migration_bus.migrate(self.id, self.generation - 1)
+
+    def step_local(self) -> None:
+        """Fase local: aplicar migrantes pendientes → evolucionar (sin migrar)."""
+        self.apply_pending_migrants()
         self._evolve_local()
-        self.migration_bus.migrate(self.id, self.generation)
         self.generation += 1
+
+    def queue_migrant(self, individual: Individual) -> None:
+        """Encola un inmigrante para aplicarlo al inicio de la próxima generación."""
+        migrant = copy.deepcopy(individual)
+        migrant.score = float("-inf")
+        migrant.fitness = None
+        migrant.passed = False
+        self._pending_migrants.append(migrant)
+
+    def apply_pending_migrants(self) -> int:
+        """Aplica la cola de migrantes (Fase D). No evalúa mientras se muta la pop."""
+        if not self._pending_migrants:
+            return 0
+        count = 0
+        for migrant in self._pending_migrants:
+            self.receive_migrant(migrant)
+            count += 1
+        self._pending_migrants.clear()
+        return count
 
     def _evolve_local(self) -> None:
         """Evaluación → selección elitista → mutación."""
@@ -363,8 +409,10 @@ class Island:
                     ProtocolStage("generate_candidate", self._stage_generate_candidate),
                     ProtocolStage("build_gate", self._stage_build_gate),
                     ProtocolStage("security_gate", self._stage_security_gate),
+                    ProtocolStage("api_gate", self._stage_api_gate),
                     ProtocolStage("evaluate_candidate", self._stage_evaluate_candidate),
                     ProtocolStage("tests_gate", self._stage_tests_gate),
+                    ProtocolStage("differential_gate", self._stage_differential_gate),
                     ProtocolStage("performance_gate", self._stage_performance_gate),
                     ProtocolStage("decision_gate", self._stage_decision_gate),
                 ]
@@ -468,6 +516,53 @@ class Island:
             artifacts={"candidate_ref": artifact_ref(code)},
         )
 
+    def _stage_api_gate(self, context: Dict[str, Any]):
+        """Reject candidates that break the baseline public API (ML-F03)."""
+        code = context["candidate_code"]
+        attempt = context["attempt"]
+        if not self._enforce_api_fingerprint or not self._baseline_code:
+            return make_stage_result(
+                "api_gate",
+                PASS,
+                "api fingerprint gate disabled or no baseline",
+                metadata={"attempt": attempt, "enforced": False},
+                artifacts={"candidate_ref": artifact_ref(code)},
+            )
+        try:
+            from api_fingerprint import compare_api, extract_api_fingerprint
+
+            base_fp = extract_api_fingerprint(self._baseline_code)
+            cand_fp = extract_api_fingerprint(code)
+            result = compare_api(base_fp, cand_fp, policy=self._api_policy)
+            context["api_result"] = result
+            if not result.compatible:
+                return make_stage_result(
+                    "api_gate",
+                    RETRYABLE_FAIL,
+                    "api fingerprint incompatible",
+                    metadata={
+                        "attempt": attempt,
+                        "policy": self._api_policy,
+                        **result.to_dict(),
+                    },
+                    artifacts={"candidate_ref": artifact_ref(code)},
+                )
+            return make_stage_result(
+                "api_gate",
+                PASS,
+                "api fingerprint compatible",
+                metadata={"attempt": attempt, "policy": self._api_policy},
+                artifacts={"candidate_ref": artifact_ref(code)},
+            )
+        except Exception as exc:
+            return make_stage_result(
+                "api_gate",
+                RETRYABLE_FAIL,
+                f"api gate error: {exc}",
+                metadata={"attempt": attempt},
+                artifacts={"candidate_ref": artifact_ref(code)},
+            )
+
     def _stage_evaluate_candidate(self, context: Dict[str, Any]):
         code = context["candidate_code"]
         attempt = context["attempt"]
@@ -507,6 +602,48 @@ class Island:
             },
             artifacts={"stderr_preview": result.stderr[:120]},
         )
+
+    def _stage_differential_gate(self, context: Dict[str, Any]):
+        """Compare candidate vs baseline on the same inputs (ML-M03)."""
+        code = context["candidate_code"]
+        attempt = context["attempt"]
+        if not self._enforce_differential or not self._baseline_code:
+            return make_stage_result(
+                "differential_gate",
+                PASS,
+                "differential gate disabled or no baseline",
+                metadata={"attempt": attempt, "enforced": False},
+                artifacts={"candidate_ref": artifact_ref(code)},
+            )
+        try:
+            from differential import differential_test
+
+            cases = list(getattr(self.evaluator, "test_cases", []) or [])
+            diff = differential_test(self._baseline_code, code, cases)
+            context["differential_result"] = diff
+            if not diff.equivalent:
+                return make_stage_result(
+                    "differential_gate",
+                    RETRYABLE_FAIL,
+                    f"differential mismatch {diff.mismatches}/{diff.compared}",
+                    metadata={"attempt": attempt, **diff.to_dict()},
+                    artifacts={"candidate_ref": artifact_ref(code)},
+                )
+            return make_stage_result(
+                "differential_gate",
+                PASS,
+                f"differential OK ({diff.compared} cases)",
+                metadata={"attempt": attempt, "compared": diff.compared},
+                artifacts={"candidate_ref": artifact_ref(code)},
+            )
+        except Exception as exc:
+            return make_stage_result(
+                "differential_gate",
+                RETRYABLE_FAIL,
+                f"differential error: {exc}",
+                metadata={"attempt": attempt},
+                artifacts={"candidate_ref": artifact_ref(code)},
+            )
 
     def _stage_performance_gate(self, context: Dict[str, Any]):
         result = context["candidate_result"]

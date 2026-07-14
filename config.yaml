@@ -39,6 +39,8 @@ workflow:
   correctness_threshold: 1.0    # Umbral de tests/correctitud para promoción
   require_score_improvement: false  # Si true, rechaza candidatos peores que su padre
   enforce_security: true        # Bloquea eval/exec/subprocess/os.system en candidatos
+  enforce_api_fingerprint: false  # Requiere target.seed / baseline API
+  enforce_differential: false   # Compara outputs vs baseline en los mismos inputs
   trace_limit: 200              # Máximo de trazas recientes retenidas en métricas
 
 # ── Evolution Upgrade v2.0 (opt-in) ─────────────────────────────────
@@ -81,6 +83,14 @@ target:
   tests_file: examples/target_tests.json
   benchmark_file: examples/target_benchmark.json
   api_policy: strict          # strict | relaxed
+  enforce_api_fingerprint: false
+  enforce_differential: false
+
+# ── Benchmark estadístico (ML-F04/F05) ──────────────────────────────
+benchmark:
+  warmups: 0                  # 0 = single-shot (dev); 5+ for real p50/p99
+  samples: 1                  # >1 enables multi-sample percentiles
+  operations_per_case: 1
 
 # ── Privacy / LLM egress ────────────────────────────────────────────
 privacy:
