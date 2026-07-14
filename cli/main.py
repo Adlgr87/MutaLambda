@@ -689,7 +689,7 @@ class MutaLambdaCLI:
         mutation_type: str = 'prompt',
         strategy: str = 'adaptive'
     ) -> bool:
-        """Run mutation operations"""
+        """Run mutation operations (ML-UI01: never report success if nothing changed)."""
 
         console.print(Panel(
             Text.assemble(
@@ -704,12 +704,52 @@ class MutaLambdaCLI:
         console.print(f"\n[cyan]Strategy: {strategy}[/cyan]")
         console.print(f"[cyan]Target: {target}[/cyan]\n")
 
-        # TODO: Implement actual mutation logic
-        # This would integrate with MutaLambda's mutation engine
-        console.print("[yellow]Mutation engine integration in progress...[/yellow]")
-        console.print()
+        path = Path(target)
+        if mutation_type in {"prompt", "operators", "hyperparams"} and not path.exists():
+            # Non-file targets (prompt strings) are accepted only for 'prompt'
+            if mutation_type != "prompt":
+                console.print(
+                    f"[red]✗ Target file not found: {target}. "
+                    "No mutation applied.[/red]"
+                )
+                return False
 
-        return True
+        if mutation_type == "prompt":
+            # Minimal real operation: apply AST mutation to a source file if present.
+            if path.exists() and path.suffix == ".py":
+                try:
+                    from evolution_engine import ASTMutator
+
+                    original = path.read_text(encoding="utf-8")
+                    mutated = ASTMutator.apply_random_mutation(original)
+                    if mutated.strip() == original.strip():
+                        console.print(
+                            "[red]✗ Mutation produced no change. "
+                            "Refusing to report success.[/red]"
+                        )
+                        return False
+                    out = path.with_suffix(path.suffix + f".mut.{strategy}.py")
+                    out.write_text(mutated, encoding="utf-8")
+                    console.print(f"[green]✓ Wrote mutated source: {out}[/green]")
+                    return True
+                except Exception as e:
+                    console.print(f"[red]✗ Mutation failed: {e}[/red]")
+                    return False
+            console.print(
+                "[red]✗ mutate prompt without a .py file is not implemented. "
+                "No changes made.[/red]"
+            )
+            return False
+
+        if mutation_type in {"operators", "hyperparams"}:
+            console.print(
+                f"[red]✗ mutate {mutation_type} is not implemented yet. "
+                "No configuration was modified.[/red]"
+            )
+            return False
+
+        console.print(f"[red]✗ Unknown mutation type: {mutation_type}[/red]")
+        return False
 
     def evaluate_results(self, results_path: Optional[str] = None) -> bool:
         """Evaluate and summarize results"""

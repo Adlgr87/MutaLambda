@@ -125,3 +125,73 @@ class NoOpExtension:
 
     def metrics(self) -> dict:
         return {}
+
+
+class EngineExtensionAdapter:
+    """Wrap existing HFC/THC/Dialectic/PatternMemory engines under the common contract (WF#20).
+
+    Does not change engine internals; only exposes lifecycle + metrics so the
+    agent can treat experimental modules uniformly.
+    """
+
+    def __init__(self, engine: Any, name: Optional[str] = None):
+        self.engine = engine
+        self.name = name or getattr(engine, "name", None) or type(engine).__name__
+
+    def on_generation_start(self, context: ExtensionContext) -> None:
+        hook = getattr(self.engine, "on_generation_start", None)
+        if callable(hook):
+            hook(context)
+
+    def on_candidate(self, candidate: Any, context: ExtensionContext) -> Any:
+        # Dialectic-style refine if available
+        refine = getattr(self.engine, "refine", None)
+        if callable(refine) and candidate is not None:
+            try:
+                code = getattr(candidate, "code", candidate)
+                if isinstance(code, str):
+                    out = refine(code, code, context.metadata.get("llm_fn"))
+                    if isinstance(out, str) and out.strip():
+                        if hasattr(candidate, "code"):
+                            candidate.code = out
+                            return candidate
+                        return out
+            except TypeError:
+                # refine signatures vary; ignore
+                pass
+            except Exception:
+                pass
+        hook = getattr(self.engine, "on_candidate", None)
+        if callable(hook):
+            try:
+                return hook(candidate, context)
+            except Exception:
+                return candidate
+        return candidate
+
+    def on_generation_end(self, context: ExtensionContext) -> None:
+        hook = getattr(self.engine, "on_generation_end", None)
+        if callable(hook):
+            try:
+                hook(context)
+            except Exception:
+                pass
+
+    def metrics(self) -> dict:
+        m = getattr(self.engine, "metrics", None)
+        if callable(m):
+            try:
+                return dict(m() or {})
+            except Exception:
+                return {}
+        if m is not None and hasattr(m, "__dict__"):
+            return dict(m.__dict__)
+        if isinstance(m, dict):
+            return dict(m)
+        return {}
+
+
+def wrap_engine(engine: Any, name: Optional[str] = None) -> Optional[EngineExtensionAdapter]:
+    if engine is None:
+        return None
+    return EngineExtensionAdapter(engine, name=name)

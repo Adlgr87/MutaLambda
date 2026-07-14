@@ -155,6 +155,9 @@ class Island:
             ind.fitness = res.fitness
             ind.passed = bool(res.passed and res.fitness.correctness >= 1.0)
 
+        # Operator bandit feedback from this generation's evaluations (WF#17).
+        self._update_operator_bandit(results)
+
         pattern_memory = getattr(self.migration_bus, "pattern_memory", None)
         if pattern_memory is not None:
             for ind in self.population:
@@ -241,7 +244,6 @@ class Island:
 
         new_pop: List[Individual] = list(elites)
         while len(new_pop) < self.config.population_size:
-            strategy = "mutation"
             if use_nsga2 and len(elites) >= 2 and random.random() < 0.7:
                 parents = nsga2_tournament_select(elites, 1)
                 parent = parents[0] if parents else random.choice(elites)
@@ -249,22 +251,28 @@ class Island:
                 parent = random.choice(elites)
 
             child_parents: List[Individual] = [parent]
-            if parent.score < 0 and random.random() < 0.10:
-                strategy = "redesign"
+            strategy = self._select_operator_strategy(parent, elites)
+            if strategy == "redesign":
                 mutated_code = self._redesign(parent.code, parent.score)
-            elif random.random() < 0.15 and len(elites) >= 2:
+            elif strategy == "crossover":
                 mate_candidates = [e for e in elites if e.id != parent.id]
                 if mate_candidates:
-                    strategy = "crossover"
                     other = random.choice(mate_candidates)
                     mutated_code = self._crossover(parent.code, other.code)
                     child_parents.append(other)
                 else:
+                    strategy = "mutation"
                     error_info = error_map.get(parent.id, "")
                     mutated_code = self._mutate_with_context(
                         parent.code, parent.score, error_info
                     )
+            elif strategy == "ast":
+                from evolution_engine import ASTMutator
+
+                mutated_code = ASTMutator.apply_random_mutation(parent.code)
             else:
+                # llm / mutation — context-aware LLM path with AST fallback
+                strategy = "llm" if strategy == "llm" else "mutation"
                 error_info = error_map.get(parent.id, "")
                 mutated_code = self._mutate_with_context(
                     parent.code, parent.score, error_info
@@ -277,9 +285,82 @@ class Island:
                 strategy=strategy,
                 candidate_index=len(new_pop),
             )
+            # Preserve operator label for bandit credit assignment next gen.
+            child.creation_reason = strategy
+            setattr(child, "operator", strategy)
+            if child_parents:
+                setattr(child, "parent_score", float(parent.score))
             new_pop.append(child)
 
         self.population = new_pop
+
+    def _select_operator_strategy(
+        self, parent: Individual, elites: List[Individual]
+    ) -> str:
+        """Choose redesign/crossover/mutation/ast via bandit or legacy heuristic."""
+        bandit = getattr(self.migration_bus, "operator_bandit", None)
+        if bandit is not None:
+            try:
+                op = bandit.select()
+                # Map bandit arms to island strategies.
+                if op == "redesign":
+                    return "redesign"
+                if op == "crossover" and len(elites) >= 2:
+                    return "crossover"
+                if op == "ast":
+                    return "ast"
+                return "llm"  # treated as mutation+LLM path
+            except Exception:
+                pass
+        # Legacy heuristic (workflow default before bandit).
+        if parent.score < 0 and random.random() < 0.10:
+            return "redesign"
+        if random.random() < 0.15 and len(elites) >= 2:
+            return "crossover"
+        return "mutation"
+
+    def _update_operator_bandit(self, results: List[Any]) -> None:
+        """Credit operators from evaluated individuals (WF#17 rewards)."""
+        bandit = getattr(self.migration_bus, "operator_bandit", None)
+        if bandit is None:
+            return
+        try:
+            from operator_bandit import compute_operator_reward
+        except Exception:
+            return
+        for ind, res in zip(self.population, results):
+            op = getattr(ind, "operator", None) or getattr(ind, "creation_reason", None)
+            if not op or op in {"seed", "laboratory"}:
+                continue
+            # Normalize labels to bandit arms
+            if op == "mutation":
+                op = "llm"
+            syntax_fail = bool(res.timed_out or (res.stderr and "Syntax" in res.stderr))
+            correct = bool(res.passed and res.fitness.correctness >= 1.0)
+            parent_score = float(getattr(ind, "parent_score", float("-inf")))
+            gain = 0.0
+            improved = False
+            if correct and parent_score != float("-inf"):
+                gain = float(res.score - parent_score)
+                improved = gain > 0
+            elif correct and ind.score > float("-inf"):
+                improved = True
+            reward = compute_operator_reward(
+                syntax_or_security_failure=syntax_fail and not correct,
+                correct=correct,
+                improved=improved,
+                gain=max(0.0, gain) if improved else 0.0,
+            )
+            try:
+                bandit.update(
+                    op,
+                    reward,
+                    valid=correct and not syntax_fail,
+                    improved=improved,
+                    gain=gain,
+                )
+            except Exception:
+                pass
 
     def _mutate(self, code: str) -> str:
         """Mutación híbrida: AST o LLM."""

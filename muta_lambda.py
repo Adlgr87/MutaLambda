@@ -172,6 +172,8 @@ class EvolveConfig:
     operator_bandit_strategy: str = "ucb1"
     fitness_normalize: bool = True
     archive_dedupe_similarity: float = 0.98
+    autodoc_elites: bool = True
+    write_run_artifacts: bool = True
     privacy_redact_secrets: bool = True
     target_source_file: str = ""
     target_entrypoint: str = ""
@@ -606,12 +608,18 @@ class MutaLambdaAgent:
                 strategy=getattr(config, "operator_bandit_strategy", "ucb1"),
                 rng=self.rng_session.stream("bandit"),
             )
-        # Register optional engines as extensions when present
-        for eng in (self._hfc, getattr(self, "_thc_engine", None),
-                    getattr(self, "_dialectic_engine", None),
-                    getattr(self, "_pattern_memory", None)):
-            if eng is not None:
-                self.extensions.register(eng)
+        # Register optional engines under EvolutionExtension contract (WF#20)
+        from extensions import wrap_engine
+        for eng, name in (
+            (self._hfc, "hfc"),
+            (getattr(self, "_thc_engine", None), "thc"),
+            (getattr(self, "_dialectic_engine", None), "dialectic"),
+            (getattr(self, "_pattern_memory", None), "pattern_memory"),
+            (getattr(self, "_advanced_selection", None), "advanced_selection"),
+        ):
+            wrapped = wrap_engine(eng, name=name)
+            if wrapped is not None:
+                self.extensions.register(wrapped)
 
     def _island_llm_fn(self, prompt: str) -> str:
         """LLM callable used by islands; steered by best evolved prompt if available."""
@@ -1202,6 +1210,36 @@ class MutaLambdaAgent:
                 run_id=self.run_id,
                 generation=getattr(self, "_generation_completed", -1),
             )
+            # Workflow §16 artifacts + optional elite auto-doc (WF#22)
+            try:
+                from run_artifacts import write_run_artifacts
+                art_dir = Path(self.config.checkpoint_dir) / f"run_{self.run_id}"
+                baseline = ""
+                if self.config.seed_codes:
+                    baseline = self.config.seed_codes[0]
+                paths = write_run_artifacts(
+                    self,
+                    output_dir=art_dir,
+                    baseline_code=baseline,
+                    task=task or self.task,
+                )
+                logger.info("Run artifacts written to %s", art_dir)
+                # Auto-doc only the final elite, never every candidate
+                if best is not None and getattr(self.config, "autodoc_elites", True):
+                    try:
+                        from interpretability import CodeDocumenter
+                        doc_path = art_dir / "best_solution_documented.md"
+                        # Lightweight report without extra LLM if documenter needs one
+                        report_body = (
+                            f"# Elite documentation\n\n"
+                            f"run={self.run_id} score={best.score}\n\n"
+                            f"```python\n{best.code}\n```\n"
+                        )
+                        doc_path.write_text(report_body, encoding="utf-8")
+                    except Exception as doc_exc:
+                        logger.debug("elite autodoc skipped: %s", doc_exc)
+            except Exception as art_exc:
+                logger.warning("Failed to write run artifacts: %s", art_exc)
             self.shutdown()
 
         if self._global_best is None:
