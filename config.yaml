@@ -73,10 +73,29 @@ population:
   migration_interval: 10      # Cada cuántas generaciones migrar
   migrants_per_island: 2      # Cuántos emigrantes por isla
 
+# ── Target (código a evolucionar) ───────────────────────────────────
+target:
+  source_file: examples/target.py
+  entrypoint: solution
+  task: "Improve solution while preserving behavior"
+  tests_file: examples/target_tests.json
+  benchmark_file: examples/target_benchmark.json
+  api_policy: strict          # strict | relaxed
+
+# ── Privacy / LLM egress ────────────────────────────────────────────
+privacy:
+  allow_external_llm: false   # true only if code may leave the host
+  redact_secrets: true
+  allowed_backends:
+    - ollama
+
 # ── Sandbox ─────────────────────────────────────────────────────────
 sandbox:
   timeout_sec: 10.0           # Timeout por evaluación (segundos)
   max_workers: 4              # Workers paralelos en ProcessPoolExecutor
+  runner: subprocess          # subprocess | container | microvm
+  allow_expression_eval: false  # expression/assert via eval (dev only)
+  enforce_ast_scan: false     # early AST filter (not a security boundary)
 
 # ── HFC / Ligas evolutivas ─────────────────────────────────────────
 hfc:
@@ -120,6 +139,9 @@ llm:
   model: llama3.2:3b          # Nombre del modelo en el backend seleccionado
   timeout_sec: 60.0           # Timeout por llamada al LLM
   temperature: 0.2            # Temperatura de generación para APIs compatibles
+  max_calls_per_generation: 20
+  max_total_calls: 1000
+  prompt_evolution_interval: 5
   # Variables opcionales:
   #   MUTALAMBDA_OLLAMA_URL, MUTALAMBDA_OPENAI_URL, MUTALAMBDA_ANTHROPIC_URL,
   #   MUTALAMBDA_OPENROUTER_URL, MUTALAMBDA_MISTRAL_URL, MUTALAMBDA_LLM_TIMEOUT_SEC,

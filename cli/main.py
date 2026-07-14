@@ -8,9 +8,8 @@ and the InteractiveREPL for real-time control.
 import json
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
-import click
 from rich.console import Console
 from rich.layout import Layout
 from rich.live import Live
@@ -22,9 +21,6 @@ from cli.animator import RetroAnimator
 from cli.checkpoint_manager import CheckpointManager
 from cli.config_manager import ConfigManager
 from muta_lambda import MutaLambdaAgent, EvolveConfig
-from island import Island
-from migration import MigrationBus
-from models import Individual
 
 
 console = Console()
@@ -40,15 +36,25 @@ class MutaLambdaCLI:
         self.current_config = None
         self.agent: Optional[MutaLambdaAgent] = None
         self.generation = 0
+        self._test_cases: List[Dict[str, Any]] = []
+        self._seed_codes: List[str] = []
+        self._task: str = "Optimize Python code for correctness and performance"
+        self._allow_untested: bool = False
 
     def run_evolution(
         self,
         config_path: Optional[str] = None,
         generations: int = 50,
         animation: str = 'retro',
-        verbose: bool = False
+        verbose: bool = False,
+        source: Optional[str] = None,
+        tests: Optional[str] = None,
+        task: Optional[str] = None,
+        allow_untested: bool = False,
     ) -> bool:
         """Run a complete evolution process"""
+
+        self._allow_untested = allow_untested
 
         # Load or create config
         if config_path:
@@ -57,6 +63,9 @@ class MutaLambdaCLI:
                 return False
         else:
             self.current_config = self.config_manager.get_default()
+
+        if not self._prepare_target(source=source, tests=tests, task=task):
+            return False
 
         # Create MutaLambda agent
         evolve_config = self._create_evolve_config(self.current_config, generations)
@@ -80,24 +89,93 @@ class MutaLambdaCLI:
         else:
             return self._run_no_animation(generations, verbose)
 
+    def _prepare_target(
+        self,
+        source: Optional[str],
+        tests: Optional[str],
+        task: Optional[str],
+    ) -> bool:
+        """Resolve source code + tests from CLI args or YAML target section."""
+        cfg = self.current_config or {}
+        target = cfg.get("target") or {}
+
+        source_path = source or target.get("source_file") or ""
+        tests_path = tests or target.get("tests_file") or ""
+        self._task = task or target.get("task") or self._task
+
+        if source_path:
+            p = Path(source_path)
+            if not p.exists():
+                console.print(f"[red]Source file not found: {source_path}[/red]")
+                return False
+            self._seed_codes = [p.read_text(encoding="utf-8")]
+        else:
+            self._seed_codes = []
+
+        if tests_path:
+            p = Path(tests_path)
+            if not p.exists():
+                console.print(f"[red]Tests file not found: {tests_path}[/red]")
+                return False
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if not isinstance(data, list):
+                console.print("[red]Tests file must be a JSON list of cases[/red]")
+                return False
+            self._test_cases = data
+        else:
+            self._test_cases = []
+
+        if not self._test_cases and not self._allow_untested:
+            console.print(
+                "[red]No test cases configured. Use --tests or target.tests_file, "
+                "or pass --allow-untested only for development.[/red]"
+            )
+            return False
+
+        return True
+
     def _create_evolve_config(self, config: dict, generations: int) -> Optional[EvolveConfig]:
-        """Create EvolveConfig from CLI config"""
+        """Create EvolveConfig from CLI config (aligned with core loader fields)."""
         try:
             evo = config.get('evolution', {})
+            pop = config.get('population', {})
             mig = config.get('migration', {})
             chk = config.get('checkpoint', {})
+            sand = config.get('sandbox', {})
+            privacy = config.get('privacy', {})
+
+            # Prefer core YAML schema (population.*) with legacy migration.* fallback.
+            population_size = pop.get('size', evo.get('population_size', 8))
+            top_k = pop.get('top_k', evo.get('top_k', 3))
+            migration_interval = pop.get(
+                'migration_interval', mig.get('interval', 10)
+            )
+            migrants = pop.get(
+                'migrants_per_island', mig.get('migrants_per_island', 2)
+            )
+            topology = evo.get('topology', mig.get('topology', 'ring'))
 
             return EvolveConfig(
                 num_islands=evo.get('num_islands', 4),
                 generations=generations,
-                population_size=evo.get('population_size', 8),
-                top_k=evo.get('top_k', 3),
-                topology=mig.get('topology', 'ring'),
-                migration_interval=mig.get('interval', 10),
-                migrants_per_island=mig.get('migrants_per_island', 2),
+                seed_codes=list(self._seed_codes),
+                population_size=population_size,
+                top_k=top_k,
+                topology=topology,
+                migration_interval=migration_interval,
+                migrants_per_island=migrants,
+                archive_solutions=config.get('archive', {}).get('enabled', False),
+                prompt_evolution=config.get('prompt_evolution', {}).get('enabled', False),
                 checkpoint_enabled=chk.get('enabled', True),
                 checkpoint_interval=chk.get('interval', 10),
-                checkpoint_dir=chk.get('directory', 'checkpoints'),
+                checkpoint_dir=chk.get('directory', chk.get('dir', 'checkpoints')),
+                allow_untested=self._allow_untested,
+                require_tests=not self._allow_untested,
+                runner_mode=sand.get('runner', sand.get('mode', 'subprocess')),
+                allow_expression_eval=sand.get('allow_expression_eval', False),
+                enforce_ast_scan=sand.get('enforce_ast_scan', False),
+                privacy_allow_external_llm=privacy.get('allow_external_llm', False),
+                privacy_redact_secrets=privacy.get('redact_secrets', True),
             )
         except Exception as e:
             console.print(f"[red]Error creating evolve config: {e}[/red]")
@@ -106,13 +184,20 @@ class MutaLambdaCLI:
     def _create_agent(self, config: EvolveConfig) -> Optional[MutaLambdaAgent]:
         """Create and initialize MutaLambda agent"""
         try:
-            # Create agent with default task
-            task = "Optimize Python code for correctness and performance"
-            agent = MutaLambdaAgent(config, task=task)
+            timeout = float(
+                (self.current_config or {}).get('sandbox', {}).get('timeout_sec', 10.0)
+            )
+            agent = MutaLambdaAgent(
+                config,
+                test_cases=self._test_cases,
+                timeout_sec=timeout,
+                task=self._task,
+            )
 
             console.print(f"[green]✓ Initialized {config.num_islands} islands[/green]")
             console.print(f"[green]✓ Population: {config.population_size} per island[/green]")
             console.print(f"[green]✓ Topology: {config.topology}[/green]")
+            console.print(f"[green]✓ Tests: {len(self._test_cases)} cases[/green]")
             console.print()
 
             return agent
@@ -136,13 +221,11 @@ class MutaLambdaCLI:
                 for gen in range(generations):
                     self.generation = gen + 1
 
-                    # Execute one evolution step
-                    self.agent.step()
-
-                    # Get current best from all islands
-                    best = self.agent.migration_bus.get_global_best()
+                    # Execute one evolution step (shared core API)
+                    result = self.agent.step_generation(generation=gen, task=self._task)
+                    best = result.best or self.agent.migration_bus.get_global_best()
                     if best:
-                        best_score = max(best_score, best.score)
+                        best_score = max(best_score, best.score if best.score > float("-inf") else best_score)
                         history.append(best_score)
 
                     # Build and update display
@@ -154,6 +237,9 @@ class MutaLambdaCLI:
                     if (gen + 1) % self.agent.config.checkpoint_interval == 0:
                         if self.agent.config.checkpoint_enabled:
                             self._save_checkpoint(gen + 1, best_score)
+
+                    if result.should_stop:
+                        break
 
                     # Small delay for smooth animation
                     time.sleep(0.05)
@@ -187,14 +273,14 @@ class MutaLambdaCLI:
             for gen in range(generations):
                 self.generation = gen + 1
 
-                # Execute step
-                self.agent.step()
-
-                # Get best
-                best = self.agent.migration_bus.get_global_best()
-                if best:
+                result = self.agent.step_generation(generation=gen, task=self._task)
+                best = result.best or self.agent.migration_bus.get_global_best()
+                if best and best.score > float("-inf"):
                     best_score = max(best_score, best.score)
                     history.append(best_score)
+
+                if result.should_stop:
+                    break
 
                 # Progress update every 10 generations
                 if (gen + 1) % 10 == 0:
@@ -236,12 +322,9 @@ class MutaLambdaCLI:
             for gen in range(generations):
                 self.generation = gen + 1
 
-                # Execute step
-                self.agent.step()
-
-                # Get best
-                best = self.agent.migration_bus.get_global_best()
-                if best:
+                result = self.agent.step_generation(generation=gen, task=self._task)
+                best = result.best or self.agent.migration_bus.get_global_best()
+                if best and best.score > float("-inf"):
                     best_score = max(best_score, best.score)
                     history.append(best_score)
 
@@ -249,6 +332,9 @@ class MutaLambdaCLI:
                 if (gen + 1) % self.agent.config.checkpoint_interval == 0:
                     if self.agent.config.checkpoint_enabled:
                         self._save_checkpoint(gen + 1, best_score)
+
+                if result.should_stop:
+                    break
 
             if verbose:
                 console.print(f"Complete: {generations} generations, best={best_score:.4f}")
@@ -370,7 +456,7 @@ class MutaLambdaCLI:
         return layout
 
     def _save_checkpoint(self, generation: int, score: float):
-        """Save checkpoint"""
+        """Save JSON checkpoint (no pickle)."""
         try:
             state = {
                 'generation': generation,
@@ -385,7 +471,12 @@ class MutaLambdaCLI:
                 ]
             }
 
-            self.checkpoint_manager.save(generation, score, state)
+            self.checkpoint_manager.save(
+                state=state,
+                generation=generation,
+                score=score,
+                compress=True,
+            )
         except Exception as e:
             console.print(f"[yellow]Warning: checkpoint failed: {e}[/yellow]")
 

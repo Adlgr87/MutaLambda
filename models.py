@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import random
 import time
 import uuid
@@ -12,6 +13,11 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from fitness_vector import FitnessVector
+
+
+def stable_code_hash(code: str) -> str:
+    """Stable SHA-256 of source (avoids PYTHONHASHSEED instability of hash())."""
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
 
 
 @dataclass
@@ -30,6 +36,9 @@ class Individual:
     tier: str = "laboratory"
     passed: bool = False
     record_lineage: bool = True
+    evaluation_key: str = ""
+    evaluated_at: float = 0.0
+    benchmark_samples: List[float] = field(default_factory=list)
 
     def __lt__(self, other: "Individual") -> bool:
         return self.score < other.score
@@ -49,7 +58,7 @@ class LineageNode:
     id: str
     generation: int
     score: float
-    code_hash: int = 0
+    code_hash: str = ""  # stable sha256 hex; was unstable hash() int
     code: str = ""
     fitness: Dict[str, float] = field(default_factory=dict)
     island_id: int = 0
@@ -58,6 +67,10 @@ class LineageNode:
     creation_reason: str = "mutation"
     alive: bool = True
     resurrected: bool = False
+    # Lifecycle flags (ML-L04) — alive kept for backward compatibility.
+    in_current_population: bool = False
+    survived_last_generation: bool = False
+    historical_node: bool = True
 
 
 class LineageGraph:
@@ -85,7 +98,7 @@ class LineageGraph:
                     id=parent.id,
                     generation=max(0, generation - 1),
                     score=parent.score,
-                    code_hash=hash(parent.code) & 0xFFFFFFFF,
+                    code_hash=stable_code_hash(parent.code),
                     code=parent.code,
                     fitness=(parent.fitness.to_dict() if parent.fitness else {}),
                     island_id=island_id,
@@ -101,7 +114,7 @@ class LineageGraph:
             id=child.id,
             generation=generation,
             score=child.score,
-            code_hash=hash(child.code) & 0xFFFFFFFF,
+            code_hash=stable_code_hash(child.code),
             code=child.code,
             fitness=(child.fitness.to_dict() if child.fitness else {}),
             island_id=island_id,

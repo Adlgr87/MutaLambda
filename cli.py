@@ -47,8 +47,12 @@ def cli(ctx):
 @click.option('--generations', '-g', type=int, default=50, help='Número de generaciones')
 @click.option('--animation', '-a', type=click.Choice(['retro', 'minimal', 'none']), default='retro', help='Estilo de animación')
 @click.option('--verbose', '-v', is_flag=True, help='Output detallado')
+@click.option('--source', type=click.Path(exists=True), help='Código semilla a evolucionar')
+@click.option('--tests', type=click.Path(exists=True), help='Casos de prueba JSON declarativos')
+@click.option('--task', type=str, default=None, help='Descripción de la tarea evolutiva')
+@click.option('--allow-untested', is_flag=True, help='Permitir corridas sin tests (solo desarrollo)')
 @click.pass_context
-def run(ctx, config, generations, animation, verbose):
+def run(ctx, config, generations, animation, verbose, source, tests, task, allow_untested):
     """🚀 Ejecutar corrida evolutiva completa."""
     cli_instance = ctx.obj['cli']
     success = cli_instance.run_evolution(
@@ -56,6 +60,10 @@ def run(ctx, config, generations, animation, verbose):
         generations=generations,
         animation=animation,
         verbose=verbose,
+        source=source,
+        tests=tests,
+        task=task,
+        allow_untested=allow_untested,
     )
     sys.exit(0 if success else 1)
 
@@ -222,6 +230,94 @@ def checkpoints(ctx, list_mode, clean, max_age):
             cli_instance.checkpoint_manager.display_checkpoints(chk_list)
         else:
             console.print("[dim]No hay checkpoints. Ejecuta 'run' para crearlos.[/dim]")
+
+
+# ============================================================================
+# DOCTOR
+# ============================================================================
+@cli.command()
+@click.option('--config', '-c', type=click.Path(exists=True), help='Config YAML opcional')
+@click.pass_context
+def doctor(ctx, config):
+    """🩺 Validar entorno, backend LLM, runner y dependencias."""
+    import importlib
+    import shutil
+
+    ok = True
+    console.print("[bold]MutaLambda doctor[/bold]\n")
+
+    # Python
+    console.print(f"Python: {sys.version.split()[0]}")
+
+    # Core imports
+    try:
+        import muta_lambda  # noqa: F401
+        from sandbox import SandboxEvaluator  # noqa: F401
+        from runners import create_runner  # noqa: F401
+        console.print("[green]✓ core imports[/green]")
+    except Exception as e:
+        console.print(f"[red]✗ core imports: {e}[/red]")
+        ok = False
+
+    # Optional deps
+    for name, mod in [
+        ("click", "click"),
+        ("rich", "rich"),
+        ("numpy", "numpy"),
+        ("pydantic", "pydantic"),
+        ("yaml", "yaml"),
+        ("faiss", "faiss"),
+        ("sentence-transformers", "sentence_transformers"),
+    ]:
+        try:
+            importlib.import_module(mod)
+            console.print(f"[green]✓ {name}[/green]")
+        except Exception:
+            console.print(f"[yellow]· {name} missing (optional or install extras)[/yellow]")
+
+    # Container engines
+    for eng in ("docker", "podman"):
+        path = shutil.which(eng)
+        if path:
+            console.print(f"[green]✓ {eng} at {path}[/green]")
+        else:
+            console.print(f"[dim]· {eng} not found (container runner unavailable)[/dim]")
+
+    # LLM backend probe (Ollama default)
+    backend = "ollama"
+    model = "llama3.2:3b"
+    if config:
+        try:
+            from config_loader import load_yaml
+
+            cfg = load_yaml(config)
+            backend = cfg.get("llm", {}).get("backend", backend)
+            model = cfg.get("llm", {}).get("model", model)
+            privacy = cfg.get("privacy", {})
+            if privacy.get("allow_external_llm") is False and backend not in ("ollama", "local"):
+                console.print(
+                    f"[yellow]! privacy.allow_external_llm=false but llm.backend={backend}[/yellow]"
+                )
+        except Exception as e:
+            console.print(f"[yellow]! config load warning: {e}[/yellow]")
+
+    console.print(f"LLM backend: {backend} / model: {model}")
+    if backend == "ollama":
+        try:
+            import requests
+
+            url = "http://127.0.0.1:11434/api/tags"
+            r = requests.get(url, timeout=2)
+            if r.ok:
+                console.print("[green]✓ ollama reachable[/green]")
+            else:
+                console.print(f"[yellow]! ollama HTTP {r.status_code}[/yellow]")
+                ok = False
+        except Exception as e:
+            console.print(f"[yellow]! ollama not reachable: {e}[/yellow]")
+            ok = False
+
+    sys.exit(0 if ok else 1)
 
 
 if __name__ == '__main__':

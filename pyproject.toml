@@ -1,0 +1,95 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mutalambda"
+version = "4.0.0"
+description = "Evolutionary multi-island code optimization framework"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Adlgr87" }]
+dependencies = [
+  "numpy",
+  "pydantic>=2",
+  "pyyaml",
+  "requests",
+]
+
+[project.optional-dependencies]
+core = [
+  "numpy",
+  "pydantic>=2",
+  "pyyaml",
+  "requests",
+]
+archive = [
+  "faiss-cpu",
+  "sentence-transformers",
+]
+cli = [
+  "click",
+  "rich",
+]
+dashboard = [
+  "streamlit",
+]
+scientific = [
+  "z3-solver",
+  "pdfplumber",
+  "pandas",
+  "openpyxl",
+  "Pillow",
+]
+dev = [
+  "pytest>=7",
+  "hypothesis",
+  "ruff",
+  "mypy",
+]
+all = [
+  "mutalambda[core,archive,cli,dashboard,scientific,dev]",
+]
+
+[project.scripts]
+mutalambda = "cli:cli"
+
+[tool.setuptools]
+py-modules = [
+  "muta_lambda",
+  "sandbox",
+  "models",
+  "fitness_vector",
+  "island",
+  "island_evolution",
+  "migration",
+  "archive",
+  "llm_backend",
+  "evolution_engine",
+  "nsga2",
+  "checkpoint_manager",
+  "config_loader",
+  "workflow_protocol",
+  "prompt_evolution",
+  "prompt_evolver",
+  "property_testing",
+  "hfc_tiers",
+  "interpretability",
+  "dashboard",
+  "app",
+  "evaluation_service",
+  "runners",
+]
+packages = ["cli", "muta_ext", "muta_ext.evaluation", "muta_ext.lineage", "muta_ext.mutation", "muta_ext.config", "muta_ext.diagnostics"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.md", "*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
