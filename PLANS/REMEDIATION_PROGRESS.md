@@ -2,38 +2,49 @@
 
 **Branch:** `maintenance/mutalambda-v4`  
 **PR:** https://github.com/Adlgr87/MutaLambda/pull/3  
-**Baseline commit:** `26ed6309f163baca2b47708a5fab915eb4b0f9b8`  
-**Tests:** 155 → 167 → 176 → **184 passed**
+**Baseline:** `26ed630` · **Tests:** 155 → **189 passed**
 
-## Tranche 1 — blockers (done)
+## Completed
 
-Runners, EvaluationService, step_generation, CLI target/tests, JSON checkpoints, packaging/CI.
+| Tranche | Scope |
+|---------|--------|
+| 1 | Runners, EvaluationService, step_generation, CLI, packaging/CI |
+| 2 | Benchmarks p50/p95/p99, API fingerprint, differential, migration barriers |
+| 3 | EventBus, core resume, LLM retries/budget/structured/replay |
+| 4 | MassiveTargetAdapter + operator bandit |
 
-## Tranche 2 — correctness / concurrency (done)
+## MASSIVE adapter usage
 
-Benchmarks p50/p95/p99, API fingerprint, differential testing, migration barriers, IslandFailure.
+```python
+from massive_adapter import MassiveTargetAdapter
 
-## Tranche 3 — resume / events / LLM (done)
+# Local stand-in (CI-friendly)
+adapter = MassiveTargetAdapter(
+    source_file="examples/massive/group_cohesion_target.py",
+    entrypoint="calculate_group_cohesion",
+    tests_file="examples/massive/group_cohesion_tests.json",
+)
+pkg = adapter.promotion_package(candidate_code)
+assert pkg["promotable"]
 
-| Slice | Items | Status |
-|-------|-------|--------|
-| 14-event-bus | `EventBus` + `CommandQueue` (pause/resume/stop/hint) | done |
-| 15-dashboard | `integrate_hitl` consumes events / control queue | done |
-| 16-core-resume | Full JSON resume: gen, early-stop, global best, CLI core path | done |
-| 17-session | `MutaLambdaSession` context manager | done |
-| 18-llm-policy | retries/backoff, budget, circuit breaker, structured parse, replay log | done |
+# Real MASSIVE tree
+adapter = MassiveTargetAdapter.from_massive_utility_logic(
+    "/path/to/MASSIVE",
+    tests_file="examples/massive/group_cohesion_tests.json",
+    entrypoint="calculate_group_cohesion",
+)
+```
 
-## Still open
+## Still open / later
 
-- Operator bandit + semantic archive dedupe
-- MASSIVE adapter (`MassiveTargetAdapter`)
-- Container runner in CI (rootless)
-- Micro-optimizations / Rust-GPU experiments
+- Wire bandit rewards from Island workflow end-to-end (hooks exist)
+- Semantic archive dedupe threshold path
+- Container runner in CI
+- Full promotion pipeline with human review gates
 
-## Verification
+## Verify
 
 ```bash
 pytest tests/ -q
 MUTALAMBDA_E2E_SERIAL=1 python tests/e2e_tests.py --fast --serial
-python cli.py doctor
 ```

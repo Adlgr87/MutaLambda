@@ -91,7 +91,7 @@ class MutationStepper(Protocol):
 
 
 class MutationComposer:
-    """Compone múltiples steppers con selección ponderada.
+    """Compone múltiples steppers con selección ponderada o bandit.
 
     Attributes
     ----------
@@ -99,15 +99,30 @@ class MutationComposer:
         Lista de steppers registrados.
     rng : random.Random
         Generador de números aleatorios para selección.
+    bandit : optional OperatorBandit
+        When set, selects operators adaptively (ML-M04).
     """
 
-    def __init__(self, steppers: List[MutationStepper],
-                 rng: Optional[random.Random] = None):
+    def __init__(
+        self,
+        steppers: List[MutationStepper],
+        rng: Optional[random.Random] = None,
+        bandit: Optional[object] = None,
+    ):
         self.steppers = steppers
         self.rng = rng or random.Random()
+        self.bandit = bandit
         self._stats: Dict[str, int] = {}  # stepper_name → call count
+        self._by_name: Dict[str, MutationStepper] = {s.name: s for s in steppers}
 
-        # Normalizar pesos
+        if self.bandit is not None:
+            for s in steppers:
+                try:
+                    self.bandit.register(s.name)  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+
+        # Normalizar pesos (fallback when bandit disabled)
         total_weight = sum(s.weight for s in steppers)
         if total_weight > 0:
             self._cumulative = []
@@ -119,7 +134,7 @@ class MutationComposer:
             self._cumulative = [1.0 / len(steppers)] * len(steppers)
 
     def step(self, code: str, context: Optional[Dict] = None) -> MutationResult:
-        """Selecciona un stepper por peso y aplica la mutación.
+        """Selecciona un stepper (bandit o peso) y aplica la mutación.
 
         Args:
             code: Código fuente a mutar.
@@ -130,19 +145,59 @@ class MutationComposer:
         """
         ctx = context or {}
 
-        # Selección ponderada
-        roll = self.rng.random()
-        for i, cum in enumerate(self._cumulative):
-            if roll <= cum:
-                stepper = self.steppers[i]
-                break
-        else:
-            stepper = self.steppers[-1]
+        stepper = None
+        if self.bandit is not None and self._by_name:
+            try:
+                name = self.bandit.select()  # type: ignore[attr-defined]
+                stepper = self._by_name.get(name)
+            except Exception:
+                stepper = None
+        if stepper is None:
+            # Selección ponderada
+            roll = self.rng.random()
+            for i, cum in enumerate(self._cumulative):
+                if roll <= cum:
+                    stepper = self.steppers[i]
+                    break
+            else:
+                stepper = self.steppers[-1]
 
         result = stepper.step(code, ctx, self.rng)
         self._stats[stepper.name] = self._stats.get(stepper.name, 0) + 1
-
+        result.metadata = dict(result.metadata or {})
+        result.metadata["operator"] = stepper.name
         return result
+
+    def report_outcome(
+        self,
+        operator: str,
+        *,
+        syntax_or_security_failure: bool = False,
+        correct: bool = False,
+        improved: bool = False,
+        gain: float = 0.0,
+    ) -> None:
+        """Update optional bandit with observed reward."""
+        if self.bandit is None:
+            return
+        try:
+            from operator_bandit import compute_operator_reward
+
+            reward = compute_operator_reward(
+                syntax_or_security_failure=syntax_or_security_failure,
+                correct=correct,
+                improved=improved,
+                gain=gain,
+            )
+            self.bandit.update(  # type: ignore[attr-defined]
+                operator,
+                reward,
+                valid=correct and not syntax_or_security_failure,
+                improved=improved,
+                gain=gain,
+            )
+        except Exception:
+            pass
 
     def stats(self) -> Dict[str, int]:
         """Estadísticas de uso de steppers."""

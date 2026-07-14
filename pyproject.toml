@@ -84,6 +84,8 @@ py-modules = [
   "api_fingerprint",
   "differential",
   "event_bus",
+  "massive_adapter",
+  "operator_bandit",
 ]
 packages = ["cli", "muta_ext", "muta_ext.evaluation", "muta_ext.lineage", "muta_ext.mutation", "muta_ext.config", "muta_ext.diagnostics"]
 
