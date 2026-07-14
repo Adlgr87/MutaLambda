@@ -31,3 +31,8 @@ REPOPACK.md
 *.faiss
 
 .DS_Store
+
+# generated reports
+status_report.json
+status_report.md
+checkpoints/

@@ -285,8 +285,7 @@ class Island:
                 strategy=strategy,
                 candidate_index=len(new_pop),
             )
-            # Preserve operator label for bandit credit assignment next gen.
-            child.creation_reason = strategy
+            # Bandit arm label (do not clobber workflow creation_reason like mutation_retry).
             setattr(child, "operator", strategy)
             if child_parents:
                 setattr(child, "parent_score", float(parent.score))
