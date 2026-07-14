@@ -47,6 +47,7 @@ class SolutionArchive:
         embedder_model: str = "all-MiniLM-L6-v2",
         max_size: int = 10_000,
         prune_threshold: int = 50,
+        dedupe_similarity: float = 0.98,
     ):
         sentence_transformer = _get_sentence_transformer()
         faiss = _get_faiss()
@@ -59,13 +60,19 @@ class SolutionArchive:
         self.embedder = sentence_transformer(
             f"sentence-transformers/{embedder_model}"
         )
-        self._dim = self.embedder.get_sentence_embedding_dimension()
+        # Prefer modern API when available (sentence-transformers rename).
+        if hasattr(self.embedder, "get_embedding_dimension"):
+            self._dim = self.embedder.get_embedding_dimension()
+        else:
+            self._dim = self.embedder.get_sentence_embedding_dimension()
         self.index = faiss.IndexFlatIP(self._dim)
         self.solutions: Deque[ArchivedSolution] = deque(maxlen=max_size)
         self.max_size = max_size
         self.prune_threshold = prune_threshold
+        self.dedupe_similarity = float(dedupe_similarity)
         self._pending_prunes: int = 0
         self._lock = threading.RLock()
+        self._dedupe_updates: int = 0
 
     def _encode_normalized(self, texts: List[str]) -> np.ndarray:
         """Encode + L2-normalize en batch."""
@@ -87,10 +94,36 @@ class SolutionArchive:
             self.index.add(embeddings)
 
     def add(self, code: str, metrics: Dict[str, float]) -> None:
-        """Agrega una solución al archivo con pruning lazy."""
+        """Agrega una solución al archivo con dedupe semántico (ML-L07) y pruning lazy.
+
+        Si el vecino más cercano supera ``dedupe_similarity``, solo se actualizan
+        las métricas del existente en lugar de insertar un duplicado semántico.
+        """
         emb = self._encode_normalized([code])[0]
 
         with self._lock:
+            # Semantic dedupe: nearest neighbor above threshold → update metadata.
+            if self.solutions and self.index.ntotal > 0 and self.dedupe_similarity > 0:
+                try:
+                    scores, idxs = self.index.search(emb.reshape(1, -1), 1)
+                    sim = float(scores[0][0])
+                    idx = int(idxs[0][0])
+                    if idx >= 0 and sim >= self.dedupe_similarity and idx < len(self.solutions):
+                        existing = self.solutions[idx]
+                        merged = dict(existing.metrics)
+                        merged.update(metrics)
+                        # Prefer higher scalar score if present.
+                        if float(metrics.get("score", float("-inf"))) >= float(
+                            existing.metrics.get("score", float("-inf"))
+                        ):
+                            existing.code = code
+                            existing.embedding = emb
+                        existing.metrics = merged
+                        self._dedupe_updates += 1
+                        return
+                except Exception:
+                    pass
+
             old_len = len(self.solutions)
             will_evict = len(self.solutions) == self.max_size
 

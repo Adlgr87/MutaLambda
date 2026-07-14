@@ -1,29 +1,31 @@
 # Core runtime dependencies for MutaLambda.
+# Prefer: pip install -e ".[cli,dev]"  (see pyproject.toml extras)
 numpy
 pydantic>=2
 pyyaml
 requests
+
+# CLI surface used by cli.py
+click
+rich
+
+# Test suite.
+pytest>=7.0
+
+# Archive (heavy). Optional: pip install -e ".[archive]"
 faiss-cpu
 sentence-transformers
+
+# Scientific / document utilities. Optional: pip install -e ".[scientific]"
 pdfplumber
 pandas
 openpyxl
 Pillow
 
-# Test suite.
-pytest>=7.0
-
-# Optional legacy Inferless/HuggingFace adapter.
-# Install only if you use the old HF/Torch integration path.
-# huggingface_hub
-# transformers
-# torch
-
 # Formal verification support for property_testing.py.
 z3-solver
 
-# Optional document-processing utilities from legacy workflows.
-# pdfplumber
-# pandas
-# openpyxl
-# pillow
+# Optional legacy Inferless/HuggingFace adapter.
+# huggingface_hub
+# transformers
+# torch

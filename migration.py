@@ -111,28 +111,66 @@ class MigrationBus:
         return neighbors
 
     def migrate(self, island_id: int, generation: int) -> None:
-        """Envía migrantes si el intervalo de migración se cumple."""
+        """Envía migrantes si el intervalo de migración se cumple.
+
+        Por defecto encola en el vecino (``queue_migrant``) para aplicar al
+        inicio de la siguiente generación. Si el vecino no soporta cola,
+        cae a ``receive_migrant`` inmediato (compat).
+        """
+        self.stage_migration(island_id, generation, deferred=True)
+
+    def stage_migration(
+        self,
+        island_id: int,
+        generation: int,
+        *,
+        deferred: bool = True,
+    ) -> int:
+        """Fase C: recolectar migrantes y encolarlos en vecinos.
+
+        Parameters
+        ----------
+        deferred:
+            If True (default), neighbors receive via ``queue_migrant`` so the
+            population under evaluation is never mutated mid-generation.
+        """
         with self._lock:
             island = self.islands.get(island_id)
             if island is None:
-                return
-            if generation % island.config.migration_interval != 0:
-                return
+                return 0
+            if generation % max(1, island.config.migration_interval) != 0:
+                return 0
 
             neighbors = self._get_neighbors(island_id)
             migrants = island.get_migrants(island.config.migrants_per_island)
+            sent = 0
 
             for neighbor_id in neighbors:
                 neighbor = self.islands.get(neighbor_id)
                 if neighbor is None:
                     continue
                 for migrant in migrants:
-                    neighbor.receive_migrant(copy.deepcopy(migrant))
+                    payload = copy.deepcopy(migrant)
+                    if deferred and hasattr(neighbor, "queue_migrant"):
+                        neighbor.queue_migrant(payload)
+                    else:
+                        neighbor.receive_migrant(payload)
+                    sent += 1
 
             logger.debug(
-                "Island %d migrated %d individuals to %s.",
-                island_id, len(migrants), neighbors,
+                "Island %d staged %d migrants to %s (deferred=%s).",
+                island_id, len(migrants), neighbors, deferred,
             )
+            return sent
+
+    def stage_all_migrations(self, generation: int, *, deferred: bool = True) -> int:
+        """Stage migrations for every registered island (post-barrier)."""
+        total = 0
+        with self._lock:
+            ids = list(self.islands.keys())
+        for island_id in ids:
+            total += self.stage_migration(island_id, generation, deferred=deferred)
+        return total
 
     def get_global_best(self) -> Optional[Individual]:
         """Retorna el mejor individuo global entre todas las islas."""

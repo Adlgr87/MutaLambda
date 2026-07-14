@@ -8,9 +8,8 @@ and the InteractiveREPL for real-time control.
 import json
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
-import click
 from rich.console import Console
 from rich.layout import Layout
 from rich.live import Live
@@ -22,9 +21,6 @@ from cli.animator import RetroAnimator
 from cli.checkpoint_manager import CheckpointManager
 from cli.config_manager import ConfigManager
 from muta_lambda import MutaLambdaAgent, EvolveConfig
-from island import Island
-from migration import MigrationBus
-from models import Individual
 
 
 console = Console()
@@ -40,15 +36,25 @@ class MutaLambdaCLI:
         self.current_config = None
         self.agent: Optional[MutaLambdaAgent] = None
         self.generation = 0
+        self._test_cases: List[Dict[str, Any]] = []
+        self._seed_codes: List[str] = []
+        self._task: str = "Optimize Python code for correctness and performance"
+        self._allow_untested: bool = False
 
     def run_evolution(
         self,
         config_path: Optional[str] = None,
         generations: int = 50,
         animation: str = 'retro',
-        verbose: bool = False
+        verbose: bool = False,
+        source: Optional[str] = None,
+        tests: Optional[str] = None,
+        task: Optional[str] = None,
+        allow_untested: bool = False,
     ) -> bool:
         """Run a complete evolution process"""
+
+        self._allow_untested = allow_untested
 
         # Load or create config
         if config_path:
@@ -57,6 +63,9 @@ class MutaLambdaCLI:
                 return False
         else:
             self.current_config = self.config_manager.get_default()
+
+        if not self._prepare_target(source=source, tests=tests, task=task):
+            return False
 
         # Create MutaLambda agent
         evolve_config = self._create_evolve_config(self.current_config, generations)
@@ -80,25 +89,88 @@ class MutaLambdaCLI:
         else:
             return self._run_no_animation(generations, verbose)
 
-    def _create_evolve_config(self, config: dict, generations: int) -> Optional[EvolveConfig]:
-        """Create EvolveConfig from CLI config"""
-        try:
-            evo = config.get('evolution', {})
-            mig = config.get('migration', {})
-            chk = config.get('checkpoint', {})
+    def _prepare_target(
+        self,
+        source: Optional[str],
+        tests: Optional[str],
+        task: Optional[str],
+    ) -> bool:
+        """Resolve source code + tests from CLI args or YAML target section."""
+        cfg = self.current_config or {}
+        target = cfg.get("target") or {}
 
-            return EvolveConfig(
-                num_islands=evo.get('num_islands', 4),
-                generations=generations,
-                population_size=evo.get('population_size', 8),
-                top_k=evo.get('top_k', 3),
-                topology=mig.get('topology', 'ring'),
-                migration_interval=mig.get('interval', 10),
-                migrants_per_island=mig.get('migrants_per_island', 2),
-                checkpoint_enabled=chk.get('enabled', True),
-                checkpoint_interval=chk.get('interval', 10),
-                checkpoint_dir=chk.get('directory', 'checkpoints'),
+        source_path = source or target.get("source_file") or ""
+        tests_path = tests or target.get("tests_file") or ""
+        self._task = task or target.get("task") or self._task
+
+        if source_path:
+            p = Path(source_path)
+            if not p.exists():
+                console.print(f"[red]Source file not found: {source_path}[/red]")
+                return False
+            self._seed_codes = [p.read_text(encoding="utf-8")]
+        else:
+            self._seed_codes = []
+
+        if tests_path:
+            p = Path(tests_path)
+            if not p.exists():
+                console.print(f"[red]Tests file not found: {tests_path}[/red]")
+                return False
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if not isinstance(data, list):
+                console.print("[red]Tests file must be a JSON list of cases[/red]")
+                return False
+            self._test_cases = data
+        else:
+            self._test_cases = []
+
+        if not self._test_cases and not self._allow_untested:
+            console.print(
+                "[red]No test cases configured. Use --tests or target.tests_file, "
+                "or pass --allow-untested only for development.[/red]"
             )
+            return False
+
+        return True
+
+    def _create_evolve_config(self, config: dict, generations: int) -> Optional[EvolveConfig]:
+        """Create EvolveConfig from CLI config via unified MutaLambdaConfig (ML-C02)."""
+        try:
+            from muta_config import MutaLambdaConfig
+
+            # Legacy CLI templates may use migration.* instead of population.*
+            raw = dict(config or {})
+            if "migration" in raw and "population" not in raw:
+                mig = raw.get("migration") or {}
+                evo = raw.setdefault("evolution", {})
+                raw["population"] = {
+                    "size": evo.get("population_size", 8),
+                    "top_k": evo.get("top_k", 3),
+                    "migration_interval": mig.get("interval", 10),
+                    "migrants_per_island": mig.get("migrants_per_island", 2),
+                }
+                if "topology" not in evo and "topology" in mig:
+                    evo["topology"] = mig["topology"]
+            if "checkpoint" in raw:
+                chk = raw["checkpoint"]
+                if "dir" not in chk and "directory" in chk:
+                    chk = dict(chk)
+                    chk["dir"] = chk["directory"]
+                    raw["checkpoint"] = chk
+
+            ml = MutaLambdaConfig.from_dict(raw)
+            evolve = ml.to_evolve_config(generations=generations)
+            evolve.seed_codes = list(self._seed_codes)
+            evolve.allow_untested = self._allow_untested
+            evolve.require_tests = not self._allow_untested
+            if self._task:
+                evolve.target_task = self._task
+            # Surface isolation guidance once
+            msg = ml.recommended_runner_message()
+            if "subprocess" in msg:
+                console.print(f"[dim]{msg}[/dim]")
+            return evolve
         except Exception as e:
             console.print(f"[red]Error creating evolve config: {e}[/red]")
             return None
@@ -106,13 +178,20 @@ class MutaLambdaCLI:
     def _create_agent(self, config: EvolveConfig) -> Optional[MutaLambdaAgent]:
         """Create and initialize MutaLambda agent"""
         try:
-            # Create agent with default task
-            task = "Optimize Python code for correctness and performance"
-            agent = MutaLambdaAgent(config, task=task)
+            timeout = float(
+                (self.current_config or {}).get('sandbox', {}).get('timeout_sec', 10.0)
+            )
+            agent = MutaLambdaAgent(
+                config,
+                test_cases=self._test_cases,
+                timeout_sec=timeout,
+                task=self._task,
+            )
 
             console.print(f"[green]✓ Initialized {config.num_islands} islands[/green]")
             console.print(f"[green]✓ Population: {config.population_size} per island[/green]")
             console.print(f"[green]✓ Topology: {config.topology}[/green]")
+            console.print(f"[green]✓ Tests: {len(self._test_cases)} cases[/green]")
             console.print()
 
             return agent
@@ -136,13 +215,11 @@ class MutaLambdaCLI:
                 for gen in range(generations):
                     self.generation = gen + 1
 
-                    # Execute one evolution step
-                    self.agent.step()
-
-                    # Get current best from all islands
-                    best = self.agent.migration_bus.get_global_best()
+                    # Execute one evolution step (shared core API)
+                    result = self.agent.step_generation(generation=gen, task=self._task)
+                    best = result.best or self.agent.migration_bus.get_global_best()
                     if best:
-                        best_score = max(best_score, best.score)
+                        best_score = max(best_score, best.score if best.score > float("-inf") else best_score)
                         history.append(best_score)
 
                     # Build and update display
@@ -154,6 +231,9 @@ class MutaLambdaCLI:
                     if (gen + 1) % self.agent.config.checkpoint_interval == 0:
                         if self.agent.config.checkpoint_enabled:
                             self._save_checkpoint(gen + 1, best_score)
+
+                    if result.should_stop:
+                        break
 
                     # Small delay for smooth animation
                     time.sleep(0.05)
@@ -187,14 +267,14 @@ class MutaLambdaCLI:
             for gen in range(generations):
                 self.generation = gen + 1
 
-                # Execute step
-                self.agent.step()
-
-                # Get best
-                best = self.agent.migration_bus.get_global_best()
-                if best:
+                result = self.agent.step_generation(generation=gen, task=self._task)
+                best = result.best or self.agent.migration_bus.get_global_best()
+                if best and best.score > float("-inf"):
                     best_score = max(best_score, best.score)
                     history.append(best_score)
+
+                if result.should_stop:
+                    break
 
                 # Progress update every 10 generations
                 if (gen + 1) % 10 == 0:
@@ -236,12 +316,9 @@ class MutaLambdaCLI:
             for gen in range(generations):
                 self.generation = gen + 1
 
-                # Execute step
-                self.agent.step()
-
-                # Get best
-                best = self.agent.migration_bus.get_global_best()
-                if best:
+                result = self.agent.step_generation(generation=gen, task=self._task)
+                best = result.best or self.agent.migration_bus.get_global_best()
+                if best and best.score > float("-inf"):
                     best_score = max(best_score, best.score)
                     history.append(best_score)
 
@@ -249,6 +326,9 @@ class MutaLambdaCLI:
                 if (gen + 1) % self.agent.config.checkpoint_interval == 0:
                     if self.agent.config.checkpoint_enabled:
                         self._save_checkpoint(gen + 1, best_score)
+
+                if result.should_stop:
+                    break
 
             if verbose:
                 console.print(f"Complete: {generations} generations, best={best_score:.4f}")
@@ -370,7 +450,7 @@ class MutaLambdaCLI:
         return layout
 
     def _save_checkpoint(self, generation: int, score: float):
-        """Save checkpoint"""
+        """Save JSON checkpoint (no pickle)."""
         try:
             state = {
                 'generation': generation,
@@ -385,7 +465,12 @@ class MutaLambdaCLI:
                 ]
             }
 
-            self.checkpoint_manager.save(generation, score, state)
+            self.checkpoint_manager.save(
+                state=state,
+                generation=generation,
+                score=score,
+                compress=True,
+            )
         except Exception as e:
             console.print(f"[yellow]Warning: checkpoint failed: {e}[/yellow]")
 
@@ -434,23 +519,50 @@ class MutaLambdaCLI:
         additional_gens: int = 50,
         animation: str = 'retro'
     ) -> bool:
-        """Resume evolution from checkpoint"""
+        """Resume evolution from a core or CLI checkpoint (JSON only)."""
 
         console.print(f"[cyan]Loading checkpoint: {checkpoint_path}[/cyan]")
+        path = Path(checkpoint_path)
 
-        # Load checkpoint
+        # Prefer core checkpoint_manager when format matches.
+        core_ckpt = None
+        try:
+            candidate = path
+            if path.is_dir():
+                candidate = path / "checkpoint.json"
+            if candidate.exists() and candidate.suffix == ".json":
+                raw = candidate.read_text(encoding="utf-8")
+                data = json.loads(raw)
+                if data.get("format") == "mutalambda-core-json" or "island_populations" in data:
+                    core_ckpt = candidate
+        except Exception:
+            core_ckpt = None
+
+        if core_ckpt is not None:
+            return self._resume_from_core_checkpoint(core_ckpt, additional_gens, animation)
+
+        # Fallback: CLI lightweight JSON checkpoints
         checkpoint_data = self.checkpoint_manager.load(checkpoint_path)
         if not checkpoint_data:
             console.print("[red]Failed to load checkpoint[/red]")
             return False
 
-        console.print(f"[green]✓ Loaded checkpoint from generation {checkpoint_data['generation']}[/green]")
-        console.print(f"[green]✓ Best score: {checkpoint_data['best_score']:.4f}[/green]")
+        gen = checkpoint_data.get("generation", 0)
+        best = checkpoint_data.get("best_score", 0.0)
+        console.print(f"[green]✓ Loaded CLI checkpoint from generation {gen}[/green]")
+        console.print(f"[green]✓ Best score: {best}[/green]")
+        console.print(
+            "[yellow]Note: CLI lightweight checkpoints restore generation metadata only; "
+            "use core checkpoints (checkpoints/chk_gen*/checkpoint.json) for full resume.[/yellow]"
+        )
         console.print()
 
-        # Recreate agent with checkpoint state
-        config = checkpoint_data.get('config', self.config_manager.get_default())
+        config = checkpoint_data.get("config") or self.config_manager.get_default()
         self.current_config = config
+        if not self._prepare_target(source=None, tests=None, task=None):
+            # Allow resume of lightweight ckpt with allow_untested if no tests
+            if not self._test_cases:
+                self._allow_untested = True
 
         evolve_config = self._create_evolve_config(config, additional_gens)
         if not evolve_config:
@@ -460,27 +572,110 @@ class MutaLambdaCLI:
         if not self.agent:
             return False
 
-        # Restore state from checkpoint
-        self._restore_agent_state(checkpoint_data)
-
+        self.agent._current_generation = int(gen)
+        self.agent._generation_completed = int(gen)
+        self.generation = int(gen)
         console.print(f"[cyan]Resuming for {additional_gens} additional generations...[/cyan]\n")
 
-        # Continue evolution
-        self.generation = checkpoint_data['generation']
-
-        if animation == 'retro':
+        if animation == "retro":
             return self._run_with_retro_animation(additional_gens, False)
-        elif animation == 'minimal':
+        if animation == "minimal":
             return self._run_minimal_animation(additional_gens, False)
-        else:
-            return self._run_no_animation(additional_gens, False)
+        return self._run_no_animation(additional_gens, False)
 
-    def _restore_agent_state(self, checkpoint_data: dict):
-        """Restore agent state from checkpoint"""
-        # Note: Full state restoration would require saving island populations
-        # For now, we just set the generation counter
-        # In production, you'd save/load full island state
-        pass
+    def _resume_from_core_checkpoint(
+        self,
+        checkpoint_path: Path,
+        additional_gens: int,
+        animation: str,
+    ) -> bool:
+        """Full restore via checkpoint_manager.resume_agent."""
+        try:
+            from checkpoint_manager import load_checkpoint, resume_agent
+            from muta_lambda import EvolveConfig
+        except Exception as e:
+            console.print(f"[red]Core resume unavailable: {e}[/red]")
+            return False
+
+        try:
+            cp = load_checkpoint(checkpoint_path)
+        except Exception as e:
+            console.print(f"[red]Failed to load core checkpoint: {e}[/red]")
+            return False
+
+        console.print(
+            f"[green]✓ Core checkpoint gen_completed={cp.generation_completed} "
+            f"current={cp.current_generation}[/green]"
+        )
+        console.print(f"[green]✓ Best score: {cp.best_score}[/green]")
+        console.print()
+
+        # Build config: prefer YAML if available, else defaults sized for additional gens.
+        if self.current_config is None:
+            self.current_config = self.config_manager.get_default()
+        evolve_config = self._create_evolve_config(self.current_config, additional_gens)
+        if not evolve_config:
+            evolve_config = EvolveConfig(
+                generations=cp.current_generation + additional_gens,
+                allow_untested=True,
+                archive_solutions=False,
+                prompt_evolution=False,
+                checkpoint_enabled=True,
+            )
+        else:
+            # Ensure total horizon covers completed + additional
+            evolve_config.generations = max(
+                evolve_config.generations,
+                int(cp.current_generation) + int(additional_gens),
+            )
+
+        if not self._test_cases and not self._allow_untested:
+            self._allow_untested = True
+            evolve_config.allow_untested = True
+
+        try:
+            agent = resume_agent(
+                checkpoint_path,
+                evolve_config,
+                test_cases=self._test_cases,
+                llm_fn=None,
+            )
+        except Exception as e:
+            console.print(f"[red]resume_agent failed: {e}[/red]")
+            return False
+
+        self.agent = agent
+        self.generation = int(agent._current_generation)
+        console.print(
+            f"[cyan]Resuming from gen {agent._current_generation} "
+            f"for {additional_gens} additional generations...[/cyan]\n"
+        )
+
+        # Drive via step_generation so we don't double-count from 0.
+        try:
+            history = []
+            best_score = float(cp.best_score) if cp.best_score is not None else float("-inf")
+            start = int(agent._current_generation)
+            for i, gen in enumerate(range(start, start + additional_gens)):
+                self.generation = gen + 1
+                result = agent.step_generation(generation=gen, task=agent.task or self._task)
+                if result.best and result.best.score > best_score:
+                    best_score = result.best.score
+                history.append(best_score if best_score > float("-inf") else 0.0)
+                if animation == "minimal" and (i + 1) % 10 == 0:
+                    console.print(f"Gen {gen + 1} | Best: {best_score:.4f}")
+                if result.should_stop:
+                    break
+            agent.shutdown()
+            console.print(f"[green]✓ Resume complete — best={best_score:.4f}[/green]")
+            return True
+        except Exception as e:
+            console.print(f"[red]Resume run error: {e}[/red]")
+            try:
+                agent.shutdown()
+            except Exception:
+                pass
+            return False
 
     def run_mutation(
         self,
@@ -488,7 +683,7 @@ class MutaLambdaCLI:
         mutation_type: str = 'prompt',
         strategy: str = 'adaptive'
     ) -> bool:
-        """Run mutation operations"""
+        """Run mutation operations (ML-UI01: never report success if nothing changed)."""
 
         console.print(Panel(
             Text.assemble(
@@ -503,12 +698,52 @@ class MutaLambdaCLI:
         console.print(f"\n[cyan]Strategy: {strategy}[/cyan]")
         console.print(f"[cyan]Target: {target}[/cyan]\n")
 
-        # TODO: Implement actual mutation logic
-        # This would integrate with MutaLambda's mutation engine
-        console.print("[yellow]Mutation engine integration in progress...[/yellow]")
-        console.print()
+        path = Path(target)
+        if mutation_type in {"prompt", "operators", "hyperparams"} and not path.exists():
+            # Non-file targets (prompt strings) are accepted only for 'prompt'
+            if mutation_type != "prompt":
+                console.print(
+                    f"[red]✗ Target file not found: {target}. "
+                    "No mutation applied.[/red]"
+                )
+                return False
 
-        return True
+        if mutation_type == "prompt":
+            # Minimal real operation: apply AST mutation to a source file if present.
+            if path.exists() and path.suffix == ".py":
+                try:
+                    from evolution_engine import ASTMutator
+
+                    original = path.read_text(encoding="utf-8")
+                    mutated = ASTMutator.apply_random_mutation(original)
+                    if mutated.strip() == original.strip():
+                        console.print(
+                            "[red]✗ Mutation produced no change. "
+                            "Refusing to report success.[/red]"
+                        )
+                        return False
+                    out = path.with_suffix(path.suffix + f".mut.{strategy}.py")
+                    out.write_text(mutated, encoding="utf-8")
+                    console.print(f"[green]✓ Wrote mutated source: {out}[/green]")
+                    return True
+                except Exception as e:
+                    console.print(f"[red]✗ Mutation failed: {e}[/red]")
+                    return False
+            console.print(
+                "[red]✗ mutate prompt without a .py file is not implemented. "
+                "No changes made.[/red]"
+            )
+            return False
+
+        if mutation_type in {"operators", "hyperparams"}:
+            console.print(
+                f"[red]✗ mutate {mutation_type} is not implemented yet. "
+                "No configuration was modified.[/red]"
+            )
+            return False
+
+        console.print(f"[red]✗ Unknown mutation type: {mutation_type}[/red]")
+        return False
 
     def evaluate_results(self, results_path: Optional[str] = None) -> bool:
         """Evaluate and summarize results"""

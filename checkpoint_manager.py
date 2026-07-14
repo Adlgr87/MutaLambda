@@ -89,6 +89,14 @@ class Checkpoint:
     spatial_metrics: Dict[str, Any] = field(default_factory=dict)
     pattern_memory: Optional[Dict[str, Any]] = None
 
+    # Resume metadata (ML-CK03/CK04)
+    generation_completed: int = 0
+    current_generation: int = 0
+    early_stop_best: float = float("-inf")
+    early_stop_no_improve: int = 0
+    run_id: str = ""
+    task: str = ""
+
 
 # ── Save ──────────────────────────────────────────────────────────────
 
@@ -180,6 +188,18 @@ def save_full_checkpoint(
     # ── Metrics history ──────────────────────────────────────────────
     checkpoint.global_best_history = agent._global_best_history
     checkpoint.generation_times = agent._generation_times
+    checkpoint.generation_completed = int(
+        getattr(agent, "_generation_completed", generation) or generation
+    )
+    checkpoint.current_generation = int(
+        getattr(agent, "_current_generation", generation) or generation
+    )
+    checkpoint.run_id = str(getattr(agent, "run_id", "") or "")
+    checkpoint.task = str(getattr(agent, "task", "") or "")
+    early = getattr(agent, "_early_stop", None)
+    if early is not None:
+        checkpoint.early_stop_best = float(getattr(early, "_best", float("-inf")))
+        checkpoint.early_stop_no_improve = int(getattr(early, "_no_improve", 0))
 
     # ── Lineage graph (Fase 7) ────────────────────────────────────────
     if hasattr(agent, '_lineage') and agent._lineage.nodes:
@@ -275,6 +295,16 @@ def _serialise_checkpoint(cp: Checkpoint) -> Dict[str, Any]:
         "dialectic_metrics": cp.dialectic_metrics,
         "spatial_metrics": cp.spatial_metrics,
         "pattern_memory": cp.pattern_memory,
+        "generation_completed": cp.generation_completed,
+        "current_generation": cp.current_generation,
+        "early_stop_best": (
+            None if cp.early_stop_best == float("-inf") else cp.early_stop_best
+        ),
+        "early_stop_no_improve": cp.early_stop_no_improve,
+        "run_id": cp.run_id,
+        "task": cp.task,
+        "format": "mutalambda-core-json",
+        "version": "4.0.0",
     }
 
 
@@ -333,6 +363,16 @@ def load_checkpoint(path: str | Path) -> Checkpoint:
         dialectic_metrics=data.get("dialectic_metrics", {}),
         spatial_metrics=data.get("spatial_metrics", {}),
         pattern_memory=data.get("pattern_memory"),
+        generation_completed=int(data.get("generation_completed", data.get("generation", 0))),
+        current_generation=int(data.get("current_generation", data.get("generation", 0))),
+        early_stop_best=(
+            float("-inf")
+            if data.get("early_stop_best") is None
+            else float(data.get("early_stop_best"))
+        ),
+        early_stop_no_improve=int(data.get("early_stop_no_improve", 0)),
+        run_id=str(data.get("run_id", "") or ""),
+        task=str(data.get("task", "") or ""),
     )
 
     # Restore RNG state
@@ -434,6 +474,25 @@ def resume_agent(
     # Restore metrics
     agent._global_best_history = cp.global_best_history
     agent._generation_times = cp.generation_times
+    agent._current_generation = cp.current_generation or cp.generation
+    agent._generation_completed = cp.generation_completed or cp.generation
+    if cp.task:
+        agent.task = cp.task
+    if cp.run_id:
+        agent.run_id = cp.run_id
+
+    # Restore global best
+    if cp.best_code is not None:
+        agent._global_best = Individual(
+            code=cp.best_code,
+            score=float(cp.best_score) if cp.best_score is not None else float("-inf"),
+        )
+
+    # Restore EarlyStopMonitor
+    early = getattr(agent, "_early_stop", None)
+    if early is not None:
+        early._best = cp.early_stop_best
+        early._no_improve = cp.early_stop_no_improve
 
     # Restore lineage graph (Fase 7)
     if cp.lineage and hasattr(agent, '_lineage'):
@@ -453,9 +512,11 @@ def resume_agent(
             logger.warning("Could not restore pattern memory", exc_info=True)
 
     logger.info(
-        "Agent resumed from checkpoint: gen %d, %d islands restored, "
+        "Agent resumed from checkpoint: gen_completed=%d current=%d, %d islands, "
         "archive=%d, config_hash=%s",
-        cp.generation, len(cp.island_populations),
+        agent._generation_completed,
+        agent._current_generation,
+        len(cp.island_populations),
         agent.archive.size if agent.archive else 0,
         cp.config_hash,
     )

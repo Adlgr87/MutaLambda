@@ -19,6 +19,7 @@ import copy
 import json
 import logging
 import os
+from pathlib import Path
 import random
 import sys
 import time
@@ -71,6 +72,18 @@ from models import (
 )
 from prompt_evolver import PromptEvolver
 from sandbox import SandboxEvaluator
+from extensions import ExtensionRegistry, ExtensionContext
+from rng_session import RNGSession
+from event_bus import (
+    EventBus,
+    CommandQueue,
+    GENERATION_STARTED,
+    GENERATION_COMPLETED,
+    CHECKPOINT_SAVED,
+    RUN_STARTED,
+    RUN_COMPLETED,
+    MIGRATION_APPLIED,
+)
 from workflow_protocol import ProtocolTrace
 
 
@@ -139,10 +152,52 @@ class EvolveConfig:
     spatial_enabled: bool = False
     spatial_neighborhood: str = "moore"
     pattern_memory_enabled: bool = False
+    allow_untested: bool = True
+    runner_mode: str = "subprocess"  # subprocess | container | microvm
+    allow_expression_eval: bool = False
+    enforce_ast_scan: bool = False
+    require_tests: bool = False  # CLI sets True unless --allow-untested
+    enforce_api_fingerprint: bool = False
+    enforce_differential: bool = False
+    benchmark_warmups: int = 0
+    benchmark_samples: int = 1
+    benchmark_operations_per_case: int = 1
+    privacy_allow_external_llm: bool = False
+    llm_max_retries: int = 3
+    llm_max_calls_per_generation: int = 0
+    llm_max_total_calls: int = 0
+    llm_replay_log: str = ""
+    master_seed: Optional[int] = None
+    operator_bandit_enabled: bool = False
+    operator_bandit_strategy: str = "ucb1"
+    fitness_normalize: bool = True
+    archive_dedupe_similarity: float = 0.98
+    autodoc_elites: bool = True
+    write_run_artifacts: bool = True
+    privacy_redact_secrets: bool = True
+    target_source_file: str = ""
+    target_entrypoint: str = ""
+    target_task: str = ""
+    target_tests_file: str = ""
+    target_benchmark_file: str = ""
+    target_api_policy: str = "strict"
 
     @classmethod
     def from_yaml(cls, path: str) -> "EvolveConfig":
-        """Load EvolveConfig from a validated YAML file."""
+        """Load EvolveConfig from a validated YAML file.
+
+        Preferred path: unified Pydantic ``MutaLambdaConfig`` (CLI + core).
+        """
+        try:
+            from muta_config import MutaLambdaConfig
+
+            return MutaLambdaConfig.from_yaml(path).to_evolve_config()
+        except Exception as _mlc_exc:
+            # Legacy fallback keeps older call sites working if schema drifts.
+            import logging as _logging
+            _logging.getLogger("MutaLambda").debug(
+                "MutaLambdaConfig path failed (%s); using legacy from_yaml", _mlc_exc
+            )
         from config_loader import load_yaml
 
         cfg = load_yaml(path)
@@ -162,6 +217,8 @@ class EvolveConfig:
         dialectic = cfg.get("dialectic", {})
         spatial = cfg.get("spatial", {})
         patterns = cfg.get("pattern_memory", {})
+        privacy = cfg.get("privacy", {})
+        target = cfg.get("target", {})
 
         config = cls(
             num_islands=evo.get("num_islands", 4),
@@ -224,6 +281,25 @@ class EvolveConfig:
             spatial_enabled=spatial.get("enabled", False),
             spatial_neighborhood=spatial.get("neighborhood", "moore"),
             pattern_memory_enabled=patterns.get("enabled", False),
+            enforce_api_fingerprint=cfg.get("workflow", {}).get("enforce_api_fingerprint",
+                cfg.get("target", {}).get("enforce_api_fingerprint", False)),
+            enforce_differential=cfg.get("workflow", {}).get("enforce_differential",
+                cfg.get("target", {}).get("enforce_differential", False)),
+            benchmark_warmups=cfg.get("benchmark", {}).get("warmups", 0),
+            benchmark_samples=cfg.get("benchmark", {}).get("samples", 1),
+            benchmark_operations_per_case=cfg.get("benchmark", {}).get("operations_per_case", 1),
+            allow_untested=cfg.get("allow_untested", True),
+            runner_mode=sand.get("runner", sand.get("mode", "subprocess")),
+            allow_expression_eval=sand.get("allow_expression_eval", False),
+            enforce_ast_scan=sand.get("enforce_ast_scan", False),
+            privacy_allow_external_llm=privacy.get("allow_external_llm", False),
+            privacy_redact_secrets=privacy.get("redact_secrets", True),
+            target_source_file=target.get("source_file", ""),
+            target_entrypoint=target.get("entrypoint", ""),
+            target_task=target.get("task", ""),
+            target_tests_file=target.get("tests_file", ""),
+            target_benchmark_file=target.get("benchmark_file", ""),
+            target_api_policy=target.get("api_policy", "strict"),
         )
 
         config.sandbox_timeout = sand.get("timeout_sec", 10.0)
@@ -272,6 +348,40 @@ class EarlyStopMonitor:
         return self._no_improve
 
 
+
+@dataclass
+class GenerationResult:
+    """Resultado de una generación (API incremental CLI/dashboard/core)."""
+
+    generation: int
+    best: Optional[Individual] = None
+    snapshots: List[IslandSnapshot] = field(default_factory=list)
+    should_stop: bool = False
+    combined_best_score: float = float("-inf")
+
+
+
+
+class MutaLambdaSession:
+    """Context manager for construct → run → shutdown lifecycle (ML-E02)."""
+
+    def __init__(self, agent: "MutaLambdaAgent"):
+        self.agent = agent
+
+    def __enter__(self) -> "MutaLambdaAgent":
+        return self.agent
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        try:
+            self.agent.shutdown()
+        except Exception:
+            pass
+        return False
+
+    def run(self, task: str = "", **kwargs):
+        return self.agent.run(task=task, **kwargs)
+
+
 class MutaLambdaAgent:
     """Orquestador principal del ciclo evolutivo MutaLambda."""
 
@@ -299,16 +409,54 @@ class MutaLambdaAgent:
                 model=config.llm_model,
                 timeout_sec=config.llm_timeout_sec,
                 temperature=config.llm_temperature,
+                max_retries=int(getattr(config, "llm_max_retries", 3) or 3),
+                max_calls_per_generation=int(
+                    getattr(config, "llm_max_calls_per_generation", 0) or 0
+                ),
+                max_total_calls=int(getattr(config, "llm_max_total_calls", 0) or 0),
+                privacy_allow_external=bool(
+                    getattr(config, "privacy_allow_external_llm", True)
+                ),
+                replay_log_path=getattr(config, "llm_replay_log", None)
+                or (
+                    str(Path(config.checkpoint_dir) / "llm_replay.jsonl")
+                    if getattr(config, "checkpoint_enabled", False)
+                    else None
+                ),
             )
             if llm_fn is None
             else llm_fn
         )
+        # Keep backend instance when factory attached it.
+        self._llm_backend = getattr(self.llm_fn, "__self_backend__", None)
         self._base_llm_fn = self.llm_fn
         self._active_prompt_genome: Optional[PromptGenome] = None
 
+        # Backward-compat: some callers pass llm_fn as the second positional
+        # argument (historically before test_cases was required).
+        if callable(test_cases) and llm_fn is None:
+            llm_fn = test_cases  # type: ignore[assignment]
+            test_cases = []
+
+        cases = list(test_cases or [])
+        allow_untested = bool(getattr(config, "allow_untested", True))
+        if getattr(config, "require_tests", False) and not cases and not allow_untested:
+            raise ValueError(
+                "No test cases configured. Use --allow-untested only for development."
+            )
         self.evaluator = SandboxEvaluator(
-            test_cases=test_cases or [],
+            test_cases=cases,
             timeout_sec=timeout_sec,
+            parallelism=getattr(config, "sandbox_workers", None),
+            allow_untested=allow_untested,
+            runner_mode=getattr(config, "runner_mode", "subprocess"),
+            allow_expression_eval=getattr(config, "allow_expression_eval", False),
+            enforce_ast_scan=getattr(config, "enforce_ast_scan", False),
+            benchmark_warmups=int(getattr(config, "benchmark_warmups", 0) or 0),
+            benchmark_samples=int(getattr(config, "benchmark_samples", 1) or 1),
+            benchmark_operations_per_case=int(
+                getattr(config, "benchmark_operations_per_case", 1) or 1
+            ),
         )
         topology = "spatial_grid" if config.spatial_enabled else config.topology
         self.migration_bus = MigrationBus(topology=topology)
@@ -452,6 +600,39 @@ class MutaLambdaAgent:
         self.migration_bus.lineage_graph = self._lineage
         if self._advanced_selection is not None:
             self._advanced_selection.lineage_graph = self._lineage
+
+        self._global_best: Optional[Individual] = None
+        self._current_generation: int = 0
+        self._stopped: bool = False
+        self.event_bus = EventBus()
+        self.commands = CommandQueue()
+        self._generation_completed: int = 0
+        self.extensions = ExtensionRegistry()
+        seed = getattr(config, "master_seed", None)
+        if seed is None:
+            seed = getattr(config, "seed", None)
+        self.rng_session = RNGSession(master_seed=seed)
+        self._baseline_fitness = None
+        self._operator_bandit = None
+        if getattr(config, "operator_bandit_enabled", False):
+            from operator_bandit import OperatorBandit
+            self._operator_bandit = OperatorBandit(
+                operators=["ast", "llm", "crossover", "redesign"],
+                strategy=getattr(config, "operator_bandit_strategy", "ucb1"),
+                rng=self.rng_session.stream("bandit"),
+            )
+        # Register optional engines under EvolutionExtension contract (WF#20)
+        from extensions import wrap_engine
+        for eng, name in (
+            (self._hfc, "hfc"),
+            (getattr(self, "_thc_engine", None), "thc"),
+            (getattr(self, "_dialectic_engine", None), "dialectic"),
+            (getattr(self, "_pattern_memory", None), "pattern_memory"),
+            (getattr(self, "_advanced_selection", None), "advanced_selection"),
+        ):
+            wrapped = wrap_engine(eng, name=name)
+            if wrapped is not None:
+                self.extensions.register(wrapped)
 
     def _island_llm_fn(self, prompt: str) -> str:
         """LLM callable used by islands; steered by best evolved prompt if available."""
@@ -718,210 +899,372 @@ class MutaLambdaAgent:
         alpha = self.config.novelty_alpha
         return (1.0 - alpha) * individual.score + alpha * novelty * 100.0
 
-    def run(self, task: str = "") -> Individual:
+    def step_generation(self, generation: Optional[int] = None, task: str = "") -> "GenerationResult":
+        """Ejecuta exactamente una generación y devuelve un resultado estructurado.
+
+        API incremental compartida por CLI, dashboard y core. No cierra el evaluator.
+        """
+        if not task:
+            task = self.task
+        elif task != self.task:
+            self.task = task
+
+        if generation is None:
+            generation = self._current_generation
+        gen = int(generation)
+        self.commands.wait_if_paused()
+        if self.commands.stop_requested:
+            self._stopped = True
+            return GenerationResult(
+                generation=gen,
+                best=self._global_best,
+                snapshots=[],
+                should_stop=True,
+                combined_best_score=float("-inf"),
+            )
+        # Drain HITL/control commands
+        for cmd in self.commands.drain():
+            c = cmd.get("command")
+            if c == "inject_hint" and cmd.get("code"):
+                self.inject_hint(str(cmd["code"]))
+            elif c == "stop":
+                self.commands.stop_requested = True
+        gen_start = time.perf_counter()
+        island_snapshots: List[IslandSnapshot] = []
+        self.event_bus.emit(
+            GENERATION_STARTED,
+            {"generation": gen},
+            run_id=self.run_id,
+            generation=gen,
+        )
+        ext_ctx = ExtensionContext(
+            generation=gen,
+            run_id=self.run_id,
+            task=task,
+            islands=list(self.islands),
+            best=self._global_best,
+        )
+        self.extensions.on_generation_start(ext_ctx)
+        # Reset per-generation LLM budget when available
+        backend = getattr(self, "_llm_backend", None)
+        if backend is not None and hasattr(backend, "reset_generation_budget"):
+            backend.reset_generation_budget()
+
+        if self._hfc is not None:
+            hfc_snapshot = self._hfc.step(
+                self.llm_fn,
+                self.evaluator,
+                gen,
+                lineage_graph=self._lineage,
+                task=task,
+            )
+            island_snapshots = []
+            logger.debug(
+                "HFC gen %d — tiers=%s | best=%.4f | diversity=%.3f",
+                gen + 1,
+                hfc_snapshot.tier_counts,
+                hfc_snapshot.best_score,
+                hfc_snapshot.diversity,
+            )
+        else:
+            island_snapshots = self._island_pool.run_generation(self.islands, gen)
+
+        self._process_hitl_hints()
+
+        cross_diversity = self._compute_cross_island_diversity()
+        spatial_topology = getattr(self.migration_bus, "spatial_topology", None)
+        if spatial_topology is not None:
+            spatial_topology.update_metrics(self.migration_bus.islands)
+        if gen % 5 == 0 and self._hfc is None:
+            diversities = [s.diversity for s in island_snapshots]
+            logger.debug(
+                "Gen %d diversity — intra: [%s] | cross: %.3f",
+                gen + 1,
+                ", ".join(f"{d:.3f}" for d in diversities),
+                cross_diversity,
+            )
+
+        if (
+            self._hfc is None
+            and gen % max(1, self.config.migration_interval) == 0
+        ):
+            boost_stats = self._apply_convergent_boost()
+            if boost_stats.get("boosted", 0) > 0:
+                logger.info(
+                    "Gen %d — convergent boost: %d inds × %d pairs",
+                    gen + 1, boost_stats["boosted"], boost_stats.get("pairs", 0),
+                )
+
+        global_best = self._global_best
+        if (
+            os.getenv("MUTALAMBDA_ENABLE_LINEAGE_COMPRESSION", "0") == "1"
+            and len(self._lineage.nodes) > 1000
+            and global_best is not None
+        ):
+            try:
+                from muta_ext.lineage.compression import LineageCompressor
+
+                compressor = getattr(self, "_lineage_compressor", None)
+                if compressor is None:
+                    compressor = LineageCompressor(self._lineage)
+                    setattr(self, "_lineage_compressor", compressor)
+
+                active_branch_ids = set(self._lineage.get_ancestors(global_best.id))
+                active_branch_ids.add(global_best.id)
+                compressor.compress_inactive(active_branch_ids)
+            except Exception as e:
+                logger.warning("Lineage compression failed: %s", e)
+
+        if (self.config.resurrection_enabled
+                and self._early_stop.stagnant_generations
+                >= self.config.resurrection_threshold
+                and self._lineage._resurrection_count
+                < self.config.resurrection_max_attempts
+                and global_best is not None):
+            threshold = (self.config.resurrection_min_score_ratio
+                         * global_best.score)
+            candidates = self._lineage.find_abandoned_branches(
+                global_best.id, threshold,
+            )
+            if candidates:
+                resurrected = self._resurrect_branch(candidates[0])
+                stagnant_island = self._find_stagnant_island()
+                if stagnant_island:
+                    stagnant_island.population[0] = resurrected
+                    logger.info(
+                        "Gen %d — ♜ resurrected branch → island %d",
+                        gen + 1, stagnant_island.id,
+                    )
+
+        if gen % 5 == 0:
+            try:
+                from nsga2 import get_nsga2_stats
+                all_inds = [
+                    ind for isl in self.islands
+                    for ind in isl.population
+                ]
+                nsga_stats = get_nsga2_stats(all_inds)
+                logger.debug(
+                    "NSGA-II fronts=%d pareto=%d crowding=%.3f",
+                    nsga_stats["num_fronts"],
+                    nsga_stats["pareto_frontier_size"],
+                    nsga_stats["mean_crowding"],
+                )
+            except ImportError:
+                pass
+
+        if self.prompt_evolver and task:
+            best_so_far = self._get_global_best()
+            base_code = best_so_far.code if best_so_far else ""
+            self.prompt_evolver.step(task, base_code)
+            best_prompt = self.prompt_evolver.get_best_prompt()
+            if best_prompt is not None:
+                self._active_prompt_genome = copy.deepcopy(best_prompt)
+
+        current_best = self._get_global_best()
+        if current_best:
+            combined = self._score_with_novelty(current_best)
+            if global_best is None or combined > self._score_with_novelty(global_best):
+                global_best = copy.deepcopy(current_best)
+                self._global_best = global_best
+
+        if self.archive and global_best:
+            self.archive.add(
+                global_best.code,
+                {"score": global_best.score, "generation": float(gen)},
+            )
+
+        gen_elapsed = time.perf_counter() - gen_start
+        self._generation_times.append(gen_elapsed)
+        current_score = global_best.score if global_best else float("-inf")
+        current_combined_score = (
+            self._score_with_novelty(global_best)
+            if global_best is not None
+            else float("-inf")
+        )
+        self._global_best_history.append(current_score)
+
+        if gen % 5 == 0 or gen == self.config.generations - 1:
+            avg_time = (
+                sum(self._generation_times[-5:]) /
+                min(5, len(self._generation_times[-5:]))
+            )
+            logger.info(
+                "Gen %d/%d | best=%.4f | avg_time=%.2fs | "
+                "archive=%d | stagnant=%d | protocol(promote=%d reject=%d)",
+                gen + 1, self.config.generations, current_score,
+                avg_time,
+                self.archive.size if self.archive else 0,
+                self._early_stop.stagnant_generations,
+                self._protocol_metrics["promoted"],
+                self._protocol_metrics["rejected"],
+            )
+
+        if (
+            self.config.checkpoint_enabled
+            and self.config.checkpoint_interval > 0
+            and (gen + 1) % self.config.checkpoint_interval == 0
+        ):
+            ckpt_path = self._save_checkpoint(gen + 1)
+            if ckpt_path:
+                self.event_bus.emit(
+                    CHECKPOINT_SAVED,
+                    {"path": ckpt_path, "generation": gen + 1},
+                    run_id=self.run_id,
+                    generation=gen + 1,
+                )
+
+        should_stop = self._early_stop.update(current_combined_score)
+        if should_stop:
+            logger.info(
+                "Early stop en gen %d: sin mejora ≥%.4f en %d generaciones.",
+                gen + 1, self.config.early_stop_delta,
+                self.config.early_stop_patience,
+            )
+            self._stopped = True
+
+        self._current_generation = gen + 1
+        self._generation_completed = gen + 1
+        ext_ctx.best = self._global_best
+        ext_ctx.metadata["combined_best_score"] = current_combined_score
+        self.extensions.on_generation_end(ext_ctx)
+        self.event_bus.emit(
+            GENERATION_COMPLETED,
+            {
+                "generation": gen + 1,
+                "best_score": current_score,
+                "combined_best_score": current_combined_score,
+                "should_stop": should_stop,
+                "snapshots": len(island_snapshots),
+                "extension_metrics": self.extensions.all_metrics(),
+            },
+            run_id=self.run_id,
+            generation=gen + 1,
+        )
+        if self.commands.stop_requested:
+            should_stop = True
+            self._stopped = True
+        return GenerationResult(
+            generation=gen + 1,
+            best=self._global_best,
+            snapshots=island_snapshots,
+            should_stop=should_stop,
+            combined_best_score=current_combined_score,
+        )
+
+    def step(self, task: str = "") -> "GenerationResult":
+        """Alias CLI-compatible de ``step_generation``."""
+        return self.step_generation(task=task)
+
+    def run(
+        self,
+        task: str = "",
+        *,
+        additional_generations: Optional[int] = None,
+        from_generation: Optional[int] = None,
+    ) -> Individual:
         if not task:
             task = self.task
         elif task != self.task:
             self.task = task
         self._start_time = time.perf_counter()
+        self._stopped = False
+        self.commands.stop_requested = False
+        start_gen = (
+            int(from_generation)
+            if from_generation is not None
+            else int(getattr(self, "_current_generation", 0) or 0)
+        )
+        if additional_generations is not None:
+            end_gen = start_gen + max(0, int(additional_generations))
+        else:
+            # Fresh runs start at 0; resumed agents keep start_gen and run until config.generations
+            if start_gen > 0:
+                end_gen = max(start_gen, int(self.config.generations))
+            else:
+                end_gen = int(self.config.generations)
+                self._current_generation = 0
         logger.info(
-            "MutaLambda starting: run=%s %d islands × %d generations",
+            "MutaLambda starting: run=%s %d islands × gens [%d, %d)",
             self.run_id,
             self.config.num_islands,
-            self.config.generations,
+            start_gen,
+            end_gen,
+        )
+        self.event_bus.emit(
+            RUN_STARTED,
+            {"start_gen": start_gen, "end_gen": end_gen},
+            run_id=self.run_id,
+            generation=start_gen,
         )
 
-        global_best: Optional[Individual] = None
-
-        for gen in range(self.config.generations):
-            gen_start = time.perf_counter()
-
-            if self._hfc is not None:
-                hfc_snapshot = self._hfc.step(
-                    self.llm_fn,
-                    self.evaluator,
-                    gen,
-                    lineage_graph=self._lineage,
-                    task=task,
-                )
-                island_snapshots = []
-                logger.debug(
-                    "HFC gen %d — tiers=%s | best=%.4f | diversity=%.3f",
-                    gen + 1,
-                    hfc_snapshot.tier_counts,
-                    hfc_snapshot.best_score,
-                    hfc_snapshot.diversity,
-                )
-            else:
-                island_snapshots = self._island_pool.run_generation(
-                    self.islands, gen
-                )
-
-            self._process_hitl_hints()
-
-            cross_diversity = self._compute_cross_island_diversity()
-            spatial_topology = getattr(self.migration_bus, "spatial_topology", None)
-            if spatial_topology is not None:
-                spatial_topology.update_metrics(self.migration_bus.islands)
-            if gen % 5 == 0 and self._hfc is None:
-                diversities = [s.diversity for s in island_snapshots]
-                logger.debug(
-                    "Gen %d diversity — intra: [%s] | cross: %.3f",
-                    gen + 1,
-                    ", ".join(f"{d:.3f}" for d in diversities),
-                    cross_diversity,
-                )
-
-            if (
-                self._hfc is None
-                and gen % max(1, self.config.migration_interval) == 0
-            ):
-                boost_stats = self._apply_convergent_boost()
-                if boost_stats.get("boosted", 0) > 0:
-                    logger.info(
-                        "Gen %d — convergent boost: %d inds × %d pairs",
-                        gen + 1, boost_stats["boosted"], boost_stats.get("pairs", 0),
-                    )
-
-            if (
-                os.getenv("MUTALAMBDA_ENABLE_LINEAGE_COMPRESSION", "0") == "1"
-                and len(self._lineage.nodes) > 1000
-                and global_best is not None
-            ):
-                try:
-                    from muta_ext.lineage.compression import LineageCompressor
-
-                    compressor = getattr(self, "_lineage_compressor", None)
-                    if compressor is None:
-                        compressor = LineageCompressor(self._lineage)
-                        setattr(self, "_lineage_compressor", compressor)
-
-                    active_branch_ids = set(self._lineage.get_ancestors(global_best.id))
-                    active_branch_ids.add(global_best.id)
-                    compressor.compress_inactive(active_branch_ids)
-                except Exception as e:
-                    logger.warning("Lineage compression failed: %s", e)
-
-            if (self.config.resurrection_enabled
-                    and self._early_stop.stagnant_generations
-                    >= self.config.resurrection_threshold
-                    and self._lineage._resurrection_count
-                    < self.config.resurrection_max_attempts
-                    and global_best is not None):
-                threshold = (self.config.resurrection_min_score_ratio
-                             * global_best.score)
-                candidates = self._lineage.find_abandoned_branches(
-                    global_best.id, threshold,
-                )
-                if candidates:
-                    resurrected = self._resurrect_branch(candidates[0])
-                    stagnant_island = self._find_stagnant_island()
-                    if stagnant_island:
-                        stagnant_island.population[0] = resurrected
-                        logger.info(
-                            "Gen %d — ♜ resurrected branch → island %d",
-                            gen + 1, stagnant_island.id,
-                        )
-
-            if gen % 5 == 0:
-                try:
-                    from nsga2 import get_nsga2_stats
-                    all_inds = [
-                        ind for isl in self.islands
-                        for ind in isl.population
-                    ]
-                    nsga_stats = get_nsga2_stats(all_inds)
-                    logger.debug(
-                        "NSGA-II fronts=%d pareto=%d crowding=%.3f",
-                        nsga_stats["num_fronts"],
-                        nsga_stats["pareto_frontier_size"],
-                        nsga_stats["mean_crowding"],
-                    )
-                except ImportError:
-                    pass
-
-            if self.prompt_evolver and task:
-                best_so_far = self._get_global_best()
-                base_code = best_so_far.code if best_so_far else ""
-                self.prompt_evolver.step(task, base_code)
-                best_prompt = self.prompt_evolver.get_best_prompt()
-                if best_prompt is not None:
-                    self._active_prompt_genome = copy.deepcopy(best_prompt)
-
-            current_best = self._get_global_best()
-            if current_best:
-                combined = self._score_with_novelty(current_best)
-                if global_best is None or combined > self._score_with_novelty(global_best):
-                    global_best = copy.deepcopy(current_best)
-
-            if self.archive and global_best:
-                self.archive.add(
-                    global_best.code,
-                    {"score": global_best.score, "generation": float(gen)},
-                )
-
-            gen_elapsed = time.perf_counter() - gen_start
-            self._generation_times.append(gen_elapsed)
-            current_score = global_best.score if global_best else float("-inf")
-            current_combined_score = (
-                self._score_with_novelty(global_best)
-                if global_best is not None
-                else float("-inf")
+        result: Optional[GenerationResult] = None
+        try:
+            for gen in range(start_gen, end_gen):
+                result = self.step_generation(generation=gen, task=task)
+                if result.should_stop:
+                    break
+        finally:
+            total_time = time.perf_counter() - self._start_time
+            best = self._global_best
+            logger.info(
+                "Evolution complete: run=%s in %.1fs. Best score: %.4f",
+                self.run_id,
+                total_time,
+                best.score if best else float("-inf"),
             )
-            self._global_best_history.append(current_score)
-
-            if gen % 5 == 0 or gen == self.config.generations - 1:
-                avg_time = (
-                    sum(self._generation_times[-5:]) /
-                    min(5, len(self._generation_times[-5:]))
+            self.event_bus.emit(
+                RUN_COMPLETED,
+                {
+                    "best_score": best.score if best else float("-inf"),
+                    "elapsed_sec": total_time,
+                    "generation_completed": getattr(self, "_generation_completed", 0),
+                },
+                run_id=self.run_id,
+                generation=getattr(self, "_generation_completed", -1),
+            )
+            # Workflow §16 artifacts + optional elite auto-doc (WF#22)
+            try:
+                from run_artifacts import write_run_artifacts
+                art_dir = Path(self.config.checkpoint_dir) / f"run_{self.run_id}"
+                baseline = ""
+                if self.config.seed_codes:
+                    baseline = self.config.seed_codes[0]
+                paths = write_run_artifacts(
+                    self,
+                    output_dir=art_dir,
+                    baseline_code=baseline,
+                    task=task or self.task,
                 )
-                logger.info(
-                    "Gen %d/%d | best=%.4f | avg_time=%.2fs | "
-                    "archive=%d | stagnant=%d | protocol(promote=%d reject=%d)",
-                    gen + 1, self.config.generations, current_score,
-                    avg_time,
-                    self.archive.size if self.archive else 0,
-                    self._early_stop.stagnant_generations,
-                    self._protocol_metrics["promoted"],
-                    self._protocol_metrics["rejected"],
-                )
+                logger.info("Run artifacts written to %s", art_dir)
+                # Auto-doc only the final elite, never every candidate
+                if best is not None and getattr(self.config, "autodoc_elites", True):
+                    try:
+                        from interpretability import CodeDocumenter
+                        doc_path = art_dir / "best_solution_documented.md"
+                        # Lightweight report without extra LLM if documenter needs one
+                        report_body = (
+                            f"# Elite documentation\n\n"
+                            f"run={self.run_id} score={best.score}\n\n"
+                            f"```python\n{best.code}\n```\n"
+                        )
+                        doc_path.write_text(report_body, encoding="utf-8")
+                    except Exception as doc_exc:
+                        logger.debug("elite autodoc skipped: %s", doc_exc)
+            except Exception as art_exc:
+                logger.warning("Failed to write run artifacts: %s", art_exc)
+            self.shutdown()
 
-            if (
-                self.config.checkpoint_enabled
-                and
-                self.config.checkpoint_interval > 0
-                and (gen + 1) % self.config.checkpoint_interval == 0
-            ):
-                self._save_checkpoint(gen + 1)
-
-            if self._early_stop.update(current_combined_score):
-                logger.info(
-                    "Early stop en gen %d: sin mejora ≥%.4f en %d generaciones.",
-                    gen + 1, self.config.early_stop_delta,
-                    self.config.early_stop_patience,
-                )
-                break
-
-        total_time = time.perf_counter() - self._start_time
-        logger.info(
-            "Evolution complete: run=%s in %.1fs. Best score: %.4f",
-            self.run_id,
-            total_time,
-            global_best.score if global_best else float("-inf"),
-        )
-
-        self.shutdown()
-
-        if global_best is None:
+        if self._global_best is None:
             raise RuntimeError("Evolution produced no valid individuals.")
-        return global_best
+        return self._global_best
 
-    def _save_checkpoint(self, generation: int) -> None:
+    def _save_checkpoint(self, generation: int) -> Optional[str]:
         try:
             from checkpoint_manager import save_full_checkpoint
 
             raw_config = getattr(self, '_raw_config', None)
-            save_full_checkpoint(
+            return save_full_checkpoint(
                 self, generation, self.config,
                 raw_config=raw_config,
             )
@@ -944,6 +1287,10 @@ class MutaLambdaAgent:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
             logger.debug("Checkpoint saved: %s", path)
+            return path
+        except Exception as exc:
+            logger.warning("Checkpoint save failed: %s", exc)
+            return None
 
     def shutdown(self) -> None:
         self.evaluator.shutdown()

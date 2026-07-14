@@ -57,6 +57,12 @@ class Island:
         self._workflow_correctness_threshold: float = 1.0
         self._workflow_require_score_improvement: bool = False
         self._workflow_enforce_security: bool = True
+        # Deferred migration queue (applied at start of next generation).
+        self._pending_migrants: List[Individual] = []
+        self._baseline_code: str = ""
+        self._api_policy: str = "strict"
+        self._enforce_api_fingerprint: bool = False
+        self._enforce_differential: bool = False
 
         self.migration_bus.register_island(island_id, self)
 
@@ -83,18 +89,58 @@ class Island:
         self._workflow_enforce_security = bool(
             getattr(config, "workflow_enforce_security", True)
         )
+        self._api_policy = str(getattr(config, "target_api_policy", "strict") or "strict")
+        self._enforce_api_fingerprint = bool(
+            getattr(config, "enforce_api_fingerprint", False)
+        )
+        self._enforce_differential = bool(
+            getattr(config, "enforce_differential", False)
+        )
+        seeds = getattr(config, "seed_codes", None) or []
+        if seeds and not self._baseline_code:
+            self._baseline_code = seeds[0]
 
     def seed_population(self, codes: List[str]) -> None:
         """Inicializa la población con semillas de código."""
         self.population = [
             Individual(code=c) for c in codes[: self.config.population_size]
         ]
+        if codes and not self._baseline_code:
+            self._baseline_code = codes[0]
 
     def step(self) -> None:
-        """Un paso: evolución local + migración."""
+        """Un paso completo (compat): evolución local + migración inmediata.
+
+        Preferir el pipeline por fases del IslandPool (barreras de generación)
+        que separa evolve / stage / apply para evitar races.
+        """
+        self.step_local()
+        self.migration_bus.migrate(self.id, self.generation - 1)
+
+    def step_local(self) -> None:
+        """Fase local: aplicar migrantes pendientes → evolucionar (sin migrar)."""
+        self.apply_pending_migrants()
         self._evolve_local()
-        self.migration_bus.migrate(self.id, self.generation)
         self.generation += 1
+
+    def queue_migrant(self, individual: Individual) -> None:
+        """Encola un inmigrante para aplicarlo al inicio de la próxima generación."""
+        migrant = copy.deepcopy(individual)
+        migrant.score = float("-inf")
+        migrant.fitness = None
+        migrant.passed = False
+        self._pending_migrants.append(migrant)
+
+    def apply_pending_migrants(self) -> int:
+        """Aplica la cola de migrantes (Fase D). No evalúa mientras se muta la pop."""
+        if not self._pending_migrants:
+            return 0
+        count = 0
+        for migrant in self._pending_migrants:
+            self.receive_migrant(migrant)
+            count += 1
+        self._pending_migrants.clear()
+        return count
 
     def _evolve_local(self) -> None:
         """Evaluación → selección elitista → mutación."""
@@ -108,6 +154,9 @@ class Island:
             ind.score = res.score
             ind.fitness = res.fitness
             ind.passed = bool(res.passed and res.fitness.correctness >= 1.0)
+
+        # Operator bandit feedback from this generation's evaluations (WF#17).
+        self._update_operator_bandit(results)
 
         pattern_memory = getattr(self.migration_bus, "pattern_memory", None)
         if pattern_memory is not None:
@@ -132,15 +181,29 @@ class Island:
         if (self.migration_bus is not None
                 and getattr(self.migration_bus, "lineage_graph", None) is not None
                 and self.generation > 0):
+            lineage = self.migration_bus.lineage_graph
+            # Resolve real parent code from current population or lineage store.
+            pop_by_id = {p.id: p for p in self.population}
             for ind in self.population:
                 if ind.parent_ids:
                     try:
-                        parents = [
-                            Individual(id=pid, code="")
-                            for pid in ind.parent_ids
-                        ]
+                        parents = []
+                        for pid in ind.parent_ids:
+                            if pid in pop_by_id:
+                                parents.append(pop_by_id[pid])
+                            elif pid in getattr(lineage, "nodes", {}):
+                                node = lineage.nodes[pid]
+                                parents.append(
+                                    Individual(
+                                        id=pid,
+                                        code=node.code or "",
+                                        score=node.score,
+                                    )
+                                )
+                            else:
+                                parents.append(Individual(id=pid, code=""))
                         reason = getattr(ind, "creation_reason", "mutation")
-                        self.migration_bus.lineage_graph.record(
+                        lineage.record(
                             ind, parents, self.generation, self.id, reason=reason,
                         )
                     except Exception as exc:
@@ -181,7 +244,6 @@ class Island:
 
         new_pop: List[Individual] = list(elites)
         while len(new_pop) < self.config.population_size:
-            strategy = "mutation"
             if use_nsga2 and len(elites) >= 2 and random.random() < 0.7:
                 parents = nsga2_tournament_select(elites, 1)
                 parent = parents[0] if parents else random.choice(elites)
@@ -189,22 +251,28 @@ class Island:
                 parent = random.choice(elites)
 
             child_parents: List[Individual] = [parent]
-            if parent.score < 0 and random.random() < 0.10:
-                strategy = "redesign"
+            strategy = self._select_operator_strategy(parent, elites)
+            if strategy == "redesign":
                 mutated_code = self._redesign(parent.code, parent.score)
-            elif random.random() < 0.15 and len(elites) >= 2:
+            elif strategy == "crossover":
                 mate_candidates = [e for e in elites if e.id != parent.id]
                 if mate_candidates:
-                    strategy = "crossover"
                     other = random.choice(mate_candidates)
                     mutated_code = self._crossover(parent.code, other.code)
                     child_parents.append(other)
                 else:
+                    strategy = "mutation"
                     error_info = error_map.get(parent.id, "")
                     mutated_code = self._mutate_with_context(
                         parent.code, parent.score, error_info
                     )
+            elif strategy == "ast":
+                from evolution_engine import ASTMutator
+
+                mutated_code = ASTMutator.apply_random_mutation(parent.code)
             else:
+                # llm / mutation — context-aware LLM path with AST fallback
+                strategy = "llm" if strategy == "llm" else "mutation"
                 error_info = error_map.get(parent.id, "")
                 mutated_code = self._mutate_with_context(
                     parent.code, parent.score, error_info
@@ -217,9 +285,81 @@ class Island:
                 strategy=strategy,
                 candidate_index=len(new_pop),
             )
+            # Bandit arm label (do not clobber workflow creation_reason like mutation_retry).
+            setattr(child, "operator", strategy)
+            if child_parents:
+                setattr(child, "parent_score", float(parent.score))
             new_pop.append(child)
 
         self.population = new_pop
+
+    def _select_operator_strategy(
+        self, parent: Individual, elites: List[Individual]
+    ) -> str:
+        """Choose redesign/crossover/mutation/ast via bandit or legacy heuristic."""
+        bandit = getattr(self.migration_bus, "operator_bandit", None)
+        if bandit is not None:
+            try:
+                op = bandit.select()
+                # Map bandit arms to island strategies.
+                if op == "redesign":
+                    return "redesign"
+                if op == "crossover" and len(elites) >= 2:
+                    return "crossover"
+                if op == "ast":
+                    return "ast"
+                return "llm"  # treated as mutation+LLM path
+            except Exception:
+                pass
+        # Legacy heuristic (workflow default before bandit).
+        if parent.score < 0 and random.random() < 0.10:
+            return "redesign"
+        if random.random() < 0.15 and len(elites) >= 2:
+            return "crossover"
+        return "mutation"
+
+    def _update_operator_bandit(self, results: List[Any]) -> None:
+        """Credit operators from evaluated individuals (WF#17 rewards)."""
+        bandit = getattr(self.migration_bus, "operator_bandit", None)
+        if bandit is None:
+            return
+        try:
+            from operator_bandit import compute_operator_reward
+        except Exception:
+            return
+        for ind, res in zip(self.population, results):
+            op = getattr(ind, "operator", None) or getattr(ind, "creation_reason", None)
+            if not op or op in {"seed", "laboratory"}:
+                continue
+            # Normalize labels to bandit arms
+            if op == "mutation":
+                op = "llm"
+            syntax_fail = bool(res.timed_out or (res.stderr and "Syntax" in res.stderr))
+            correct = bool(res.passed and res.fitness.correctness >= 1.0)
+            parent_score = float(getattr(ind, "parent_score", float("-inf")))
+            gain = 0.0
+            improved = False
+            if correct and parent_score != float("-inf"):
+                gain = float(res.score - parent_score)
+                improved = gain > 0
+            elif correct and ind.score > float("-inf"):
+                improved = True
+            reward = compute_operator_reward(
+                syntax_or_security_failure=syntax_fail and not correct,
+                correct=correct,
+                improved=improved,
+                gain=max(0.0, gain) if improved else 0.0,
+            )
+            try:
+                bandit.update(
+                    op,
+                    reward,
+                    valid=correct and not syntax_fail,
+                    improved=improved,
+                    gain=gain,
+                )
+            except Exception:
+                pass
 
     def _mutate(self, code: str) -> str:
         """Mutación híbrida: AST o LLM."""
@@ -363,8 +503,10 @@ class Island:
                     ProtocolStage("generate_candidate", self._stage_generate_candidate),
                     ProtocolStage("build_gate", self._stage_build_gate),
                     ProtocolStage("security_gate", self._stage_security_gate),
+                    ProtocolStage("api_gate", self._stage_api_gate),
                     ProtocolStage("evaluate_candidate", self._stage_evaluate_candidate),
                     ProtocolStage("tests_gate", self._stage_tests_gate),
+                    ProtocolStage("differential_gate", self._stage_differential_gate),
                     ProtocolStage("performance_gate", self._stage_performance_gate),
                     ProtocolStage("decision_gate", self._stage_decision_gate),
                 ]
@@ -468,6 +610,53 @@ class Island:
             artifacts={"candidate_ref": artifact_ref(code)},
         )
 
+    def _stage_api_gate(self, context: Dict[str, Any]):
+        """Reject candidates that break the baseline public API (ML-F03)."""
+        code = context["candidate_code"]
+        attempt = context["attempt"]
+        if not self._enforce_api_fingerprint or not self._baseline_code:
+            return make_stage_result(
+                "api_gate",
+                PASS,
+                "api fingerprint gate disabled or no baseline",
+                metadata={"attempt": attempt, "enforced": False},
+                artifacts={"candidate_ref": artifact_ref(code)},
+            )
+        try:
+            from api_fingerprint import compare_api, extract_api_fingerprint
+
+            base_fp = extract_api_fingerprint(self._baseline_code)
+            cand_fp = extract_api_fingerprint(code)
+            result = compare_api(base_fp, cand_fp, policy=self._api_policy)
+            context["api_result"] = result
+            if not result.compatible:
+                return make_stage_result(
+                    "api_gate",
+                    RETRYABLE_FAIL,
+                    "api fingerprint incompatible",
+                    metadata={
+                        "attempt": attempt,
+                        "policy": self._api_policy,
+                        **result.to_dict(),
+                    },
+                    artifacts={"candidate_ref": artifact_ref(code)},
+                )
+            return make_stage_result(
+                "api_gate",
+                PASS,
+                "api fingerprint compatible",
+                metadata={"attempt": attempt, "policy": self._api_policy},
+                artifacts={"candidate_ref": artifact_ref(code)},
+            )
+        except Exception as exc:
+            return make_stage_result(
+                "api_gate",
+                RETRYABLE_FAIL,
+                f"api gate error: {exc}",
+                metadata={"attempt": attempt},
+                artifacts={"candidate_ref": artifact_ref(code)},
+            )
+
     def _stage_evaluate_candidate(self, context: Dict[str, Any]):
         code = context["candidate_code"]
         attempt = context["attempt"]
@@ -507,6 +696,48 @@ class Island:
             },
             artifacts={"stderr_preview": result.stderr[:120]},
         )
+
+    def _stage_differential_gate(self, context: Dict[str, Any]):
+        """Compare candidate vs baseline on the same inputs (ML-M03)."""
+        code = context["candidate_code"]
+        attempt = context["attempt"]
+        if not self._enforce_differential or not self._baseline_code:
+            return make_stage_result(
+                "differential_gate",
+                PASS,
+                "differential gate disabled or no baseline",
+                metadata={"attempt": attempt, "enforced": False},
+                artifacts={"candidate_ref": artifact_ref(code)},
+            )
+        try:
+            from differential import differential_test
+
+            cases = list(getattr(self.evaluator, "test_cases", []) or [])
+            diff = differential_test(self._baseline_code, code, cases)
+            context["differential_result"] = diff
+            if not diff.equivalent:
+                return make_stage_result(
+                    "differential_gate",
+                    RETRYABLE_FAIL,
+                    f"differential mismatch {diff.mismatches}/{diff.compared}",
+                    metadata={"attempt": attempt, **diff.to_dict()},
+                    artifacts={"candidate_ref": artifact_ref(code)},
+                )
+            return make_stage_result(
+                "differential_gate",
+                PASS,
+                f"differential OK ({diff.compared} cases)",
+                metadata={"attempt": attempt, "compared": diff.compared},
+                artifacts={"candidate_ref": artifact_ref(code)},
+            )
+        except Exception as exc:
+            return make_stage_result(
+                "differential_gate",
+                RETRYABLE_FAIL,
+                f"differential error: {exc}",
+                metadata={"attempt": attempt},
+                artifacts={"candidate_ref": artifact_ref(code)},
+            )
 
     def _stage_performance_gate(self, context: Dict[str, Any]):
         result = context["candidate_result"]

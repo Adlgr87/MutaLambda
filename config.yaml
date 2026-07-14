@@ -12,6 +12,10 @@ evolution:
   early_stop_patience: 15     # Generaciones sin mejora para parada temprana
   early_stop_delta: 0.001     # Mejora relativa mínima (0 = desactivado)
   novelty_alpha: 0.15         # Peso del bonus de novedad (0.0–1.0)
+  fitness_normalize: true     # gains vs baseline (latency/throughput/memory)
+  operator_bandit:
+    enabled: false            # UCB1 adaptive operator selection
+    strategy: ucb1            # ucb1 | epsilon_greedy
 
   # ── Convergent Evolution Boost ──────────────────────────────────
   convergent_boost:
@@ -39,6 +43,8 @@ workflow:
   correctness_threshold: 1.0    # Umbral de tests/correctitud para promoción
   require_score_improvement: false  # Si true, rechaza candidatos peores que su padre
   enforce_security: true        # Bloquea eval/exec/subprocess/os.system en candidatos
+  enforce_api_fingerprint: false  # Requiere target.seed / baseline API
+  enforce_differential: false   # Compara outputs vs baseline en los mismos inputs
   trace_limit: 200              # Máximo de trazas recientes retenidas en métricas
 
 # ── Evolution Upgrade v2.0 (opt-in) ─────────────────────────────────
@@ -73,10 +79,39 @@ population:
   migration_interval: 10      # Cada cuántas generaciones migrar
   migrants_per_island: 2      # Cuántos emigrantes por isla
 
+# ── Target (código a evolucionar) ───────────────────────────────────
+target:
+  source_file: examples/target.py
+  entrypoint: solution
+  task: "Improve solution while preserving behavior"
+  tests_file: examples/target_tests.json
+  benchmark_file: examples/target_benchmark.json
+  api_policy: strict          # strict | relaxed
+  enforce_api_fingerprint: false
+  enforce_differential: false
+
+# ── Benchmark estadístico (ML-F04/F05) ──────────────────────────────
+benchmark:
+  warmups: 0                  # 0 = single-shot (dev); 5+ for real p50/p99
+  samples: 1                  # >1 enables multi-sample percentiles
+  operations_per_case: 1
+
+# ── Privacy / LLM egress ────────────────────────────────────────────
+privacy:
+  allow_external_llm: false   # true only if code may leave the host
+  redact_secrets: true
+  allowed_backends:
+    - ollama
+
 # ── Sandbox ─────────────────────────────────────────────────────────
 sandbox:
   timeout_sec: 10.0           # Timeout por evaluación (segundos)
   max_workers: 4              # Workers paralelos en ProcessPoolExecutor
+  # subprocess = local dev only (NOT a security boundary).
+  # container  = recommended for untrusted candidates (Docker/Podman).
+  runner: subprocess          # subprocess | container | microvm
+  allow_expression_eval: false  # expression/assert via eval (dev only)
+  enforce_ast_scan: false     # early AST filter (not a security boundary)
 
 # ── HFC / Ligas evolutivas ─────────────────────────────────────────
 hfc:
@@ -95,6 +130,7 @@ archive:
   max_size: 10000             # Máximo de soluciones en el archivo
   prune_threshold: 50         # Purgas diferidas antes de rebuild
   embedder_model: all-MiniLM-L6-v2  # Modelo de sentence-transformers
+  dedupe_similarity: 0.98     # No insertar vecinos semánticos por encima del umbral
 
 # ── Evolución de prompts ────────────────────────────────────────────
 prompt_evolution:
@@ -120,6 +156,11 @@ llm:
   model: llama3.2:3b          # Nombre del modelo en el backend seleccionado
   timeout_sec: 60.0           # Timeout por llamada al LLM
   temperature: 0.2            # Temperatura de generación para APIs compatibles
+  max_retries: 3              # exponential backoff retries
+  max_calls_per_generation: 20  # 0 = unlimited
+  max_total_calls: 1000         # 0 = unlimited
+  prompt_evolution_interval: 5
+  replay_log: checkpoints/llm_replay.jsonl
   # Variables opcionales:
   #   MUTALAMBDA_OLLAMA_URL, MUTALAMBDA_OPENAI_URL, MUTALAMBDA_ANTHROPIC_URL,
   #   MUTALAMBDA_OPENROUTER_URL, MUTALAMBDA_MISTRAL_URL, MUTALAMBDA_LLM_TIMEOUT_SEC,

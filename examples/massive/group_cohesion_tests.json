@@ -1,0 +1,32 @@
+[
+  {
+    "function": "calculate_group_cohesion",
+    "args": [[1.0, 1.0, 1.0]],
+    "expected": 1.0,
+    "comparison": "float_close"
+  },
+  {
+    "function": "calculate_group_cohesion",
+    "args": [[-1.0, 1.0]],
+    "expected": 0.0,
+    "comparison": "float_close"
+  },
+  {
+    "function": "calculate_group_cohesion",
+    "args": [[0.0]],
+    "expected": 1.0,
+    "comparison": "float_close"
+  },
+  {
+    "function": "calculate_group_cohesion",
+    "args": [[]],
+    "expected": 0.0,
+    "comparison": "float_close"
+  },
+  {
+    "function": "calculate_group_cohesion",
+    "args": [[0.5, 0.5, 0.0]],
+    "expected": 0.8333333333,
+    "comparison": "float_close"
+  }
+]

@@ -47,8 +47,12 @@ def cli(ctx):
 @click.option('--generations', '-g', type=int, default=50, help='Número de generaciones')
 @click.option('--animation', '-a', type=click.Choice(['retro', 'minimal', 'none']), default='retro', help='Estilo de animación')
 @click.option('--verbose', '-v', is_flag=True, help='Output detallado')
+@click.option('--source', type=click.Path(exists=True), help='Código semilla a evolucionar')
+@click.option('--tests', type=click.Path(exists=True), help='Casos de prueba JSON declarativos')
+@click.option('--task', type=str, default=None, help='Descripción de la tarea evolutiva')
+@click.option('--allow-untested', is_flag=True, help='Permitir corridas sin tests (solo desarrollo)')
 @click.pass_context
-def run(ctx, config, generations, animation, verbose):
+def run(ctx, config, generations, animation, verbose, source, tests, task, allow_untested):
     """🚀 Ejecutar corrida evolutiva completa."""
     cli_instance = ctx.obj['cli']
     success = cli_instance.run_evolution(
@@ -56,6 +60,10 @@ def run(ctx, config, generations, animation, verbose):
         generations=generations,
         animation=animation,
         verbose=verbose,
+        source=source,
+        tests=tests,
+        task=task,
+        allow_untested=allow_untested,
     )
     sys.exit(0 if success else 1)
 
@@ -222,6 +230,137 @@ def checkpoints(ctx, list_mode, clean, max_age):
             cli_instance.checkpoint_manager.display_checkpoints(chk_list)
         else:
             console.print("[dim]No hay checkpoints. Ejecuta 'run' para crearlos.[/dim]")
+
+
+# ============================================================================
+# DOCTOR
+# ============================================================================
+@cli.command()
+@click.option('--config', '-c', type=click.Path(exists=True), help='Config YAML opcional')
+@click.pass_context
+def doctor(ctx, config):
+    """🩺 Validar entorno, backend LLM, runner y dependencias."""
+    import importlib
+    import shutil
+
+    ok = True
+    console.print("[bold]MutaLambda doctor[/bold]\n")
+
+    # Python
+    console.print(f"Python: {sys.version.split()[0]}")
+
+    # Core imports
+    try:
+        import muta_lambda  # noqa: F401
+        from sandbox import SandboxEvaluator  # noqa: F401
+        from runners import create_runner  # noqa: F401
+        console.print("[green]✓ core imports[/green]")
+    except Exception as e:
+        console.print(f"[red]✗ core imports: {e}[/red]")
+        ok = False
+
+    # Optional deps
+    for name, mod in [
+        ("click", "click"),
+        ("rich", "rich"),
+        ("numpy", "numpy"),
+        ("pydantic", "pydantic"),
+        ("yaml", "yaml"),
+        ("faiss", "faiss"),
+        ("sentence-transformers", "sentence_transformers"),
+    ]:
+        try:
+            importlib.import_module(mod)
+            console.print(f"[green]✓ {name}[/green]")
+        except Exception:
+            console.print(f"[yellow]· {name} missing (optional or install extras)[/yellow]")
+
+    # Container engines (recommended isolation for untrusted candidates)
+    has_container = False
+    for eng in ("docker", "podman"):
+        path = shutil.which(eng)
+        if path:
+            console.print(f"[green]✓ {eng} at {path}[/green]")
+            has_container = True
+        else:
+            console.print(f"[dim]· {eng} not found[/dim]")
+    if has_container:
+        console.print(
+            "[green]✓ container runner available[/green] "
+            "[dim](set sandbox.runner: container for hardened isolation)[/dim]"
+        )
+    else:
+        console.print(
+            "[yellow]! no container engine — only sandbox.runner=subprocess "
+            "(local dev; not a security boundary)[/yellow]"
+        )
+
+    # Unified config validation
+    backend = "ollama"
+    model = "llama3.2:3b"
+    runner = "subprocess"
+    if config:
+        try:
+            from muta_config import MutaLambdaConfig
+
+            ml = MutaLambdaConfig.from_yaml(config)
+            backend = ml.llm.backend
+            model = ml.llm.model
+            runner = ml.sandbox.runner
+            console.print("[green]✓ MutaLambdaConfig (Pydantic) valid[/green]")
+            console.print(f"[dim]{ml.recommended_runner_message()}[/dim]")
+            if (
+                not ml.privacy.allow_external_llm
+                and backend not in ("ollama",)
+            ):
+                console.print(
+                    f"[yellow]! privacy.allow_external_llm=false but "
+                    f"llm.backend={backend}[/yellow]"
+                )
+                ok = False
+            if runner in {"container", "docker", "podman"} and not has_container:
+                console.print(
+                    "[red]✗ config requests container runner but docker/podman missing[/red]"
+                )
+                ok = False
+        except Exception as e:
+            console.print(f"[yellow]! config load/validate warning: {e}[/yellow]")
+            try:
+                from config_loader import load_yaml
+
+                cfg = load_yaml(config)
+                backend = cfg.get("llm", {}).get("backend", backend)
+                model = cfg.get("llm", {}).get("model", model)
+            except Exception as e2:
+                console.print(f"[red]✗ legacy config load failed: {e2}[/red]")
+                ok = False
+
+    console.print(f"LLM backend: {backend} / model: {model}")
+    console.print(f"Sandbox runner: {runner}")
+    if backend == "ollama":
+        try:
+            import requests
+
+            url = "http://127.0.0.1:11434/api/tags"
+            r = requests.get(url, timeout=2)
+            if r.ok:
+                console.print("[green]✓ ollama reachable[/green]")
+            else:
+                console.print(f"[yellow]! ollama HTTP {r.status_code}[/yellow]")
+                ok = False
+        except Exception as e:
+            console.print(f"[yellow]! ollama not reachable: {e}[/yellow]")
+            ok = False
+
+    # MASSIVE is a separate project; MutaLambda only optimizes pure targets via adapter.
+    console.print(
+        "\n[dim]MASSIVE note: external consumer project "
+        "(https://github.com/Adlgr87/MASSIVE). "
+        "Use massive_adapter.MassiveTargetAdapter against pure functions; "
+        "do not couple MutaLambda core to MASSIVE imports.[/dim]"
+    )
+
+    sys.exit(0 if ok else 1)
 
 
 if __name__ == '__main__':
