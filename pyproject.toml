@@ -86,6 +86,9 @@ py-modules = [
   "event_bus",
   "massive_adapter",
   "operator_bandit",
+  "extensions",
+  "fitness_normalize",
+  "rng_session",
 ]
 packages = ["cli", "muta_ext", "muta_ext.evaluation", "muta_ext.lineage", "muta_ext.mutation", "muta_ext.config", "muta_ext.diagnostics"]
 

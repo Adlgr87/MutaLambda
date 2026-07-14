@@ -12,6 +12,10 @@ evolution:
   early_stop_patience: 15     # Generaciones sin mejora para parada temprana
   early_stop_delta: 0.001     # Mejora relativa mínima (0 = desactivado)
   novelty_alpha: 0.15         # Peso del bonus de novedad (0.0–1.0)
+  fitness_normalize: true     # gains vs baseline (latency/throughput/memory)
+  operator_bandit:
+    enabled: false            # UCB1 adaptive operator selection
+    strategy: ucb1            # ucb1 | epsilon_greedy
 
   # ── Convergent Evolution Boost ──────────────────────────────────
   convergent_boost:
@@ -124,6 +128,7 @@ archive:
   max_size: 10000             # Máximo de soluciones en el archivo
   prune_threshold: 50         # Purgas diferidas antes de rebuild
   embedder_model: all-MiniLM-L6-v2  # Modelo de sentence-transformers
+  dedupe_similarity: 0.98     # No insertar vecinos semánticos por encima del umbral
 
 # ── Evolución de prompts ────────────────────────────────────────────
 prompt_evolution:

@@ -74,13 +74,28 @@ class LineageNode:
 
 
 class LineageGraph:
-    """DAG que registra la genealogía completa de una corrida evolutiva."""
+    """DAG que registra la genealogía completa de una corrida evolutiva.
+
+    Mantiene índices de adyacencia ``parents_of`` / ``children_of`` (ML-L02)
+    para BFS O(E) en lugar de barridos O(N²) sobre todos los nodos.
+    """
 
     def __init__(self) -> None:
         self.nodes: Dict[str, LineageNode] = {}
         self._roots: List[str] = []
         self._gen_map: Dict[int, List[str]] = {}
         self._resurrection_count: int = 0
+        # Adjacency indexes (id → list of related ids)
+        self.parents_of: Dict[str, List[str]] = {}
+        self.children_of: Dict[str, List[str]] = {}
+
+    def _index_edge(self, parent_id: str, child_id: str) -> None:
+        self.parents_of.setdefault(child_id, [])
+        if parent_id not in self.parents_of[child_id]:
+            self.parents_of[child_id].append(parent_id)
+        self.children_of.setdefault(parent_id, [])
+        if child_id not in self.children_of[parent_id]:
+            self.children_of[parent_id].append(child_id)
 
     def record(
         self,
@@ -94,12 +109,14 @@ class LineageGraph:
         for parent in parents:
             parent_exists = parent.id in self.nodes
             if not parent_exists:
+                # Prefer real parent code when available (ML-L03).
+                p_code = parent.code or ""
                 p_node = LineageNode(
                     id=parent.id,
                     generation=max(0, generation - 1),
                     score=parent.score,
-                    code_hash=stable_code_hash(parent.code),
-                    code=parent.code,
+                    code_hash=stable_code_hash(p_code) if p_code else "",
+                    code=p_code,
                     fitness=(parent.fitness.to_dict() if parent.fitness else {}),
                     island_id=island_id,
                     parent_ids=parent.parent_ids or [],
@@ -109,6 +126,12 @@ class LineageGraph:
                 self._gen_map.setdefault(p_node.generation, []).append(parent.id)
                 if not parent.parent_ids:
                     self._roots.append(parent.id)
+                self.parents_of.setdefault(parent.id, list(parent.parent_ids or []))
+                self.children_of.setdefault(parent.id, [])
+            elif parent.code and not self.nodes[parent.id].code:
+                # Fill placeholder empty code if we later see the real parent.
+                self.nodes[parent.id].code = parent.code
+                self.nodes[parent.id].code_hash = stable_code_hash(parent.code)
 
         child_node = LineageNode(
             id=child.id,
@@ -125,16 +148,19 @@ class LineageGraph:
         )
         self.nodes[child.id] = child_node
         self._gen_map.setdefault(generation, []).append(child.id)
-
+        self.parents_of[child.id] = [p.id for p in parents]
+        self.children_of.setdefault(child.id, [])
         for parent in parents:
+            self._index_edge(parent.id, child.id)
             pn = self.nodes.get(parent.id)
             if pn:
                 pn.alive = False
+                pn.survived_last_generation = False
 
         return child_node
 
     def get_ancestors(self, node_id: str, max_depth: int = -1) -> List[str]:
-        """Cadena de ancestros (BFS hacia atrás)."""
+        """Cadena de ancestros (BFS hacia atrás vía parents_of)."""
         if node_id not in self.nodes:
             return []
         ancestors: List[str] = []
@@ -143,10 +169,11 @@ class LineageGraph:
         depth = 0
         while queue and (max_depth < 0 or depth < max_depth):
             current = queue.pop(0)
-            node = self.nodes.get(current)
-            if not node:
-                continue
-            for pid in node.parent_ids:
+            parents = self.parents_of.get(current)
+            if parents is None:
+                node = self.nodes.get(current)
+                parents = list(node.parent_ids) if node else []
+            for pid in parents:
                 if pid not in visited:
                     visited.add(pid)
                     ancestors.append(pid)
@@ -154,8 +181,26 @@ class LineageGraph:
             depth += 1
         return ancestors
 
+    def get_descendants(self, node_id: str, max_depth: int = -1) -> List[str]:
+        """BFS hacia adelante vía children_of."""
+        if node_id not in self.nodes:
+            return []
+        out: List[str] = []
+        visited: set = {node_id}
+        queue: List[str] = [node_id]
+        depth = 0
+        while queue and (max_depth < 0 or depth < max_depth):
+            current = queue.pop(0)
+            for cid in self.children_of.get(current, []):
+                if cid not in visited:
+                    visited.add(cid)
+                    out.append(cid)
+                    queue.append(cid)
+            depth += 1
+        return out
+
     def get_genealogical_distance(self, id_a: str, id_b: str) -> Optional[int]:
-        """Distancia genealógica (BFS bidireccional en DAG no dirigido)."""
+        """Distancia genealógica (BFS no dirigido sobre índices)."""
         if id_a == id_b:
             return 0
         if id_a not in self.nodes or id_b not in self.nodes:
@@ -166,14 +211,12 @@ class LineageGraph:
 
         while queue:
             current, dist = queue.pop(0)
-            node = self.nodes.get(current)
-            if not node:
-                continue
-
-            neighbors = list(node.parent_ids)
-            for nid, nnode in self.nodes.items():
-                if current in nnode.parent_ids:
-                    neighbors.append(nid)
+            parents = self.parents_of.get(current)
+            if parents is None:
+                node = self.nodes.get(current)
+                parents = list(node.parent_ids) if node else []
+            children = self.children_of.get(current, [])
+            neighbors = list(parents) + list(children)
 
             for neighbor in neighbors:
                 if neighbor == id_b:
@@ -267,6 +310,13 @@ class LineageGraph:
                 resurrected=ndata.get("resurrected", False),
             )
             graph.nodes[nid] = node
+            graph.parents_of[nid] = list(ndata.get("parent_ids", []))
+            graph.children_of.setdefault(nid, [])
+        for nid, node in graph.nodes.items():
+            for pid in node.parent_ids:
+                graph.children_of.setdefault(pid, [])
+                if nid not in graph.children_of[pid]:
+                    graph.children_of[pid].append(nid)
         graph._roots = data.get("roots", [])
         graph._gen_map = data.get("gen_map", {})
         graph._resurrection_count = data.get("resurrection_count", 0)

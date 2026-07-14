@@ -178,15 +178,29 @@ class Island:
         if (self.migration_bus is not None
                 and getattr(self.migration_bus, "lineage_graph", None) is not None
                 and self.generation > 0):
+            lineage = self.migration_bus.lineage_graph
+            # Resolve real parent code from current population or lineage store.
+            pop_by_id = {p.id: p for p in self.population}
             for ind in self.population:
                 if ind.parent_ids:
                     try:
-                        parents = [
-                            Individual(id=pid, code="")
-                            for pid in ind.parent_ids
-                        ]
+                        parents = []
+                        for pid in ind.parent_ids:
+                            if pid in pop_by_id:
+                                parents.append(pop_by_id[pid])
+                            elif pid in getattr(lineage, "nodes", {}):
+                                node = lineage.nodes[pid]
+                                parents.append(
+                                    Individual(
+                                        id=pid,
+                                        code=node.code or "",
+                                        score=node.score,
+                                    )
+                                )
+                            else:
+                                parents.append(Individual(id=pid, code=""))
                         reason = getattr(ind, "creation_reason", "mutation")
-                        self.migration_bus.lineage_graph.record(
+                        lineage.record(
                             ind, parents, self.generation, self.id, reason=reason,
                         )
                     except Exception as exc:

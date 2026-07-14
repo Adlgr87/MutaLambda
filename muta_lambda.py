@@ -72,6 +72,8 @@ from models import (
 )
 from prompt_evolver import PromptEvolver
 from sandbox import SandboxEvaluator
+from extensions import ExtensionRegistry, ExtensionContext
+from rng_session import RNGSession
 from event_bus import (
     EventBus,
     CommandQueue,
@@ -165,6 +167,11 @@ class EvolveConfig:
     llm_max_calls_per_generation: int = 0
     llm_max_total_calls: int = 0
     llm_replay_log: str = ""
+    master_seed: Optional[int] = None
+    operator_bandit_enabled: bool = False
+    operator_bandit_strategy: str = "ucb1"
+    fitness_normalize: bool = True
+    archive_dedupe_similarity: float = 0.98
     privacy_redact_secrets: bool = True
     target_source_file: str = ""
     target_entrypoint: str = ""
@@ -585,6 +592,26 @@ class MutaLambdaAgent:
         self.event_bus = EventBus()
         self.commands = CommandQueue()
         self._generation_completed: int = 0
+        self.extensions = ExtensionRegistry()
+        seed = getattr(config, "master_seed", None)
+        if seed is None:
+            seed = getattr(config, "seed", None)
+        self.rng_session = RNGSession(master_seed=seed)
+        self._baseline_fitness = None
+        self._operator_bandit = None
+        if getattr(config, "operator_bandit_enabled", False):
+            from operator_bandit import OperatorBandit
+            self._operator_bandit = OperatorBandit(
+                operators=["ast", "llm", "crossover", "redesign"],
+                strategy=getattr(config, "operator_bandit_strategy", "ucb1"),
+                rng=self.rng_session.stream("bandit"),
+            )
+        # Register optional engines as extensions when present
+        for eng in (self._hfc, getattr(self, "_thc_engine", None),
+                    getattr(self, "_dialectic_engine", None),
+                    getattr(self, "_pattern_memory", None)):
+            if eng is not None:
+                self.extensions.register(eng)
 
     def _island_llm_fn(self, prompt: str) -> str:
         """LLM callable used by islands; steered by best evolved prompt if available."""
@@ -889,6 +916,18 @@ class MutaLambdaAgent:
             run_id=self.run_id,
             generation=gen,
         )
+        ext_ctx = ExtensionContext(
+            generation=gen,
+            run_id=self.run_id,
+            task=task,
+            islands=list(self.islands),
+            best=self._global_best,
+        )
+        self.extensions.on_generation_start(ext_ctx)
+        # Reset per-generation LLM budget when available
+        backend = getattr(self, "_llm_backend", None)
+        if backend is not None and hasattr(backend, "reset_generation_budget"):
+            backend.reset_generation_budget()
 
         if self._hfc is not None:
             hfc_snapshot = self._hfc.step(
@@ -1065,6 +1104,9 @@ class MutaLambdaAgent:
 
         self._current_generation = gen + 1
         self._generation_completed = gen + 1
+        ext_ctx.best = self._global_best
+        ext_ctx.metadata["combined_best_score"] = current_combined_score
+        self.extensions.on_generation_end(ext_ctx)
         self.event_bus.emit(
             GENERATION_COMPLETED,
             {
@@ -1073,6 +1115,7 @@ class MutaLambdaAgent:
                 "combined_best_score": current_combined_score,
                 "should_stop": should_stop,
                 "snapshots": len(island_snapshots),
+                "extension_metrics": self.extensions.all_metrics(),
             },
             run_id=self.run_id,
             generation=gen + 1,
