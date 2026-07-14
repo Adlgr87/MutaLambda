@@ -525,23 +525,50 @@ class MutaLambdaCLI:
         additional_gens: int = 50,
         animation: str = 'retro'
     ) -> bool:
-        """Resume evolution from checkpoint"""
+        """Resume evolution from a core or CLI checkpoint (JSON only)."""
 
         console.print(f"[cyan]Loading checkpoint: {checkpoint_path}[/cyan]")
+        path = Path(checkpoint_path)
 
-        # Load checkpoint
+        # Prefer core checkpoint_manager when format matches.
+        core_ckpt = None
+        try:
+            candidate = path
+            if path.is_dir():
+                candidate = path / "checkpoint.json"
+            if candidate.exists() and candidate.suffix == ".json":
+                raw = candidate.read_text(encoding="utf-8")
+                data = json.loads(raw)
+                if data.get("format") == "mutalambda-core-json" or "island_populations" in data:
+                    core_ckpt = candidate
+        except Exception:
+            core_ckpt = None
+
+        if core_ckpt is not None:
+            return self._resume_from_core_checkpoint(core_ckpt, additional_gens, animation)
+
+        # Fallback: CLI lightweight JSON checkpoints
         checkpoint_data = self.checkpoint_manager.load(checkpoint_path)
         if not checkpoint_data:
             console.print("[red]Failed to load checkpoint[/red]")
             return False
 
-        console.print(f"[green]✓ Loaded checkpoint from generation {checkpoint_data['generation']}[/green]")
-        console.print(f"[green]✓ Best score: {checkpoint_data['best_score']:.4f}[/green]")
+        gen = checkpoint_data.get("generation", 0)
+        best = checkpoint_data.get("best_score", 0.0)
+        console.print(f"[green]✓ Loaded CLI checkpoint from generation {gen}[/green]")
+        console.print(f"[green]✓ Best score: {best}[/green]")
+        console.print(
+            "[yellow]Note: CLI lightweight checkpoints restore generation metadata only; "
+            "use core checkpoints (checkpoints/chk_gen*/checkpoint.json) for full resume.[/yellow]"
+        )
         console.print()
 
-        # Recreate agent with checkpoint state
-        config = checkpoint_data.get('config', self.config_manager.get_default())
+        config = checkpoint_data.get("config") or self.config_manager.get_default()
         self.current_config = config
+        if not self._prepare_target(source=None, tests=None, task=None):
+            # Allow resume of lightweight ckpt with allow_untested if no tests
+            if not self._test_cases:
+                self._allow_untested = True
 
         evolve_config = self._create_evolve_config(config, additional_gens)
         if not evolve_config:
@@ -551,27 +578,110 @@ class MutaLambdaCLI:
         if not self.agent:
             return False
 
-        # Restore state from checkpoint
-        self._restore_agent_state(checkpoint_data)
-
+        self.agent._current_generation = int(gen)
+        self.agent._generation_completed = int(gen)
+        self.generation = int(gen)
         console.print(f"[cyan]Resuming for {additional_gens} additional generations...[/cyan]\n")
 
-        # Continue evolution
-        self.generation = checkpoint_data['generation']
-
-        if animation == 'retro':
+        if animation == "retro":
             return self._run_with_retro_animation(additional_gens, False)
-        elif animation == 'minimal':
+        if animation == "minimal":
             return self._run_minimal_animation(additional_gens, False)
-        else:
-            return self._run_no_animation(additional_gens, False)
+        return self._run_no_animation(additional_gens, False)
 
-    def _restore_agent_state(self, checkpoint_data: dict):
-        """Restore agent state from checkpoint"""
-        # Note: Full state restoration would require saving island populations
-        # For now, we just set the generation counter
-        # In production, you'd save/load full island state
-        pass
+    def _resume_from_core_checkpoint(
+        self,
+        checkpoint_path: Path,
+        additional_gens: int,
+        animation: str,
+    ) -> bool:
+        """Full restore via checkpoint_manager.resume_agent."""
+        try:
+            from checkpoint_manager import load_checkpoint, resume_agent
+            from muta_lambda import EvolveConfig
+        except Exception as e:
+            console.print(f"[red]Core resume unavailable: {e}[/red]")
+            return False
+
+        try:
+            cp = load_checkpoint(checkpoint_path)
+        except Exception as e:
+            console.print(f"[red]Failed to load core checkpoint: {e}[/red]")
+            return False
+
+        console.print(
+            f"[green]✓ Core checkpoint gen_completed={cp.generation_completed} "
+            f"current={cp.current_generation}[/green]"
+        )
+        console.print(f"[green]✓ Best score: {cp.best_score}[/green]")
+        console.print()
+
+        # Build config: prefer YAML if available, else defaults sized for additional gens.
+        if self.current_config is None:
+            self.current_config = self.config_manager.get_default()
+        evolve_config = self._create_evolve_config(self.current_config, additional_gens)
+        if not evolve_config:
+            evolve_config = EvolveConfig(
+                generations=cp.current_generation + additional_gens,
+                allow_untested=True,
+                archive_solutions=False,
+                prompt_evolution=False,
+                checkpoint_enabled=True,
+            )
+        else:
+            # Ensure total horizon covers completed + additional
+            evolve_config.generations = max(
+                evolve_config.generations,
+                int(cp.current_generation) + int(additional_gens),
+            )
+
+        if not self._test_cases and not self._allow_untested:
+            self._allow_untested = True
+            evolve_config.allow_untested = True
+
+        try:
+            agent = resume_agent(
+                checkpoint_path,
+                evolve_config,
+                test_cases=self._test_cases,
+                llm_fn=None,
+            )
+        except Exception as e:
+            console.print(f"[red]resume_agent failed: {e}[/red]")
+            return False
+
+        self.agent = agent
+        self.generation = int(agent._current_generation)
+        console.print(
+            f"[cyan]Resuming from gen {agent._current_generation} "
+            f"for {additional_gens} additional generations...[/cyan]\n"
+        )
+
+        # Drive via step_generation so we don't double-count from 0.
+        try:
+            history = []
+            best_score = float(cp.best_score) if cp.best_score is not None else float("-inf")
+            start = int(agent._current_generation)
+            for i, gen in enumerate(range(start, start + additional_gens)):
+                self.generation = gen + 1
+                result = agent.step_generation(generation=gen, task=agent.task or self._task)
+                if result.best and result.best.score > best_score:
+                    best_score = result.best.score
+                history.append(best_score if best_score > float("-inf") else 0.0)
+                if animation == "minimal" and (i + 1) % 10 == 0:
+                    console.print(f"Gen {gen + 1} | Best: {best_score:.4f}")
+                if result.should_stop:
+                    break
+            agent.shutdown()
+            console.print(f"[green]✓ Resume complete — best={best_score:.4f}[/green]")
+            return True
+        except Exception as e:
+            console.print(f"[red]Resume run error: {e}[/red]")
+            try:
+                agent.shutdown()
+            except Exception:
+                pass
+            return False
 
     def run_mutation(
         self,

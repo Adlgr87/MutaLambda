@@ -19,6 +19,7 @@ import copy
 import json
 import logging
 import os
+from pathlib import Path
 import random
 import sys
 import time
@@ -71,6 +72,16 @@ from models import (
 )
 from prompt_evolver import PromptEvolver
 from sandbox import SandboxEvaluator
+from event_bus import (
+    EventBus,
+    CommandQueue,
+    GENERATION_STARTED,
+    GENERATION_COMPLETED,
+    CHECKPOINT_SAVED,
+    RUN_STARTED,
+    RUN_COMPLETED,
+    MIGRATION_APPLIED,
+)
 from workflow_protocol import ProtocolTrace
 
 
@@ -150,6 +161,10 @@ class EvolveConfig:
     benchmark_samples: int = 1
     benchmark_operations_per_case: int = 1
     privacy_allow_external_llm: bool = False
+    llm_max_retries: int = 3
+    llm_max_calls_per_generation: int = 0
+    llm_max_total_calls: int = 0
+    llm_replay_log: str = ""
     privacy_redact_secrets: bool = True
     target_source_file: str = ""
     target_entrypoint: str = ""
@@ -323,6 +338,28 @@ class GenerationResult:
     combined_best_score: float = float("-inf")
 
 
+
+
+class MutaLambdaSession:
+    """Context manager for construct → run → shutdown lifecycle (ML-E02)."""
+
+    def __init__(self, agent: "MutaLambdaAgent"):
+        self.agent = agent
+
+    def __enter__(self) -> "MutaLambdaAgent":
+        return self.agent
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        try:
+            self.agent.shutdown()
+        except Exception:
+            pass
+        return False
+
+    def run(self, task: str = "", **kwargs):
+        return self.agent.run(task=task, **kwargs)
+
+
 class MutaLambdaAgent:
     """Orquestador principal del ciclo evolutivo MutaLambda."""
 
@@ -350,10 +387,26 @@ class MutaLambdaAgent:
                 model=config.llm_model,
                 timeout_sec=config.llm_timeout_sec,
                 temperature=config.llm_temperature,
+                max_retries=int(getattr(config, "llm_max_retries", 3) or 3),
+                max_calls_per_generation=int(
+                    getattr(config, "llm_max_calls_per_generation", 0) or 0
+                ),
+                max_total_calls=int(getattr(config, "llm_max_total_calls", 0) or 0),
+                privacy_allow_external=bool(
+                    getattr(config, "privacy_allow_external_llm", True)
+                ),
+                replay_log_path=getattr(config, "llm_replay_log", None)
+                or (
+                    str(Path(config.checkpoint_dir) / "llm_replay.jsonl")
+                    if getattr(config, "checkpoint_enabled", False)
+                    else None
+                ),
             )
             if llm_fn is None
             else llm_fn
         )
+        # Keep backend instance when factory attached it.
+        self._llm_backend = getattr(self.llm_fn, "__self_backend__", None)
         self._base_llm_fn = self.llm_fn
         self._active_prompt_genome: Optional[PromptGenome] = None
 
@@ -529,6 +582,9 @@ class MutaLambdaAgent:
         self._global_best: Optional[Individual] = None
         self._current_generation: int = 0
         self._stopped: bool = False
+        self.event_bus = EventBus()
+        self.commands = CommandQueue()
+        self._generation_completed: int = 0
 
     def _island_llm_fn(self, prompt: str) -> str:
         """LLM callable used by islands; steered by best evolved prompt if available."""
@@ -808,8 +864,31 @@ class MutaLambdaAgent:
         if generation is None:
             generation = self._current_generation
         gen = int(generation)
+        self.commands.wait_if_paused()
+        if self.commands.stop_requested:
+            self._stopped = True
+            return GenerationResult(
+                generation=gen,
+                best=self._global_best,
+                snapshots=[],
+                should_stop=True,
+                combined_best_score=float("-inf"),
+            )
+        # Drain HITL/control commands
+        for cmd in self.commands.drain():
+            c = cmd.get("command")
+            if c == "inject_hint" and cmd.get("code"):
+                self.inject_hint(str(cmd["code"]))
+            elif c == "stop":
+                self.commands.stop_requested = True
         gen_start = time.perf_counter()
         island_snapshots: List[IslandSnapshot] = []
+        self.event_bus.emit(
+            GENERATION_STARTED,
+            {"generation": gen},
+            run_id=self.run_id,
+            generation=gen,
+        )
 
         if self._hfc is not None:
             hfc_snapshot = self._hfc.step(
@@ -966,7 +1045,14 @@ class MutaLambdaAgent:
             and self.config.checkpoint_interval > 0
             and (gen + 1) % self.config.checkpoint_interval == 0
         ):
-            self._save_checkpoint(gen + 1)
+            ckpt_path = self._save_checkpoint(gen + 1)
+            if ckpt_path:
+                self.event_bus.emit(
+                    CHECKPOINT_SAVED,
+                    {"path": ckpt_path, "generation": gen + 1},
+                    run_id=self.run_id,
+                    generation=gen + 1,
+                )
 
         should_stop = self._early_stop.update(current_combined_score)
         if should_stop:
@@ -978,6 +1064,22 @@ class MutaLambdaAgent:
             self._stopped = True
 
         self._current_generation = gen + 1
+        self._generation_completed = gen + 1
+        self.event_bus.emit(
+            GENERATION_COMPLETED,
+            {
+                "generation": gen + 1,
+                "best_score": current_score,
+                "combined_best_score": current_combined_score,
+                "should_stop": should_stop,
+                "snapshots": len(island_snapshots),
+            },
+            run_id=self.run_id,
+            generation=gen + 1,
+        )
+        if self.commands.stop_requested:
+            should_stop = True
+            self._stopped = True
         return GenerationResult(
             generation=gen + 1,
             best=self._global_best,
@@ -990,24 +1092,51 @@ class MutaLambdaAgent:
         """Alias CLI-compatible de ``step_generation``."""
         return self.step_generation(task=task)
 
-    def run(self, task: str = "") -> Individual:
+    def run(
+        self,
+        task: str = "",
+        *,
+        additional_generations: Optional[int] = None,
+        from_generation: Optional[int] = None,
+    ) -> Individual:
         if not task:
             task = self.task
         elif task != self.task:
             self.task = task
         self._start_time = time.perf_counter()
         self._stopped = False
-        self._current_generation = 0
+        self.commands.stop_requested = False
+        start_gen = (
+            int(from_generation)
+            if from_generation is not None
+            else int(getattr(self, "_current_generation", 0) or 0)
+        )
+        if additional_generations is not None:
+            end_gen = start_gen + max(0, int(additional_generations))
+        else:
+            # Fresh runs start at 0; resumed agents keep start_gen and run until config.generations
+            if start_gen > 0:
+                end_gen = max(start_gen, int(self.config.generations))
+            else:
+                end_gen = int(self.config.generations)
+                self._current_generation = 0
         logger.info(
-            "MutaLambda starting: run=%s %d islands × %d generations",
+            "MutaLambda starting: run=%s %d islands × gens [%d, %d)",
             self.run_id,
             self.config.num_islands,
-            self.config.generations,
+            start_gen,
+            end_gen,
+        )
+        self.event_bus.emit(
+            RUN_STARTED,
+            {"start_gen": start_gen, "end_gen": end_gen},
+            run_id=self.run_id,
+            generation=start_gen,
         )
 
         result: Optional[GenerationResult] = None
         try:
-            for gen in range(self.config.generations):
+            for gen in range(start_gen, end_gen):
                 result = self.step_generation(generation=gen, task=task)
                 if result.should_stop:
                     break
@@ -1020,18 +1149,28 @@ class MutaLambdaAgent:
                 total_time,
                 best.score if best else float("-inf"),
             )
+            self.event_bus.emit(
+                RUN_COMPLETED,
+                {
+                    "best_score": best.score if best else float("-inf"),
+                    "elapsed_sec": total_time,
+                    "generation_completed": getattr(self, "_generation_completed", 0),
+                },
+                run_id=self.run_id,
+                generation=getattr(self, "_generation_completed", -1),
+            )
             self.shutdown()
 
         if self._global_best is None:
             raise RuntimeError("Evolution produced no valid individuals.")
         return self._global_best
 
-    def _save_checkpoint(self, generation: int) -> None:
+    def _save_checkpoint(self, generation: int) -> Optional[str]:
         try:
             from checkpoint_manager import save_full_checkpoint
 
             raw_config = getattr(self, '_raw_config', None)
-            save_full_checkpoint(
+            return save_full_checkpoint(
                 self, generation, self.config,
                 raw_config=raw_config,
             )
@@ -1054,6 +1193,10 @@ class MutaLambdaAgent:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
             logger.debug("Checkpoint saved: %s", path)
+            return path
+        except Exception as exc:
+            logger.warning("Checkpoint save failed: %s", exc)
+            return None
 
     def shutdown(self) -> None:
         self.evaluator.shutdown()

@@ -149,9 +149,11 @@ llm:
   model: llama3.2:3b          # Nombre del modelo en el backend seleccionado
   timeout_sec: 60.0           # Timeout por llamada al LLM
   temperature: 0.2            # Temperatura de generación para APIs compatibles
-  max_calls_per_generation: 20
-  max_total_calls: 1000
+  max_retries: 3              # exponential backoff retries
+  max_calls_per_generation: 20  # 0 = unlimited
+  max_total_calls: 1000         # 0 = unlimited
   prompt_evolution_interval: 5
+  replay_log: checkpoints/llm_replay.jsonl
   # Variables opcionales:
   #   MUTALAMBDA_OLLAMA_URL, MUTALAMBDA_OPENAI_URL, MUTALAMBDA_ANTHROPIC_URL,
   #   MUTALAMBDA_OPENROUTER_URL, MUTALAMBDA_MISTRAL_URL, MUTALAMBDA_LLM_TIMEOUT_SEC,

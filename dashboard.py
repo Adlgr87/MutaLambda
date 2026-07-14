@@ -308,23 +308,75 @@ def integrate_hitl(
     """
     Wire HITL callbacks into a MutaLambdaAgent.
 
-    Nota:
-    - El core ya soporta `agent.inject_hint(code)` y luego lo inyecta
-      en el loop evolutivo via `_process_hitl_hints()`.
-    - Aquí hacemos integración segura usando esa API, evitando tocar
-      internamente `island.population` (frágil y dependiente del seed timing).
+    Prefer EventBus consumption when available (ML-UI04). Falls back to
+    wrapping ``run()`` for older agents.
     """
     if dashboard is None:
         dashboard = DashboardState()
 
+    # Subscribe to core events when EventBus is present.
+    bus = getattr(agent, "event_bus", None)
+    if bus is not None:
+        from event_bus import GENERATION_COMPLETED, RUN_COMPLETED
+
+        def _on_event(event) -> None:
+            if event.name == GENERATION_COMPLETED:
+                payload = event.payload or {}
+                island_data = payload.get("island_scores") or {}
+                dashboard.record_generation(
+                    gen=int(payload.get("generation", event.generation)),
+                    best_score=float(payload.get("best_score", float("-inf"))),
+                    diversity=float(payload.get("diversity", 0.0)),
+                    pareto_frontier_size=int(payload.get("pareto_size", 0)),
+                    island_data={int(k): float(v) for k, v in island_data.items()}
+                    if island_data
+                    else None,
+                )
+            elif event.name == RUN_COMPLETED and console:
+                print_console_dashboard(
+                    gen=int(event.payload.get("generation_completed", event.generation)),
+                    best_score=float(event.payload.get("best_score", 0.0)),
+                    diversity=0.0,
+                    pareto_size=0,
+                    island_scores={},
+                )
+
+        bus.subscribe(_on_event)
+
+    # Sync control plane: pause/resume/stop/hints via CommandQueue when present.
+    commands = getattr(agent, "commands", None)
+    if commands is not None:
+        original_add = dashboard.add_hint
+
+        def _add_hint(code: str) -> None:
+            original_add(code)
+            commands.push("inject_hint", code=code)
+
+        dashboard.add_hint = _add_hint  # type: ignore[method-assign]
+
+        def _set_paused(value: bool) -> None:
+            dashboard.paused = value
+            commands.push("pause" if value else "resume")
+
+        def _request_stop() -> None:
+            dashboard.stop_requested = True
+            commands.push("stop")
+
+        dashboard.set_paused = _set_paused  # type: ignore[attr-defined]
+        dashboard.request_stop = _request_stop  # type: ignore[attr-defined]
+
     original_run = agent.run
 
-    def _hitl_run(task: str = "") -> Any:
+    def _hitl_run(task: str = "", **kwargs: Any) -> Any:
         hints = dashboard.get_hints()
         if hints and hasattr(agent, "inject_hint"):
             for hint in hints:
                 agent.inject_hint(hint)
-        return original_run(task)
+        if dashboard.paused and commands is not None:
+            commands.push("pause")
+        if dashboard.stop_requested and commands is not None:
+            commands.push("stop")
+        return original_run(task, **kwargs)
 
     agent.run = _hitl_run  # type: ignore[method-assign]
     return dashboard
