@@ -107,6 +107,8 @@ privacy:
 sandbox:
   timeout_sec: 10.0           # Timeout por evaluación (segundos)
   max_workers: 4              # Workers paralelos en ProcessPoolExecutor
+  # subprocess = local dev only (NOT a security boundary).
+  # container  = recommended for untrusted candidates (Docker/Podman).
   runner: subprocess          # subprocess | container | microvm
   allow_expression_eval: false  # expression/assert via eval (dev only)
   enforce_ast_scan: false     # early AST filter (not a security boundary)

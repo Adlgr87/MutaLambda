@@ -275,33 +275,68 @@ def doctor(ctx, config):
         except Exception:
             console.print(f"[yellow]· {name} missing (optional or install extras)[/yellow]")
 
-    # Container engines
+    # Container engines (recommended isolation for untrusted candidates)
+    has_container = False
     for eng in ("docker", "podman"):
         path = shutil.which(eng)
         if path:
             console.print(f"[green]✓ {eng} at {path}[/green]")
+            has_container = True
         else:
-            console.print(f"[dim]· {eng} not found (container runner unavailable)[/dim]")
+            console.print(f"[dim]· {eng} not found[/dim]")
+    if has_container:
+        console.print(
+            "[green]✓ container runner available[/green] "
+            "[dim](set sandbox.runner: container for hardened isolation)[/dim]"
+        )
+    else:
+        console.print(
+            "[yellow]! no container engine — only sandbox.runner=subprocess "
+            "(local dev; not a security boundary)[/yellow]"
+        )
 
-    # LLM backend probe (Ollama default)
+    # Unified config validation
     backend = "ollama"
     model = "llama3.2:3b"
+    runner = "subprocess"
     if config:
         try:
-            from config_loader import load_yaml
+            from muta_config import MutaLambdaConfig
 
-            cfg = load_yaml(config)
-            backend = cfg.get("llm", {}).get("backend", backend)
-            model = cfg.get("llm", {}).get("model", model)
-            privacy = cfg.get("privacy", {})
-            if privacy.get("allow_external_llm") is False and backend not in ("ollama", "local"):
+            ml = MutaLambdaConfig.from_yaml(config)
+            backend = ml.llm.backend
+            model = ml.llm.model
+            runner = ml.sandbox.runner
+            console.print("[green]✓ MutaLambdaConfig (Pydantic) valid[/green]")
+            console.print(f"[dim]{ml.recommended_runner_message()}[/dim]")
+            if (
+                not ml.privacy.allow_external_llm
+                and backend not in ("ollama",)
+            ):
                 console.print(
-                    f"[yellow]! privacy.allow_external_llm=false but llm.backend={backend}[/yellow]"
+                    f"[yellow]! privacy.allow_external_llm=false but "
+                    f"llm.backend={backend}[/yellow]"
                 )
+                ok = False
+            if runner in {"container", "docker", "podman"} and not has_container:
+                console.print(
+                    "[red]✗ config requests container runner but docker/podman missing[/red]"
+                )
+                ok = False
         except Exception as e:
-            console.print(f"[yellow]! config load warning: {e}[/yellow]")
+            console.print(f"[yellow]! config load/validate warning: {e}[/yellow]")
+            try:
+                from config_loader import load_yaml
+
+                cfg = load_yaml(config)
+                backend = cfg.get("llm", {}).get("backend", backend)
+                model = cfg.get("llm", {}).get("model", model)
+            except Exception as e2:
+                console.print(f"[red]✗ legacy config load failed: {e2}[/red]")
+                ok = False
 
     console.print(f"LLM backend: {backend} / model: {model}")
+    console.print(f"Sandbox runner: {runner}")
     if backend == "ollama":
         try:
             import requests
@@ -316,6 +351,14 @@ def doctor(ctx, config):
         except Exception as e:
             console.print(f"[yellow]! ollama not reachable: {e}[/yellow]")
             ok = False
+
+    # MASSIVE is a separate project; MutaLambda only optimizes pure targets via adapter.
+    console.print(
+        "\n[dim]MASSIVE note: external consumer project "
+        "(https://github.com/Adlgr87/MASSIVE). "
+        "Use massive_adapter.MassiveTargetAdapter against pure functions; "
+        "do not couple MutaLambda core to MASSIVE imports.[/dim]"
+    )
 
     sys.exit(0 if ok else 1)
 

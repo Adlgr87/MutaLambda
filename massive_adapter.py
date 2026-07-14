@@ -1,11 +1,15 @@
-"""MASSIVE integration adapter (workflow §15).
+"""External-project target adapter (workflow §15 — MASSIVE use case).
 
-Provides a formal target surface for optimizing pure MASSIVE functions
-without coupling MutaLambda's core to MASSIVE imports at package load time.
+MutaLambda is a general evolutionary optimizer. [MASSIVE](https://github.com/Adlgr87/MASSIVE)
+is a **separate** scientific simulation repo that historically motivated MutaLambda;
+this adapter does **not** import MASSIVE. Point it at pure-function source files +
+declarative tests from any project (including MASSIVE kernels).
 
-Typical first targets (pure / deterministic):
+Recommended first MASSIVE targets (if that repo is checked out separately):
 - massive/core/utility_logic.py
 - pure kernels from energy_engine / numerics
+
+Avoid Streamlit/API/LangChain surfaces as first targets.
 """
 
 from __future__ import annotations

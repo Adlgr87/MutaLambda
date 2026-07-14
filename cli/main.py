@@ -135,48 +135,42 @@ class MutaLambdaCLI:
         return True
 
     def _create_evolve_config(self, config: dict, generations: int) -> Optional[EvolveConfig]:
-        """Create EvolveConfig from CLI config (aligned with core loader fields)."""
+        """Create EvolveConfig from CLI config via unified MutaLambdaConfig (ML-C02)."""
         try:
-            evo = config.get('evolution', {})
-            pop = config.get('population', {})
-            mig = config.get('migration', {})
-            chk = config.get('checkpoint', {})
-            sand = config.get('sandbox', {})
-            privacy = config.get('privacy', {})
+            from muta_config import MutaLambdaConfig
 
-            # Prefer core YAML schema (population.*) with legacy migration.* fallback.
-            population_size = pop.get('size', evo.get('population_size', 8))
-            top_k = pop.get('top_k', evo.get('top_k', 3))
-            migration_interval = pop.get(
-                'migration_interval', mig.get('interval', 10)
-            )
-            migrants = pop.get(
-                'migrants_per_island', mig.get('migrants_per_island', 2)
-            )
-            topology = evo.get('topology', mig.get('topology', 'ring'))
+            # Legacy CLI templates may use migration.* instead of population.*
+            raw = dict(config or {})
+            if "migration" in raw and "population" not in raw:
+                mig = raw.get("migration") or {}
+                evo = raw.setdefault("evolution", {})
+                raw["population"] = {
+                    "size": evo.get("population_size", 8),
+                    "top_k": evo.get("top_k", 3),
+                    "migration_interval": mig.get("interval", 10),
+                    "migrants_per_island": mig.get("migrants_per_island", 2),
+                }
+                if "topology" not in evo and "topology" in mig:
+                    evo["topology"] = mig["topology"]
+            if "checkpoint" in raw:
+                chk = raw["checkpoint"]
+                if "dir" not in chk and "directory" in chk:
+                    chk = dict(chk)
+                    chk["dir"] = chk["directory"]
+                    raw["checkpoint"] = chk
 
-            return EvolveConfig(
-                num_islands=evo.get('num_islands', 4),
-                generations=generations,
-                seed_codes=list(self._seed_codes),
-                population_size=population_size,
-                top_k=top_k,
-                topology=topology,
-                migration_interval=migration_interval,
-                migrants_per_island=migrants,
-                archive_solutions=config.get('archive', {}).get('enabled', False),
-                prompt_evolution=config.get('prompt_evolution', {}).get('enabled', False),
-                checkpoint_enabled=chk.get('enabled', True),
-                checkpoint_interval=chk.get('interval', 10),
-                checkpoint_dir=chk.get('directory', chk.get('dir', 'checkpoints')),
-                allow_untested=self._allow_untested,
-                require_tests=not self._allow_untested,
-                runner_mode=sand.get('runner', sand.get('mode', 'subprocess')),
-                allow_expression_eval=sand.get('allow_expression_eval', False),
-                enforce_ast_scan=sand.get('enforce_ast_scan', False),
-                privacy_allow_external_llm=privacy.get('allow_external_llm', False),
-                privacy_redact_secrets=privacy.get('redact_secrets', True),
-            )
+            ml = MutaLambdaConfig.from_dict(raw)
+            evolve = ml.to_evolve_config(generations=generations)
+            evolve.seed_codes = list(self._seed_codes)
+            evolve.allow_untested = self._allow_untested
+            evolve.require_tests = not self._allow_untested
+            if self._task:
+                evolve.target_task = self._task
+            # Surface isolation guidance once
+            msg = ml.recommended_runner_message()
+            if "subprocess" in msg:
+                console.print(f"[dim]{msg}[/dim]")
+            return evolve
         except Exception as e:
             console.print(f"[red]Error creating evolve config: {e}[/red]")
             return None

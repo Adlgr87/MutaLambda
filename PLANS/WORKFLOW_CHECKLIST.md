@@ -15,7 +15,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente · ⏸ diferido (tests final
 | 2 | Tests obligatorios | ✅ |
 | 3 | `step_generation()` | ✅ |
 | 4 | CLI funcional | ✅ |
-| 5 | Configuración única | 🟡 EvolveConfig unificado; Pydantic full opcional |
+| 5 | Configuración única | ✅ `MutaLambdaConfig` (Pydantic) → `to_evolve_config()` |
 | 6 | Checkpoints JSON unificados | ✅ |
 | 7 | EvaluationService central | ✅ |
 | 8 | Barreras de migración | ✅ |
@@ -46,7 +46,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente · ⏸ diferido (tests final
 
 | # | Item | Estado |
 |---|------|--------|
-| 21 | Integración MASSIVE | 🟡 adapter + ejemplos |
+| 21 | Integración MASSIVE | ✅ adapter externo (no acoplar core); ver nota abajo |
 | 22 | Auto-documentación élites | ✅ solo best en run artifacts |
 | 23 | Micro-hotpaths | ⬜ |
 | 24 | Rust/GPU | ⬜ |
@@ -83,9 +83,16 @@ Leyenda: ✅ hecho · 🟡 parcial · ⬜ pendiente · ⏸ diferido (tests final
 **Pruebas finales consolidadas al cerrar el workflow** (acordado).  
 Este checklist es la fuente de verdad de avance del requerimiento.
 
-## Siguiente (solo si falta del workflow)
+## MASSIVE (proyecto externo)
 
-1. Pydantic `MutaLambdaConfig` si se exige unicidad estricta (§3 ML-C02)  
-2. Container como default recomendado en docs/doctor  
-3. MASSIVE: wiring CLI `run --massive-root`  
-4. ⏸ Suite de pruebas final  
+Repo: https://github.com/Adlgr87/MASSIVE  
+
+MutaLambda **no es** un monorepo con MASSIVE. El workflow §15 describe *usar*
+MutaLambda para optimizar funciones puras de proyectos científicos; el adapter
+(`massive_adapter.py`) es el borde. Core sin imports de MASSIVE.
+
+## Siguiente
+
+1. ⏸ Suite de pruebas final consolidada  
+2. Micro-hotpaths solo si métricas lo piden (§17.23)  
+

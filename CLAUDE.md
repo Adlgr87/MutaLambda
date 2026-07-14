@@ -55,3 +55,19 @@ For multi-step remediation, follow `PLANS/` and the remediation workflow slices.
 Branch: `maintenance/mutalambda-v4`
 
 Priority order: seguridad → ejecución correcta → evaluación correcta → rendimiento → reproducibilidad → extensiones → MASSIVE.
+
+### MASSIVE (proyecto externo)
+
+https://github.com/Adlgr87/MASSIVE is a **separate** simulation project that
+historically motivated MutaLambda. Do not import MASSIVE into core. Optimize
+pure functions via `MassiveTargetAdapter(source_file=..., tests_file=...)`.
+
+### Config unificada
+
+```python
+from muta_config import MutaLambdaConfig
+evolve = MutaLambdaConfig.from_yaml("config.yaml").to_evolve_config()
+```
+
+`sandbox.runner=container` is recommended for untrusted code when Docker/Podman is available.
+

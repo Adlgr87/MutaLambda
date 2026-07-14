@@ -184,7 +184,20 @@ class EvolveConfig:
 
     @classmethod
     def from_yaml(cls, path: str) -> "EvolveConfig":
-        """Load EvolveConfig from a validated YAML file."""
+        """Load EvolveConfig from a validated YAML file.
+
+        Preferred path: unified Pydantic ``MutaLambdaConfig`` (CLI + core).
+        """
+        try:
+            from muta_config import MutaLambdaConfig
+
+            return MutaLambdaConfig.from_yaml(path).to_evolve_config()
+        except Exception as _mlc_exc:
+            # Legacy fallback keeps older call sites working if schema drifts.
+            import logging as _logging
+            _logging.getLogger("MutaLambda").debug(
+                "MutaLambdaConfig path failed (%s); using legacy from_yaml", _mlc_exc
+            )
         from config_loader import load_yaml
 
         cfg = load_yaml(path)

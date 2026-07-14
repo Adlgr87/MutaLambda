@@ -52,6 +52,9 @@ _DEFAULTS: Dict[str, Any] = {
     "population.migrants_per_island": 2,
     "sandbox.timeout_sec": 10.0,
     "sandbox.max_workers": 4,
+    "sandbox.runner": "subprocess",
+    "sandbox.allow_expression_eval": False,
+    "sandbox.enforce_ast_scan": False,
     "archive.enabled": True,
     "archive.max_size": 10000,
     "archive.prune_threshold": 50,
@@ -163,6 +166,30 @@ def validate_config(raw: Dict[str, Any]) -> list:
     top_k = _get_nested(raw, "population.top_k", 3)
     if top_k > pop_size:
         errors.append("population.top_k must be ≤ population.size")
+
+    # ML-C04 bounds (workflow)
+    num_islands = _get_nested(raw, "evolution.num_islands")
+    if num_islands is not None and num_islands < 1:
+        errors.append("evolution.num_islands must be >= 1")
+    generations = _get_nested(raw, "evolution.generations")
+    if generations is not None and generations < 1:
+        errors.append("evolution.generations must be >= 1")
+    mig_iv = _get_nested(raw, "population.migration_interval")
+    if mig_iv is not None and mig_iv <= 0:
+        errors.append("population.migration_interval must be > 0")
+    timeout = _get_nested(raw, "sandbox.timeout_sec")
+    if timeout is not None and timeout <= 0:
+        errors.append("sandbox.timeout_sec must be > 0")
+    workers = _get_nested(raw, "sandbox.max_workers")
+    if workers is not None and workers <= 0:
+        errors.append("sandbox.max_workers must be > 0")
+    runner = _get_nested(raw, "sandbox.runner")
+    if runner is not None and runner not in (
+        "subprocess", "container", "microvm", "docker", "podman", "local", "dev"
+    ):
+        errors.append(
+            "sandbox.runner must be subprocess|container|microvm|docker|podman"
+        )
 
     prompt_pop_size = _get_nested(raw, "prompt_evolution.pop_size")
     if prompt_pop_size is not None and prompt_pop_size <= 0:
