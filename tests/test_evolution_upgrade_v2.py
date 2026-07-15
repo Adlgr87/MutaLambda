@@ -12,7 +12,7 @@ from muta_ext.spatial_topology import SpatialConfig, SpatialTopology
 from muta_ext.thc_engine import HorizontalTransferEngine, THCConfig
 
 
-class FakeEvaluator:
+class MockEvaluator:
     def evaluate_batch(self, codes):
         class Result:
             def __init__(self):
@@ -70,7 +70,7 @@ def test_thc_harvests_and_creates_hybrid():
         THCConfig(enabled=True, max_transfers_per_generation=4, min_donor_score=0.0)
     )
 
-    result = engine.apply([donor, receiver], FakeEvaluator(), generation=1)
+    result = engine.apply([donor, receiver], MockEvaluator(), generation=1)
 
     assert len(result) == 2
     assert engine.metrics.transfers_attempted >= 1
@@ -81,7 +81,7 @@ def test_thc_disabled_noop():
     pop = [Individual("def f():\n    return 1", score=1.0)]
     engine = HorizontalTransferEngine(THCConfig(enabled=False))
 
-    assert engine.apply(pop, FakeEvaluator(), generation=1) == pop
+    assert engine.apply(pop, MockEvaluator(), generation=1) == pop
 
 
 def test_thc_records_fragment_survival():
@@ -89,7 +89,7 @@ def test_thc_records_fragment_survival():
     receiver = Individual("def solve(x):\n    return x", score=1.0)
     engine = HorizontalTransferEngine(THCConfig(enabled=True))
 
-    engine.apply([donor, receiver], FakeEvaluator(), generation=1)
+    engine.apply([donor, receiver], MockEvaluator(), generation=1)
 
     assert engine.metrics.fragment_survival_gens >= 0.0
 

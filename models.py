@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from code_hash import stable_code_hash
+from constants import MIN_POPULATION_SIZE
 from fitness_vector import FitnessVector
 
 # Re-export for backward-compatible imports (tests, external callers).
@@ -362,8 +363,10 @@ class IslandConfig:
             raise ValueError(
                 f"top_k ({self.top_k}) must be <= population_size ({self.population_size})"
             )
-        if self.population_size < 2:
-            raise ValueError("population_size must be >= 2")
+        if self.population_size < MIN_POPULATION_SIZE:
+            raise ValueError(
+                f"population_size must be >= {MIN_POPULATION_SIZE}"
+            )
 
 
 @dataclass

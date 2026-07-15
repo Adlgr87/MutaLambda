@@ -3,31 +3,32 @@
 Source: `PLANS/OPTIMIZATION_WORKFLOW.md`  
 Branch: `maintenance/mutalambda-opt-v1` · PR: https://github.com/Adlgr87/MutaLambda/pull/4  
 
-Layout: flat modules (`code_hash.py`, …) — no `mutalambda/core/` rewrite.
-
 ## FASE 1 — Críticas ✅
 
 | ID | Item | Estado |
 |----|------|--------|
-| 1.1 | `stable_code_hash` único | ✅ `code_hash.py` |
-| 1.2 | `Checkpoint` → `CheckpointData` | ✅ + alias BC |
-| 1.3 | bare `except:` | ✅ CLI config |
+| 1.1–1.3 | hash único, CheckpointData, bare except | ✅ |
 
-## FASE 2 — Alta
+## FASE 2 — Alta ✅ / 🟡
 
 | ID | Item | Estado |
 |----|------|--------|
-| 2.1 | RNG centralizado | ✅ streams por isla/migración/agente vía `RNGSession` + `Island.rng` |
-| 2.2 | `compare_values` | ✅ `comparison.py` |
-| 2.3 | Logging factory | ✅ `logging_setup.py` |
-| 2.4 | Métodos con `pass` | ✅ inventario: CLI groups `pass` son Click; Protocol `...` OK; `MicroVMRunner` → `NotImplementedError` |
-| 2.5 | `sys.path` | ✅ fallback solo ImportError |
-| 2.6 | YAML Pydantic | ✅ `MutaLambdaConfig` (v4) |
-| 2.7 | `except Exception` | 🟡 high-traffic paths afinados (archive, ckpt RNG, git, pkg version) |
+| 2.1–2.6 | RNG streams, comparison, logging, sys.path, config, MicroVM | ✅ |
+| 2.7 | except genéricos high-traffic | 🟡 selectivo |
 
-## FASE 3–4
+## FASE 3 — Media
 
-⬜ legacy clean, mass rename, test consolidation — post-merge opcional
+| ID | Item | Estado |
+|----|------|--------|
+| 3.1 | `__init__.py` útiles | ✅ `muta_ext/*` con `__all__` + lazy root |
+| 3.2 | Legacy clean | ✅ documentado; `inferless` kept via `app.py`; `document_intelligence` unused-by-core |
+| 3.3 | Naming Fake→Mock | ✅ tests only |
+| 3.4 | Consolidar config | ✅ ya `MutaLambdaConfig` + `config.yaml`; repomix tooling retained |
+| 3.5 | Constantes | ✅ `constants.py` ampliado + uso en IslandConfig |
+
+## FASE 4 — Baja
+
+⬜ consolidar tests redundantes / métricas docs — opcional
 
 ## Verificación
 
