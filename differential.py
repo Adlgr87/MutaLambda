@@ -11,7 +11,7 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from runners import compare_values
+from comparison import compare_values
 
 
 @dataclass

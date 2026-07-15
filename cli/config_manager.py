@@ -160,8 +160,14 @@ class ConfigManager:
                     content = f.read()
                     try:
                         config = yaml.safe_load(content)
-                    except:
-                        config = json.loads(content)
+                    except Exception:
+                        # Not valid YAML — try JSON (config may be dual-format).
+                        try:
+                            config = json.loads(content)
+                        except json.JSONDecodeError as je:
+                            raise ValueError(
+                                f"Config is neither valid YAML nor JSON: {je}"
+                            ) from je
 
             self.animator.success_message(f"Loaded config from {config_path}")
             return config

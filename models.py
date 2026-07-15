@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import random
 import time
 import uuid
@@ -12,12 +11,20 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from code_hash import stable_code_hash
 from fitness_vector import FitnessVector
 
-
-def stable_code_hash(code: str) -> str:
-    """Stable SHA-256 of source (avoids PYTHONHASHSEED instability of hash())."""
-    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+# Re-export for backward-compatible imports (tests, external callers).
+__all__ = [
+    "stable_code_hash",
+    "Individual",
+    "LineageNode",
+    "LineageGraph",
+    "EvalResult",
+    "IslandConfig",
+    "ArchivedSolution",
+    "PromptGenome",
+]
 
 
 @dataclass

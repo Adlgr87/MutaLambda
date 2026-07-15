@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from checkpoint_manager import Checkpoint, _serialise_checkpoint
+from checkpoint_manager import CheckpointData, _serialise_checkpoint
 from fitness_vector import FitnessVector
 from models import Individual, LineageGraph
 from muta_ext.advanced_selection import AdvancedSelectionConfig, AdvancedSelectionEngine
@@ -194,7 +194,7 @@ def test_lineage_serializes_hybrid_metadata():
 
 
 def test_checkpoint_serializes_upgrade_metrics():
-    cp = Checkpoint(
+    cp = CheckpointData(
         generation=1,
         advanced_metrics={"population_entropy": 0.5},
         thc_metrics={"thc_transfer_rate": 0.25},

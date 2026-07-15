@@ -24,10 +24,16 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 
-# Import core — add parent dir to path since we're in tests/
+# Prefer package install; fall back to repo root for uninstalled checkouts.
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import muta_lambda as core
+
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+try:
+    import muta_lambda as core
+except ImportError:  # pragma: no cover
+    if _REPO_ROOT not in sys.path:
+        sys.path.insert(0, _REPO_ROOT)
+    import muta_lambda as core
 
 
 def _extract_first_function_name(code: str) -> str:
