@@ -2,6 +2,10 @@
 Tests for SolutionArchive — FAISS-based memory, Novelty Search,
 Curriculum Learning, persistence and telemetry.
 
+Note (FIX 4.1): intentionally separate from test_nsga2.py — archive covers
+embedding/novelty APIs, not FitnessVector Pareto selection. Shared fixtures
+live in tests/conftest.py when needed.
+
 These tests mock SentenceTransformer and FAISS to avoid heavy
 dependency downloads during CI.
 

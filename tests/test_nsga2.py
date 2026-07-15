@@ -18,18 +18,17 @@ from nsga2 import (
 def _make_ind(code: str, correctness: float = 0.5, latency: float = 0.01,
               throughput: float = 50.0, memory: float = 10.0,
               parsimony: float = 0.5) -> Individual:
-    """Helper: create Individual with FitnessVector."""
-    ind = Individual(code=code)
-    ind.fitness = FitnessVector(
+    """Compat wrapper → tests.helpers.make_individual (FIX 4.1)."""
+    from tests.helpers import make_individual
+
+    return make_individual(
+        code,
         correctness=correctness,
-        latency_p50=latency,
-        latency_p99=latency,
+        latency=latency,
         throughput=throughput,
-        memory_peak_mb=memory,
+        memory=memory,
         parsimony=parsimony,
     )
-    ind.score = ind.fitness.to_scalar()
-    return ind
 
 
 class TestNonDominatedSort:
