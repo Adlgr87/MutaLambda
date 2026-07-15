@@ -30,27 +30,37 @@ DEFAULT_WEIGHTS: Dict[str, float] = {
 
 @dataclass
 class FitnessVector:
-    """Six-dimensional multi-objective fitness.
+    """Six-dimensional multi-objective fitness used across evaluation and NSGA-II.
 
-    All objectives follow the convention *higher is better*.  Objectives that
-    naturally prefer lower values (latency, memory) are stored as-is and
-    *negated* inside ``dominates()`` and ``weighted_sum()``.
+    All objectives follow the convention *higher is better* for Pareto ops.
+    Objectives that naturally prefer lower values (latency, memory) are stored
+    raw and *negated* inside ``dominates()`` and ``weighted_sum()``.
 
     Attributes
     ----------
     correctness : float
-        0.0 – 1.0  fraction of test-cases passed.  Hard constraint.
+        0.0 – 1.0 fraction of test-cases passed. **Hard gate** in ``to_scalar()``:
+        any value < 1.0 ranks below every fully-correct candidate.
     latency_p50 : float
-        Median wall-clock seconds per evaluation.  Lower → better.
+        Median wall-clock seconds per evaluation (or multi-sample p50). Lower → better.
     latency_p99 : float
-        P99 wall-clock seconds.  Lower → better.
+        High-percentile latency. When samples==1, sandbox sets p50==p99; with
+        ``benchmark.samples>1``, EvaluationService refines real percentiles.
     throughput : float
-        Operations per second (estimated from runtime).  Higher → better.
+        Operations per second estimate. Higher → better.
     memory_peak_mb : float
-        Peak resident-set size in MiB.  Lower → better.
+        Peak RSS (or runner-reported ceiling) in MiB. Lower → better.
     parsimony : float
-        1.0 / (1.0 + cyclomatic_complexity / max(1, code_kb)).
-        Higher → shorter & simpler code.
+        ``1 / (1 + cyclomatic / code_kb)``. Higher → shorter/simpler AST.
+
+    Where metrics are produced / consumed
+    ------------------------------------
+    - **Produced by:** ``runners`` / ``EvaluationService`` (sandbox metrics).
+    - **Consumed by:** ``Individual.score`` via ``to_scalar()``, NSGA-II
+      (``nsga2.non_dominated_sort``), protocol gates (correctness only),
+      optional ``fitness_normalize.normalize_against_baseline``.
+    - **Not implemented here:** hypervolume, spread, epsilon indicators —
+      those names appear in older docs/plans only; do not invent them on this type.
     """
 
     correctness: float = 0.0
