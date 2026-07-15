@@ -387,8 +387,8 @@ def load_checkpoint(path: str | Path) -> CheckpointData:
             if isinstance(restored, tuple) and len(restored) >= 2:
                 random.setstate(restored)
                 cp.random_state = restored
-        except Exception:
-            pass
+        except (TypeError, ValueError, AttributeError) as exc:
+            logger.debug("Could not restore Python RNG state: %s", exc)
 
     ns = data.get("numpy_state")
     if ns and isinstance(ns, list) and len(ns) >= 2:
@@ -399,8 +399,8 @@ def load_checkpoint(path: str | Path) -> CheckpointData:
             np_has_gauss = ns[3] if len(ns) > 3 else 0
             np_gauss = ns[4] if len(ns) > 4 else 0.0
             np.random.set_state((np_version, np_core, np_pos, np_has_gauss, np_gauss))
-        except Exception:
-            pass
+        except (TypeError, ValueError, AttributeError) as exc:
+            logger.debug("Could not restore NumPy RNG state: %s", exc)
 
     return cp
 

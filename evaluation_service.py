@@ -40,9 +40,11 @@ def environment_hash() -> str:
 
 def _pkg_version(name: str) -> str:
     try:
-        from importlib.metadata import version
+        from importlib.metadata import PackageNotFoundError, version
 
         return version(name)
+    except PackageNotFoundError:
+        return "unknown"
     except Exception:
         return "unknown"
 

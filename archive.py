@@ -121,8 +121,8 @@ class SolutionArchive:
                         existing.metrics = merged
                         self._dedupe_updates += 1
                         return
-                except Exception:
-                    pass
+                except (ValueError, TypeError, RuntimeError, AttributeError) as exc:
+                    logger.debug("archive dedupe search skipped: %s", exc)
 
             old_len = len(self.solutions)
             will_evict = len(self.solutions) == self.max_size

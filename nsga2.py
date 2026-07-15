@@ -132,6 +132,7 @@ def nsga2_tournament_select(
     elites: List[Individual],
     num_parents: int,
     tournament_size: int = 2,
+    rng: Optional[random.Random] = None,
 ) -> List[Individual]:
     """
     Tournament selection for breeding: prefer lower NSGA-II rank
@@ -161,8 +162,9 @@ def nsga2_tournament_select(
             rank_map[ind.id] = front.rank
             crowd_map[ind.id] = cd
 
+    _rng = rng if rng is not None else random
     for _ in range(num_parents):
-        tournament = random.sample(
+        tournament = _rng.sample(
             elites, min(tournament_size, len(elites))
         )
         # Winner: lower rank, break ties with higher crowding

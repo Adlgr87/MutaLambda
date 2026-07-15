@@ -521,7 +521,11 @@ class MicroVMRunner:
     timeout_sec: float = 10.0
 
     def run(self, code: str, test_cases: list[dict]) -> EvalResult:
-        return _error_result(self.timeout_sec, "MicroVMRunner not implemented")
+        # Explicit stub (FIX 2.4): reserved for Firecracker/Cloud Hypervisor path.
+        raise NotImplementedError(
+            "MicroVMRunner is not implemented in this release; "
+            "use runner_mode='container' or 'subprocess'."
+        )
 
 
 def create_runner(

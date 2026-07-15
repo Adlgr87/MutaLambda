@@ -31,7 +31,7 @@ def _git_commit() -> str:
         )
         if r.returncode == 0:
             return r.stdout.strip()
-    except Exception:
+    except (OSError, subprocess.SubprocessError, TimeoutError):
         pass
     return "unknown"
 

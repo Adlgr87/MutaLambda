@@ -28,6 +28,7 @@ class MigrationBus:
         self._cache_topology_version: int = -1
         self._mesh_cols: int = 0
         self.lineage_graph = None
+        self.rng = random.Random()  # overridden by agent RNGSession when present
 
     @property
     def topology(self) -> str:
@@ -88,7 +89,8 @@ class MigrationBus:
         else:
             # Random topology is intentionally dynamic and never cached.
             candidates = [i for i in ids if i != island_id]
-            return random.sample(candidates, min(2, len(candidates)))
+            rng = getattr(self, "rng", random)
+            return rng.sample(candidates, min(2, len(candidates)))
 
         self._neighbor_cache[island_id] = result
         self._cache_version = self._islands_version
