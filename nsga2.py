@@ -27,6 +27,7 @@ Complexity
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -147,7 +148,6 @@ def nsga2_tournament_select(
     tournament_size : int
         Tournament size (default 2).
     """
-    import random
     selected: List[Individual] = []
 
     if not elites:
