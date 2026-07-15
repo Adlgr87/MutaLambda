@@ -11,7 +11,7 @@ from hfc_tiers import (
 from models import EvalResult, Individual, LineageGraph
 
 
-class _FakeEvaluator:
+class _MockEvaluator:
     def __init__(self, functional_codes):
         self.functional_codes = set(functional_codes)
 
@@ -67,7 +67,7 @@ def test_hfc_keeps_failures_in_laboratory_and_promotes_functional_code():
     engine = _engine(tier3_size=1)
     engine.tier1 = [Individual(code=good_code), Individual(code=bad_code)]
     engine.tier3 = [Individual(code=elite_code)]
-    evaluator = _FakeEvaluator(functional_codes={good_code, good_code.strip(), elite_code})
+    evaluator = _MockEvaluator(functional_codes={good_code, good_code.strip(), elite_code})
 
     snapshot = engine.step(
         llm_fn=lambda _prompt: good_code,
@@ -129,7 +129,7 @@ def test_elite_domination_demotes_weakest_elite_to_factory():
     engine = _engine(lambda_clones=0, tier3_size=1)
     engine.tier2 = [fast]
     engine.tier3 = [slow]
-    evaluator = _FakeEvaluator(functional_codes={slow_code, fast_code})
+    evaluator = _MockEvaluator(functional_codes={slow_code, fast_code})
 
     engine.step(llm_fn=lambda _prompt: fast_code, evaluator=evaluator, generation=0)
 

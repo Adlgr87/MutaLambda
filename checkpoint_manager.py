@@ -43,7 +43,7 @@ from muta_lambda import (
 
 
 @dataclass
-class Checkpoint:
+class CheckpointData:
     """Full experiment state snapshot."""
     generation: int
     timestamp: float = field(default_factory=time.time)
@@ -98,6 +98,9 @@ class Checkpoint:
     task: str = ""
 
 
+# Backward-compatible alias (FIX 1.2)
+Checkpoint = CheckpointData
+
 # ── Save ──────────────────────────────────────────────────────────────
 
 def save_full_checkpoint(
@@ -114,7 +117,7 @@ def save_full_checkpoint(
     chk_dir = Path(config.checkpoint_dir) / f"chk_gen{generation:04d}"
     chk_dir.mkdir(parents=True, exist_ok=True)
 
-    checkpoint = Checkpoint(generation=generation)
+    checkpoint = CheckpointData(generation=generation)
 
     # ── Config hash ──────────────────────────────────────────────────
     if raw_config:
@@ -130,7 +133,8 @@ def save_full_checkpoint(
         )
         if result.returncode == 0:
             checkpoint.git_commit = result.stdout.strip()[:12]
-    except Exception:
+    except (OSError, subprocess.SubprocessError, TimeoutError):
+        # Git unavailable or timeout — leave git_commit empty.
         pass
 
     # ── Best solution ────────────────────────────────────────────────
@@ -240,8 +244,8 @@ def save_full_checkpoint(
     return str(chk_dir)
 
 
-def _serialise_checkpoint(cp: Checkpoint) -> Dict[str, Any]:
-    """Convert Checkpoint to JSON-serialisable dict."""
+def _serialise_checkpoint(cp: CheckpointData) -> Dict[str, Any]:
+    """Convert CheckpointData to JSON-serialisable dict."""
     # Serialise RNG state — handle different Python versions flexibly
     rs = cp.random_state
     if rs is not None:
@@ -329,7 +333,7 @@ def _restore_state(state_data):
         return tuple(_restore_state(x) for x in state_data)
     return state_data
 
-def load_checkpoint(path: str | Path) -> Checkpoint:
+def load_checkpoint(path: str | Path) -> CheckpointData:
     """Load a checkpoint from disk."""
     path = Path(path)
     if path.is_dir():
@@ -340,7 +344,7 @@ def load_checkpoint(path: str | Path) -> Checkpoint:
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    cp = Checkpoint(
+    cp = CheckpointData(
         generation=data["generation"],
         timestamp=data.get("timestamp", 0.0),
         config_hash=data.get("config_hash", ""),
@@ -383,8 +387,8 @@ def load_checkpoint(path: str | Path) -> Checkpoint:
             if isinstance(restored, tuple) and len(restored) >= 2:
                 random.setstate(restored)
                 cp.random_state = restored
-        except Exception:
-            pass
+        except (TypeError, ValueError, AttributeError) as exc:
+            logger.debug("Could not restore Python RNG state: %s", exc)
 
     ns = data.get("numpy_state")
     if ns and isinstance(ns, list) and len(ns) >= 2:
@@ -395,8 +399,8 @@ def load_checkpoint(path: str | Path) -> Checkpoint:
             np_has_gauss = ns[3] if len(ns) > 3 else 0
             np_gauss = ns[4] if len(ns) > 4 else 0.0
             np.random.set_state((np_version, np_core, np_pos, np_has_gauss, np_gauss))
-        except Exception:
-            pass
+        except (TypeError, ValueError, AttributeError) as exc:
+            logger.debug("Could not restore NumPy RNG state: %s", exc)
 
     return cp
 

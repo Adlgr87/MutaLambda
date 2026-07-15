@@ -43,6 +43,8 @@ class Island:
         self.llm_fn = llm_fn
         self.evaluator = evaluator
         self.migration_bus = migration_bus
+        # Per-island RNG (wired from RNGSession when available; FIX 2.1)
+        self.rng = random.Random()
         self.core_engine = CoreEvolutionEngine()
 
         self.population: List[Individual] = []
@@ -244,11 +246,11 @@ class Island:
 
         new_pop: List[Individual] = list(elites)
         while len(new_pop) < self.config.population_size:
-            if use_nsga2 and len(elites) >= 2 and random.random() < 0.7:
-                parents = nsga2_tournament_select(elites, 1)
-                parent = parents[0] if parents else random.choice(elites)
+            if use_nsga2 and len(elites) >= 2 and self.rng.random() < 0.7:
+                parents = nsga2_tournament_select(elites, 1, rng=self.rng)
+                parent = parents[0] if parents else self.rng.choice(elites)
             else:
-                parent = random.choice(elites)
+                parent = self.rng.choice(elites)
 
             child_parents: List[Individual] = [parent]
             strategy = self._select_operator_strategy(parent, elites)
@@ -257,7 +259,7 @@ class Island:
             elif strategy == "crossover":
                 mate_candidates = [e for e in elites if e.id != parent.id]
                 if mate_candidates:
-                    other = random.choice(mate_candidates)
+                    other = self.rng.choice(mate_candidates)
                     mutated_code = self._crossover(parent.code, other.code)
                     child_parents.append(other)
                 else:
@@ -312,9 +314,9 @@ class Island:
             except Exception:
                 pass
         # Legacy heuristic (workflow default before bandit).
-        if parent.score < 0 and random.random() < 0.10:
+        if parent.score < 0 and self.rng.random() < 0.10:
             return "redesign"
-        if random.random() < 0.15 and len(elites) >= 2:
+        if self.rng.random() < 0.15 and len(elites) >= 2:
             return "crossover"
         return "mutation"
 
@@ -363,7 +365,7 @@ class Island:
 
     def _mutate(self, code: str) -> str:
         """Mutación híbrida: AST o LLM."""
-        if random.random() < 0.4:
+        if self.rng.random() < 0.4:
             return ASTMutator.apply_random_mutation(code)
 
         prompt = (
@@ -437,7 +439,7 @@ class Island:
         """Devuelve una muestra aleatoria de la población actual."""
         if not self.population:
             return []
-        return random.sample(self.population, min(count, len(self.population)))
+        return self.rng.sample(self.population, min(count, len(self.population)))
 
     def receive_migrant(self, individual: Individual) -> None:
         """Acepta un inmigrante sin reutilizar su score externo."""

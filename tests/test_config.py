@@ -228,9 +228,9 @@ class TestCheckpointBasic:
     """Basic checkpoint structure (without agent instantiation)."""
 
     def test_serialise_deserialise(self):
-        from checkpoint_manager import Checkpoint, _serialise_checkpoint
+        from checkpoint_manager import CheckpointData, _serialise_checkpoint
 
-        cp = Checkpoint(
+        cp = CheckpointData(
             generation=5,
             config_hash="abc123",
             git_commit="deadbeef",

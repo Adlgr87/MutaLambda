@@ -17,10 +17,13 @@ Uso:
 import sys
 from pathlib import Path
 
-# Ensure project root is on sys.path for core imports
-_project_root = str(Path(__file__).resolve().parent)
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
+# Prefer installed package (pip install -e .). Fallback for running from a raw clone.
+try:
+    import muta_lambda  # noqa: F401
+except ImportError:  # pragma: no cover - dev checkout without install
+    _project_root = str(Path(__file__).resolve().parent)
+    if _project_root not in sys.path:
+        sys.path.insert(0, _project_root)
 
 import click
 from rich.console import Console

@@ -612,6 +612,11 @@ class MutaLambdaAgent:
         if seed is None:
             seed = getattr(config, "seed", None)
         self.rng_session = RNGSession(master_seed=seed)
+        # Per-island / migration RNG streams (optimization FIX 2.1)
+        for _i, _isl in enumerate(self.islands):
+            _isl.rng = self.rng_session.island(_i)
+        self.migration_bus.rng = self.rng_session.stream("migration")
+        self._rng = self.rng_session.stream("agent")
         self._baseline_fitness = None
         self._operator_bandit = None
         if getattr(config, "operator_bandit_enabled", False):
@@ -694,11 +699,17 @@ class MutaLambdaAgent:
         if not hints:
             return
         for code in hints:
-            island = random.choice(self.islands)
+            island = self._random().choice(self.islands)
             new_ind = Individual(code=code, score=0.0)
             island.population.append(new_ind)
             logger.info("HITL: hint injected into island %d", island.id)
         self._pending_hints = []
+
+
+    def _random(self) -> random.Random:
+        """Session RNG (falls back to module random if not initialized)."""
+        rng = getattr(self, "_rng", None)
+        return rng if rng is not None else random
 
     def inject_hint(self, code: str) -> None:
         pending = getattr(self, '_pending_hints', [])
@@ -846,7 +857,7 @@ class MutaLambdaAgent:
             return None
         if len(self._lineage.nodes) < 10:
             return None
-        if random.random() > self.config.cross_branch_crossover_prob:
+        if self._random().random() > self.config.cross_branch_crossover_prob:
             return None
 
         min_dist = self.config.cross_branch_min_distance
@@ -866,8 +877,8 @@ class MutaLambdaAgent:
             return None
 
         for _ in range(10):
-            node_a = random.choice(correctness_nodes)
-            node_b = random.choice(throughput_nodes)
+            node_a = self._random().choice(correctness_nodes)
+            node_b = self._random().choice(throughput_nodes)
             if node_a.id == node_b.id:
                 continue
             dist = self._lineage.get_genealogical_distance(node_a.id, node_b.id)
@@ -876,8 +887,8 @@ class MutaLambdaAgent:
                                 if isl.id != island.id and isl.local_best]
                 if not candidates_a:
                     return None
-                parent_a = random.choice(candidates_a).local_best
-                parent_b = island.local_best or random.choice(island.population)
+                parent_a = self._random().choice(candidates_a).local_best
+                parent_b = island.local_best or self._random().choice(island.population)
 
                 child_code = island._crossover(parent_a.code, parent_b.code)
                 child = Individual(

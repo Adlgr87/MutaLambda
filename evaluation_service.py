@@ -21,7 +21,8 @@ from typing import Dict, List, Optional, Sequence
 from benchmarking import BenchmarkConfig, BenchmarkResult, percentiles_from_samples
 from fitness_vector import FitnessVector
 from models import EvalResult
-from runners import CandidateRunner, SubprocessRunner, create_runner, stable_code_hash, tests_hash
+from code_hash import stable_code_hash
+from runners import CandidateRunner, SubprocessRunner, create_runner, tests_hash
 
 logger = logging.getLogger("MutaLambda")
 
@@ -39,9 +40,11 @@ def environment_hash() -> str:
 
 def _pkg_version(name: str) -> str:
     try:
-        from importlib.metadata import version
+        from importlib.metadata import PackageNotFoundError, version
 
         return version(name)
+    except PackageNotFoundError:
+        return "unknown"
     except Exception:
         return "unknown"
 
