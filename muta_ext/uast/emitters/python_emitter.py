@@ -1,10 +1,12 @@
 """CoreUAST → Python source emitter."""
+import ast
 from typing import Optional
 
 from muta_ext.uast.core_uast import (
     CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
     Assign, If, For, While, Return, Function, ParallelFor,
-    Comment, Opaque, Node
+    Comment, Opaque, Node, TryExcept, ExceptClause, StructDef,
+    FieldDef, TypeAnnotation, MatchArm, Match, Reference
 )
 
 
@@ -88,8 +90,61 @@ class PythonEmitter:
             return lines
         if isinstance(node, Opaque):
             return [f"{indent_str}{node.original_text}"]
+        if isinstance(node, TryExcept):
+            lines = []
+            lines.append(f"{indent_str}try:")
+            for n in node.body:
+                lines.extend(self._emit_node(n, indent + 1))
+            for clause in node.except_clauses:
+                if clause.exception_type:
+                    exc_type = " ".join(self._emit_node(clause.exception_type, indent))
+                    if clause.binding:
+                        lines.append(f"{indent_str}except {exc_type} as {clause.binding}:")
+                    else:
+                        lines.append(f"{indent_str}except {exc_type}:")
+                else:
+                    lines.append(f"{indent_str}except:")
+                for n in clause.body:
+                    lines.extend(self._emit_node(n, indent + 1))
+            if node.finally_body:
+                lines.append(f"{indent_str}finally:")
+                for n in node.finally_body:
+                    lines.extend(self._emit_node(n, indent + 1))
+            return lines
+        if isinstance(node, StructDef):
+            lines = [f"{indent_str}class {node.name}:"]
+            for field in node.fields:
+                if field.default:
+                    default_val = " ".join(self._emit_node(field.default, indent))
+                    lines.append(f"{indent_str}    {field.name} = {default_val}")
+            for method in node.methods:
+                lines.extend(self._emit_function(method, indent + 1))
+            return lines
+        if isinstance(node, Match):
+            subject = " ".join(self._emit_node(node.subject, indent))
+            lines = [f"{indent_str}match {subject}:"]
+            for arm in node.arms:
+                pattern = " ".join(self._emit_node(arm.pattern, indent))
+                lines.append(f"{indent_str}    case {pattern}:")
+                for n in arm.body:
+                    lines.extend(self._emit_node(n, indent + 2))
+            return lines
+        if isinstance(node, Reference):
+            target = " ".join(self._emit_node(node.target, indent))
+            return [f"&mut {target}" if node.is_mutable else f"&{target}"]
+        if isinstance(node, TypeAnnotation):
+            return [node.type_name]
         # Fallback
         return [f"{indent_str}# Unimplemented: {type(node).__name__}"]
+
+    def _emit_function(self, func: "Function", indent: int = 0) -> list:
+        """Emit a Function node to source lines."""
+        indent_str = "    " * indent
+        params = ", ".join(p.name for p in func.params) if func.params else ""
+        lines = [f"{indent_str}def {func.name.name}({params}):"]
+        for n in func.body:
+            lines.extend(self._emit_node(n, indent + 1))
+        return lines
 
 
 # Module-level convenience function

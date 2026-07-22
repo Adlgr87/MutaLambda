@@ -11,7 +11,9 @@ import hashlib
 Node = Union[
     "LiteralNode", "Identifier", "BinaryOp", "UnaryOp", "Call",
     "Assign", "If", "For", "While", "Return", "Function",
-    "ParallelFor", "Comment", "Opaque", "Break", dict
+    "ParallelFor", "Comment", "Opaque", "Break", "TryExcept",
+    "ExceptClause", "StructDef", "FieldDef", "TypeAnnotation",
+    "MatchArm", "Match", "Reference", dict
 ]
 
 # Registry for deserialization
@@ -28,7 +30,7 @@ def _to_serializable(obj: Any) -> Any:
     """Convert object to JSON-serializable form."""
     if isinstance(obj, (str, int, float, bool, type(None))):
         return obj
-    if isinstance(obj, list):
+    if isinstance(obj, (list, tuple)):
         return [_to_serializable(x) for x in obj]
     if isinstance(obj, dict):
         return {k: _to_serializable(v) for k, v in obj.items()}
@@ -207,6 +209,93 @@ class Opaque:
 @_register_node
 @dataclass(frozen=True)
 class Break:
+    tag: Optional[str] = None
+    location: Optional[Dict[str, int]] = None
+
+
+@_register_node
+@dataclass(frozen=True)
+class TryExcept:
+    """Try/except/finally block. Maps to Rust match on Result, C++ try/catch."""
+    body: List[Node] = field(default_factory=list)
+    except_clauses: List["ExceptClause"] = field(default_factory=list)
+    finally_body: Optional[List[Node]] = None
+    tag: Optional[str] = None
+    location: Optional[Dict[str, int]] = None
+
+
+@_register_node
+@dataclass(frozen=True)
+class ExceptClause:
+    """Single except/catch clause."""
+    exception_type: Optional[Node] = None  # None = catch-all
+    binding: Optional[str] = None     # variable name for the exception
+    body: List[Node] = field(default_factory=list)
+    tag: Optional[str] = None
+    location: Optional[Dict[str, int]] = None
+
+
+@_register_node
+@dataclass(frozen=True)
+class StructDef:
+    """Struct/class definition. Maps to Rust struct, C++ struct/class."""
+    name: str
+    fields: List["FieldDef"] = field(default_factory=list)
+    methods: List[Function] = field(default_factory=list)
+    tag: Optional[str] = None
+    location: Optional[Dict[str, int]] = None
+
+
+@_register_node
+@dataclass(frozen=True)
+class FieldDef:
+    """A field in a struct/class."""
+    name: str
+    type_annotation: Optional[Node] = None
+    default: Optional[Node] = None
+    tag: Optional[str] = None
+    location: Optional[Dict[str, int]] = None
+
+
+@_register_node
+@dataclass(frozen=True)
+class TypeAnnotation:
+    """Type annotation node. Critical for Rust (mandatory) and C++."""
+    type_name: str
+    generic_args: List[Node] = field(default_factory=list)
+    is_reference: bool = False
+    is_mutable: bool = False  # Rust &mut
+    tag: Optional[str] = None
+    location: Optional[Dict[str, int]] = None
+
+
+@_register_node
+@dataclass(frozen=True)
+class MatchArm:
+    """Pattern matching arm. Maps to Rust match, C++ pattern matching."""
+    pattern: Node
+    guard: Optional[Node] = None
+    body: List[Node] = field(default_factory=list)
+    tag: Optional[str] = None
+    location: Optional[Dict[str, int]] = None
+
+
+@_register_node
+@dataclass(frozen=True)
+class Match:
+    """Match/switch expression. Maps to Rust match, C++ switch."""
+    subject: Node
+    arms: List[MatchArm] = field(default_factory=list)
+    tag: Optional[str] = None
+    location: Optional[Dict[str, int]] = None
+
+
+@_register_node
+@dataclass(frozen=True)
+class Reference:
+    """Reference/pointer. Maps to Rust &/&mut, C++ */&."""
+    target: Node
+    is_mutable: bool = False
     tag: Optional[str] = None
     location: Optional[Dict[str, int]] = None
 

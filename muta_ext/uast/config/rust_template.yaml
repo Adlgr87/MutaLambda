@@ -1,0 +1,23 @@
+# Configuration template for Rust UAST evolution
+language: rust
+handler: muta_ext.uast.handlers.rust_handler.RustHandler
+compile_timeout_sec: 30
+run_timeout_sec: 10
+sanitizers: false
+generations: 50
+population_size: 32
+islands: 4
+mutation_rate: 0.3
+cache_enabled: true
+cache_max_size: 10000
+hot_path_detection: true
+mutators:
+  - SwapConditionMutator
+  - InlineVariableMutator
+  - NegateConditionMutator
+  - LoopBoundMutator
+  - ReorderStatementsMutator
+security:
+  block_unsafe: true
+  block_ffi: true
+  block_transmute: true

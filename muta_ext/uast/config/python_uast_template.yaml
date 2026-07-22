@@ -1,0 +1,15 @@
+# Configuration template for Python UAST evolution
+language: python
+handler: muta_ext.uast.handlers.python_handler.PythonHandler
+generations: 50
+population_size: 32
+islands: 4
+mutation_rate: 0.3
+cache_enabled: true
+use_uast: true
+mutators:
+  - SwapConditionMutator
+  - InlineVariableMutator
+  - NegateConditionMutator
+  - LoopBoundMutator
+  - ReorderStatementsMutator

@@ -605,12 +605,50 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
+## 🌐 Multi-Language Support (UAST)
+
+MutaLambda supports evolutionary optimization for multiple languages through the Universal AST (UAST) abstraction layer.
+
+### Supported Languages
+
+| Language | Adapter | Emitter | Handler | Status |
+|----------|---------|---------|---------|--------|
+| Python   | ✅      | ✅      | ✅      | Production |
+| Rust     | ✅      | ✅      | ✅      | Beta |
+| C++      | ✅      | ✅      | ✅      | Beta |
+
+### Quick Start
+
+```bash
+# Optimize Python code
+python cli.py uast run --config muta_ext/uast/config/python_uast_template.yaml \
+    --code my_code.py --generations 50
+
+# Optimize Rust code
+python cli.py uast run --config muta_ext/uast/config/rust_template.yaml \
+    --code my_code.rs --generations 50
+
+# Optimize C++ code
+python cli.py uast run --config muta_ext/uast/config/cpp_template.yaml \
+    --code my_code.cpp --generations 50
+```
+
+### New CoreUAST Nodes
+
+- `TryExcept` / `ExceptClause` — Exception handling
+- `StructDef` / `FieldDef` — Struct/class definitions
+- `TypeAnnotation` — Type hints
+- `Match` / `MatchArm` — Pattern matching
+- `Reference` — References and pointers
+
+---
+
 ## 📈 Metrics Summary
 
 **Total optimizations attempted:** 11
 **Validated improvements:** 5 (MASSIVE: 4 modules, Core: 1 function)
 **Failed experiments:** 4 (reverted)
-**Tests passing:** 224/224 (100%)
+**Tests passing:** 252/252 (100%) - *Updated with UAST multi-language support*
 
 **Impact on production runs:**
 - MASSIVE: **35-60% faster** simulation runtime

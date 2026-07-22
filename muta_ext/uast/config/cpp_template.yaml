@@ -1,0 +1,25 @@
+# Configuration template for C++ UAST evolution
+language: cpp
+handler: muta_ext.uast.handlers.cpp_handler.CppHandler
+compile_timeout_sec: 30
+run_timeout_sec: 10
+sanitizers: true
+sanitizer_flags: "-fsanitize=undefined,address -fno-sanitize-recover=all"
+compiler: g++
+compiler_flags: "-O2 -std=c++17"
+generations: 50
+population_size: 32
+islands: 4
+mutation_rate: 0.3
+cache_enabled: true
+cache_max_size: 10000
+hot_path_detection: true
+mutators:
+  - SwapConditionMutator
+  - InlineVariableMutator
+  - NegateConditionMutator
+  - LoopBoundMutator
+security:
+  block_reinterpret_cast: true
+  block_system: true
+  block_goto: true

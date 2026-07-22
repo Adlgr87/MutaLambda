@@ -11,7 +11,8 @@ except ImportError:
 from muta_ext.uast.core_uast import (
     CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
     Assign, If, For, While, Return, Function, ParallelFor,
-    Comment, Opaque, Node
+    Comment, Opaque, Node, TryExcept, ExceptClause, StructDef,
+    FieldDef, TypeAnnotation, MatchArm, Match
 )
 
 
@@ -159,6 +160,86 @@ class PythonAdapter:
             params=params,
             body=[self._visit(n) for n in node.body],
             decorators=decorators
+        )
+
+    def _visit_Try(self, node: stdlib_ast.Try) -> TryExcept:
+        """Transform Try to TryExcept."""
+        except_clauses = []
+        for handler in node.handlers:
+            exc_type = self._visit(handler.type) if handler.type else None
+            except_clauses.append(ExceptClause(
+                exception_type=exc_type,
+                binding=handler.name,
+                body=[self._visit(n) for n in handler.body]
+            ))
+        
+        return TryExcept(
+            body=[self._visit(n) for n in node.body],
+            except_clauses=except_clauses,
+            finally_body=[self._visit(n) for n in node.finalbody] if node.finalbody else None
+        )
+
+    def _visit_ClassDef(self, node: stdlib_ast.ClassDef) -> StructDef:
+        """Transform ClassDef to StructDef (simple classes only)."""
+        # For simple classes without metaclasses/templates - treat complex ones as Opaque
+        if node.decorator_list or node.bases or node.keywords:
+            return Opaque(
+                original_text=stdlib_ast.unparse(node) if hasattr(stdlib_ast, 'unparse') else str(node),
+                lang="python"
+            )
+        
+        fields = []
+        methods = []
+        
+        for item in node.body:
+            if isinstance(item, stdlib_ast.Assign):
+                for target in item.targets:
+                    if isinstance(target, stdlib_ast.Name):
+                        fields.append(FieldDef(
+                            name=target.id,
+                            type_annotation=None,
+                            default=self._visit(item.value)
+                        ))
+            elif isinstance(item, stdlib_ast.FunctionDef):
+                methods.append(self._visit(item))
+        
+        return StructDef(
+            name=node.name,
+            fields=fields,
+            methods=methods
+        )
+
+    def _visit_Match(self, node: stdlib_ast.Match) -> Match:
+        """Transform Match to Match (Python 3.10+)."""
+        # Check Python version for Match support
+        import sys
+        if sys.version_info < (3, 10):
+            return Opaque(original_text=f"match {node.subject}", lang="python")
+        
+        arms = []
+        for case in node.cases:
+            pattern = self._visit(case.pattern)
+            guard = self._visit(case.guard) if case.guard else None
+            arms.append(MatchArm(
+                pattern=pattern,
+                guard=guard,
+                body=[self._visit(n) for n in case.body]
+            ))
+        
+        return Match(
+            subject=self._visit(node.subject),
+            arms=arms
+        )
+
+    def _visit_AnnAssign(self, node: stdlib_ast.AnnAssign) -> Assign:
+        """Transform AnnAssign (annotated assignment) to Assign with TypeAnnotation."""
+        # For now, treat as regular assignment
+        target = self._visit(node.target) if isinstance(node.target, stdlib_ast.Name) else None
+        if target and node.value:
+            return Assign(target=target, value=self._visit(node.value))
+        return Opaque(
+            original_text=stdlib_ast.unparse(node) if hasattr(stdlib_ast, 'unparse') else str(node),
+            lang="python"
         )
 
     def _visit_unknown(self, node: stdlib_ast.AST) -> Opaque:
