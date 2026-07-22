@@ -8,6 +8,7 @@ __all__ = [
     "pattern_memory",
     "spatial_topology",
     "thc_engine",
+    "uast",
 ]
 
 

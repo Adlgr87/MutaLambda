@@ -37,6 +37,7 @@ _VALID_VALUES: Dict[str, list] = {
         "openrouter",
         "mistral",
     ],
+    "llm.provider": ["openai"],
 }
 
 _DEFAULTS: Dict[str, Any] = {
@@ -79,6 +80,12 @@ _DEFAULTS: Dict[str, Any] = {
     "llm.model": "llama3.2:3b",
     "llm.timeout_sec": 60.0,
     "llm.temperature": 0.2,
+    "llm.enabled": False,
+    "llm.provider": "openai",
+    "llm.mutator_model": "gpt-4o-mini",
+    "llm.mutator_temperature": 0.1,
+    "llm.mutator_max_tokens": 1400,
+    "llm.mutator_timeout_sec": 60.0,
     "reproducibility.seed": None,
     "reproducibility.track_git_commit": True,
     "hfc.enabled": False,
@@ -206,6 +213,18 @@ def validate_config(raw: Dict[str, Any]) -> list:
     llm_temperature = _get_nested(raw, "llm.temperature")
     if llm_temperature is not None and not (0.0 <= llm_temperature <= 2.0):
         errors.append("llm.temperature must be between 0.0 and 2.0")
+
+    mutator_temperature = _get_nested(raw, "llm.mutator_temperature")
+    if mutator_temperature is not None and not (0.0 <= mutator_temperature <= 2.0):
+        errors.append("llm.mutator_temperature must be between 0.0 and 2.0")
+
+    mutator_timeout = _get_nested(raw, "llm.mutator_timeout_sec")
+    if mutator_timeout is not None and mutator_timeout <= 0:
+        errors.append("llm.mutator_timeout_sec must be positive")
+
+    mutator_tokens = _get_nested(raw, "llm.mutator_max_tokens")
+    if mutator_tokens is not None and mutator_tokens <= 0:
+        errors.append("llm.mutator_max_tokens must be positive")
 
     hfc_lambda = _get_nested(raw, "hfc.lambda_clones")
     if hfc_lambda is not None and hfc_lambda < 0:

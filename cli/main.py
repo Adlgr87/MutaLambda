@@ -6,6 +6,7 @@ and the InteractiveREPL for real-time control.
 """
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -744,6 +745,71 @@ class MutaLambdaCLI:
 
         console.print(f"[red]✗ Unknown mutation type: {mutation_type}[/red]")
         return False
+
+    def _resolve_llm_mutator_settings(self) -> Dict[str, Any]:
+        from config_loader import apply_defaults
+
+        raw = dict(self.current_config or {})
+        cfg = apply_defaults(raw)
+        return dict(cfg.get("llm", {}) or {})
+
+    def _generated_mutator_dir(self) -> Path:
+        return Path(__file__).resolve().parents[1] / "muta_ext" / "uast" / "mutators" / "generated"
+
+    def _mutator_file_stem(self, instruction: str, explicit_name: Optional[str]) -> str:
+        base = (explicit_name or instruction).strip().lower()
+        slug = re.sub(r"[^a-z0-9]+", "_", base).strip("_")
+        return slug or "generated_mutator"
+
+    def generate_mutator(
+        self,
+        instruction: str,
+        *,
+        lang: str = "python",
+        name: Optional[str] = None,
+        dry_run: bool = False,
+    ) -> bool:
+        settings = self._resolve_llm_mutator_settings()
+        if not bool(settings.get("enabled", False)):
+            console.print(
+                "[yellow]LLM mutator generation is disabled. "
+                "Set llm.enabled=true in config.yaml to enable it.[/yellow]"
+            )
+            return False
+
+        from muta_ext.uast.mutators.llm_generator import (
+            MutatorGenerationError,
+            generate_mutator,
+        )
+
+        try:
+            generated = generate_mutator(
+                user_intent=instruction,
+                language=lang,
+                provider=str(settings.get("provider", "openai")),
+                model=str(settings.get("mutator_model", "gpt-4o-mini")),
+                temperature=float(settings.get("mutator_temperature", 0.1)),
+                max_tokens=int(settings.get("mutator_max_tokens", 1400)),
+                timeout_sec=float(settings.get("mutator_timeout_sec", 60.0)),
+            )
+        except MutatorGenerationError as exc:
+            console.print(f"[red]✗ Mutator generation failed: {exc}[/red]")
+            return False
+        except Exception as exc:
+            console.print(f"[red]✗ Unexpected mutator generation error: {exc}[/red]")
+            return False
+
+        if dry_run:
+            console.print(generated.code)
+            return True
+
+        out_dir = self._generated_mutator_dir()
+        out_dir.mkdir(parents=True, exist_ok=True)
+        stem = self._mutator_file_stem(instruction, name)
+        out_path = out_dir / f"{stem}.py"
+        out_path.write_text(generated.code.rstrip() + "\n", encoding="utf-8")
+        console.print(f"[green]✓ Generated mutator saved: {out_path}[/green]")
+        return True
 
     def evaluate_results(self, results_path: Optional[str] = None) -> bool:
         """Evaluate and summarize results"""

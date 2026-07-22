@@ -88,6 +88,9 @@ class TestConfigValidation:
         assert _get_nested(cfg, "checkpoint.interval") == 10
         assert _get_nested(cfg, "archive.enabled") is True
         assert _get_nested(cfg, "logging.level") == "INFO"
+        assert _get_nested(cfg, "llm.enabled") is False
+        assert _get_nested(cfg, "llm.provider") == "openai"
+        assert _get_nested(cfg, "llm.mutator_model") == "gpt-4o-mini"
 
     def test_defaults_do_not_overwrite_explicit(self):
         cfg = apply_defaults({
