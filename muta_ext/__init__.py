@@ -6,6 +6,7 @@ __all__ = [
     "advanced_selection",
     "dialectic_engine",
     "pattern_memory",
+    "scientific",
     "spatial_topology",
     "thc_engine",
     "uast",

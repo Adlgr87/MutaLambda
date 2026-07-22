@@ -116,6 +116,21 @@ _DEFAULTS: Dict[str, Any] = {
     "uast.uast_timeout_sec": 30.0,
     "uast.cache_enabled": True,
     "uast.cache_dir": ".uast_cache",
+    # ── Scientific Extension ──────────────────────────────────────────
+    "scientific.enabled": False,
+    "scientific.validation.invariants": True,
+    "scientific.validation.numerical_stability": True,
+    "scientific.validation.conservation_checks": True,
+    "scientific.validation.property_based": True,
+    "scientific.hotpath.enabled": False,
+    "scientific.hotpath.profiler": "cprofile",
+    "scientific.hotpath.min_cumulative_pct": 5.0,
+    "scientific.hotpath.max_hot_functions": 15,
+    "scientific.hotpath.interprocedural_prob": 0.25,
+    "scientific.hotpath.max_functions_per_mutation": 3,
+    "scientific.hotpath.depth": 1,
+    "scientific.domain_operators.enabled": False,
+    "scientific.domain_operators.strength": 0.3,
 }
 
 
