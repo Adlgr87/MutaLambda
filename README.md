@@ -247,6 +247,29 @@ MutaLambda supports multiple LLM providers, configured via `llm.backend` in `con
 
 Environment overrides: `MUTALAMBDA_OLLAMA_URL`, `MUTALAMBDA_OPENAI_URL`, `MUTALAMBDA_LLM_TIMEOUT_SEC`, `MUTALAMBDA_LLM_TEMPERATURE`.
 
+### Natural-language mutator generation (OpenAI)
+
+CoreUAST mutator generation is additive and disabled by default:
+
+```yaml
+llm:
+  enabled: false
+  provider: openai
+  mutator_model: gpt-4o-mini
+  mutator_temperature: 0.1
+  mutator_max_tokens: 1400
+  mutator_timeout_sec: 60.0
+```
+
+Enable it explicitly and run:
+
+```bash
+python cli.py generate-mutator "rename total_price to amount in assignment nodes" --lang python --name rename_total_price
+python cli.py generate-mutator "rename total_price to amount in assignment nodes" --lang python --dry-run
+```
+
+If `llm.enabled` is `false`, current mutation/evolution flows remain unchanged and the command exits with an enablement message.
+
 ---
 
 ## 📚 Lessons Learned
@@ -342,6 +365,7 @@ MutaLambda includes a complete CLI with retro animations, configuration manageme
 | `stats` | Show statistics from previous runs |
 | `evaluate` | Evaluate and summarize results |
 | `mutate` | Mutation operations (prompts, operators, hyperparameters) |
+| `generate-mutator` | Generate a CoreUAST mutator from natural language |
 | `interactive` | Interactive REPL mode |
 | `checkpoints` | Manage checkpoints |
 

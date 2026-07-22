@@ -204,6 +204,27 @@ def interactive(ctx):
 
 
 # ============================================================================
+# GENERATE MUTATOR
+# ============================================================================
+@cli.command("generate-mutator")
+@click.argument("instruction", type=str)
+@click.option('--lang', type=str, default='python', help='Target language for mutator intent')
+@click.option('--name', type=str, default=None, help='Output mutator file name (without .py)')
+@click.option('--dry-run', is_flag=True, help='Print generated code instead of writing file')
+@click.pass_context
+def generate_mutator_cmd(ctx, instruction, lang, name, dry_run):
+    """🤖 Generate CoreUAST mutator code from natural language."""
+    cli_instance = ctx.obj['cli']
+    success = cli_instance.generate_mutator(
+        instruction=instruction,
+        lang=lang,
+        name=name,
+        dry_run=dry_run,
+    )
+    sys.exit(0 if success else 1)
+
+
+# ============================================================================
 # CHECKPOINTS
 # ============================================================================
 @cli.command()

@@ -96,6 +96,12 @@ class PrivacySection(BaseModel):
 class LLMSection(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    enabled: bool = False
+    provider: Literal["openai"] = "openai"
+    mutator_model: str = "gpt-4o-mini"
+    mutator_temperature: float = Field(0.1, ge=0.0, le=2.0)
+    mutator_max_tokens: int = Field(1400, ge=1)
+    mutator_timeout_sec: float = Field(60.0, gt=0)
     backend: Literal["ollama", "openai", "anthropic", "openrouter", "mistral"] = "ollama"
     model: str = "llama3.2:3b"
     timeout_sec: float = Field(60.0, gt=0)
