@@ -124,6 +124,13 @@ muta_lambda.py               Slim orchestrator — wires all modules together
 └── property_testing.py      Property-based test harness
 
 muta_ext/                    Extensions & advanced subsystems
+├── uast/                  Universal AST (CoreUAST) abstraction layer
+│   ├── core_uast.py       CoreUAST data structures
+│   ├── workflow.py        UAST workflow orchestration
+│   ├── adapters/          Language parsers
+│   ├── emitters/          Language emitters
+│   ├── validators/        AST safety validation
+│   └── mutators/          UAST mutation operators
 ├── advanced_selection.py    UCB, Thompson Sampling, ε-greedy multi-armed bandit selection
 ├── dialectic_engine.py      Thesis → Critique → Synthesis pre-sandbox LLM filter
 ├── pattern_memory.py        Reusable AST pattern memory
@@ -247,28 +254,56 @@ MutaLambda supports multiple LLM providers, configured via `llm.backend` in `con
 
 Environment overrides: `MUTALAMBDA_OLLAMA_URL`, `MUTALAMBDA_OPENAI_URL`, `MUTALAMBDA_LLM_TIMEOUT_SEC`, `MUTALAMBDA_LLM_TEMPERATURE`.
 
-### Natural-language mutator generation (OpenAI)
+### Natural-language mutator generation with LLM
 
-CoreUAST mutator generation is additive and disabled by default:
+MutaLambda can generate **custom CoreUAST mutators** from natural language descriptions using LLM models. This feature enables domain experts to create specialized mutation operators without writing AST code manually.
+
+#### Configuration
+
+Enable LLM mutator generation in `config.yaml` or via environment variables:
 
 ```yaml
 llm:
-  enabled: false
-  provider: openai
+  enabled: true             # Required to activate generate-mutator command
+  provider: openai          # openai, anthropic, ollama, openrouter, mistral
   mutator_model: gpt-4o-mini
-  mutator_temperature: 0.1
+  mutator_temperature: 0.1    # Lower = more deterministic
   mutator_max_tokens: 1400
   mutator_timeout_sec: 60.0
 ```
 
-Enable it explicitly and run:
+Environment variables: `MUTALAMBDA_LLM_ENABLED`, `MUTALAMBDA_LLM_PROVIDER`, `MUTALAMBDA_LLM_MUTATOR_MODEL`.
+
+#### Generate a mutator
 
 ```bash
-python cli.py generate-mutator "rename total_price to amount in assignment nodes" --lang python --name rename_total_price
-python cli.py generate-mutator "rename total_price to amount in assignment nodes" --lang python --dry-run
+# Generate and save a mutator
+python cli.py generate-mutator "rename total_price to amount in assignment nodes" \
+    --lang python \
+    --name rename_total_price
+
+# Preview without saving
+python cli.py generate-mutator "optimize list comprehension performance" \
+    --lang python \
+    --dry-run
 ```
 
-If `llm.enabled` is `false`, current mutation/evolution flows remain unchanged and the command exits with an enablement message.
+Note: Provider, model, and temperature are configured via `config.yaml` (see Configuration above).
+
+
+#### How it works
+
+1. **Prompt parsing** — LLM interprets natural language into AST transformation description
+2. **Code generation** — LLM generates Python code implementing a `CoreUASTMutator` subclass
+3. **Security validation** — AST-based scanner blocks dangerous patterns (`eval`, `exec`, `subprocess.*`)
+4. **Syntax validation** — Generated code is parsed and compiled to ensure correctness
+5. **Saving** — Mutator is saved to `muta_ext/uast/mutators/generated/{name}.py`
+
+#### Generated mutators integration
+
+Generated mutators are automatically discovered and loaded by `discover_generated_mutators()` and integrated with the existing mutation pipeline. They can be used in evolution runs like any other mutator.
+
+If `llm.enabled` is `false`, the command exits with instructions to enable it.
 
 ---
 
@@ -544,6 +579,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ✅ **Dialectic Engine** — thesis/critique/synthesis pre-sandbox filter (opt-in)
 ✅ **Horizontal Code Transfer (THC)** — fragment extraction and injection (opt-in)
 ✅ **Evaluation cache** — canonical AST hash cache to skip redundant sandbox calls
+✅ **Universal AST (UAST)** — Language-agnostic AST abstraction (Python support, opt-in)
 
 ### Validated Performance Improvements
 
@@ -574,7 +610,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Total optimizations attempted:** 11
 **Validated improvements:** 5 (MASSIVE: 4 modules, Core: 1 function)
 **Failed experiments:** 4 (reverted)
-**Tests passing:** 149/149 (100%)
+**Tests passing:** 224/224 (100%)
 
 **Impact on production runs:**
 - MASSIVE: **35-60% faster** simulation runtime

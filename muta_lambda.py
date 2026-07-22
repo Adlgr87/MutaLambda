@@ -153,6 +153,13 @@ class EvolveConfig:
     spatial_neighborhood: str = "moore"
     pattern_memory_enabled: bool = False
     allow_untested: bool = True
+    # UAST feature flags — disabled by default for safe opt-in
+    use_uast: bool = False
+    uast_supported_languages: List[str] = field(default_factory=lambda: ["python", "rust"])
+    uast_endpoint: str = ""
+    uast_timeout_sec: float = 30.0
+    uast_cache_enabled: bool = True
+    uast_cache_dir: str = ".uast_cache"
     runner_mode: str = "subprocess"  # subprocess | container | microvm
     allow_expression_eval: bool = False
     enforce_ast_scan: bool = False
@@ -300,6 +307,14 @@ class EvolveConfig:
             target_tests_file=target.get("tests_file", ""),
             target_benchmark_file=target.get("benchmark_file", ""),
             target_api_policy=target.get("api_policy", "strict"),
+            use_uast=cfg.get("uast", {}).get("use_uast", False),
+            uast_supported_languages=cfg.get("uast", {}).get(
+                "supported_languages", ["python", "rust"]
+            ),
+            uast_endpoint=cfg.get("uast", {}).get("uast_endpoint", ""),
+            uast_timeout_sec=cfg.get("uast", {}).get("uast_timeout_sec", 30.0),
+            uast_cache_enabled=cfg.get("uast", {}).get("cache_enabled", True),
+            uast_cache_dir=cfg.get("uast", {}).get("cache_dir", ".uast_cache"),
         )
 
         config.sandbox_timeout = sand.get("timeout_sec", 10.0)

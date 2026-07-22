@@ -13,6 +13,7 @@ evolution:
   early_stop_delta: 0.001     # Mejora relativa mínima (0 = desactivado)
   novelty_alpha: 0.15         # Peso del bonus de novedad (0.0–1.0)
   fitness_normalize: true     # gains vs baseline (latency/throughput/memory)
+  use_uast: false             # Usar Universal AST para mutaciones
   operator_bandit:
     enabled: false            # UCB1 adaptive operator selection
     strategy: ucb1            # ucb1 | epsilon_greedy

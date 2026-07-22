@@ -1,6 +1,37 @@
-"""UAST extension package."""
+from muta_ext.uast.core_uast import (
+    CoreUAST,
+    LiteralNode,
+    Identifier,
+    BinaryOp,
+    UnaryOp,
+    Call,
+    Assign,
+    If,
+    For,
+    While,
+    Return,
+    Function,
+    ParallelFor,
+    Comment,
+    Opaque,
+    Node,
+)
 
-from __future__ import annotations
-
-__all__ = ["mutators"]
-
+__all__ = [
+    "CoreUAST",
+    "LiteralNode",
+    "Identifier",
+    "BinaryOp",
+    "UnaryOp",
+    "Call",
+    "Assign",
+    "If",
+    "For",
+    "While",
+    "Return",
+    "Function",
+    "ParallelFor",
+    "Comment",
+    "Opaque",
+    "Node",
+]

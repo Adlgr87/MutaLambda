@@ -159,6 +159,22 @@ class WorkflowSection(BaseModel):
     trace_limit: int = Field(200, ge=1)
 
 
+class UASTSection(BaseModel):
+    """Universal Abstract Syntax Tree configuration.
+
+    UAST provides language-agnostic code analysis and mutation.
+    Disabled by default for safe opt-in adoption.
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    use_uast: bool = False
+    supported_languages: List[str] = Field(default_factory=lambda: ["python", "rust"])
+    uast_endpoint: str = ""
+    uast_timeout_sec: float = Field(30.0, gt=0)
+    cache_enabled: bool = True
+    cache_dir: str = ".uast_cache"
+
+
 class ReproducibilitySection(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -191,6 +207,7 @@ class MutaLambdaConfig(BaseModel):
     workflow: WorkflowSection = Field(default_factory=WorkflowSection)
     reproducibility: ReproducibilitySection = Field(default_factory=ReproducibilitySection)
     prompt_evolution: PromptEvolutionSection = Field(default_factory=PromptEvolutionSection)
+    uast: UASTSection = Field(default_factory=UASTSection)
     # Optional nested blocks kept as loose dicts for experimental flags
     hfc: Dict[str, Any] = Field(default_factory=dict)
     thc: Dict[str, Any] = Field(default_factory=dict)
@@ -294,6 +311,12 @@ class MutaLambdaConfig(BaseModel):
             pattern_memory_enabled=bool(patterns.get("enabled", False)),
             allow_untested=self.allow_untested,
             runner_mode=sand.runner,
+            use_uast=self.uast.use_uast,
+            uast_supported_languages=self.uast.supported_languages,
+            uast_endpoint=self.uast.uast_endpoint,
+            uast_timeout_sec=self.uast.uast_timeout_sec,
+            uast_cache_enabled=self.uast.cache_enabled,
+            uast_cache_dir=self.uast.cache_dir,
             allow_expression_eval=sand.allow_expression_eval,
             enforce_ast_scan=sand.enforce_ast_scan,
             enforce_api_fingerprint=wf.enforce_api_fingerprint or tgt.enforce_api_fingerprint,

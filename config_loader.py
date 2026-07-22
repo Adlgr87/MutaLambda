@@ -110,6 +110,12 @@ _DEFAULTS: Dict[str, Any] = {
     "spatial.enabled": False,
     "spatial.neighborhood": "moore",
     "pattern_memory.enabled": False,
+    "uast.use_uast": False,
+    "uast.supported_languages": ["python", "rust"],
+    "uast.uast_endpoint": "",
+    "uast.uast_timeout_sec": 30.0,
+    "uast.cache_enabled": True,
+    "uast.cache_dir": ".uast_cache",
 }
 
 
@@ -268,6 +274,11 @@ def validate_config(raw: Dict[str, Any]) -> list:
     neighborhood = _get_nested(raw, "spatial.neighborhood")
     if neighborhood is not None and neighborhood not in ("moore", "von_neumann"):
         errors.append("spatial.neighborhood must be 'moore' or 'von_neumann'")
+
+    # UAST validation
+    uast_timeout = _get_nested(raw, "uast.uast_timeout_sec")
+    if uast_timeout is not None and uast_timeout <= 0:
+        errors.append("uast.uast_timeout_sec must be positive")
 
     return errors
 
