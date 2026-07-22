@@ -543,12 +543,62 @@ Este proyecto está licenciado bajo la Licencia MIT - ver el archivo [LICENSE](L
 
 ---
 
+## 🌐 Soporte Multi-Lenguaje (UAST)
+
+MutaLambda soporta optimización evolutiva para múltiples lenguajes a través de la capa de abstracción Universal AST (UAST).
+
+### Lenguajes Soportados
+
+| Lenguaje | Adaptador | Emisor | Handler | Estado |
+|----------|-----------|--------|---------|--------|
+| Python   | ✅        | ✅     | ✅      | Producción |
+| Rust     | ✅        | ✅     | ✅      | Beta |
+| C++      | ✅        | ✅     | ✅      | Beta |
+
+### Inicio Rápido
+
+```bash
+# Optimizar código Python
+python cli.py uast run --config muta_ext/uast/config/python_uast_template.yaml \
+    --code mi_codigo.py --generations 50
+
+# Optimizar código Rust
+python cli.py uast run --config muta_ext/uast/config/rust_template.yaml \
+    --code mi_codigo.rs --generations 50
+
+# Optimizar código C++
+python cli.py uast run --config muta_ext/uast/config/cpp_template.yaml \
+    --code mi_codigo.cpp --generations 50
+```
+
+### Nuevos Nodos CoreUAST
+
+- `TryExcept` / `ExceptClause` — Manejo de excepciones
+- `StructDef` / `FieldDef` — Definiciones de struct/clase
+- `TypeAnnotation` — Anotaciones de tipo
+- `Match` / `MatchArm` — Coincidencia de patrones
+- `Reference` — Referencias y punteros
+
+### Limitaciones
+
+Ver [muta_ext/uast/LIMITATIONS.md](muta_ext/uast/LIMITATIONS.md) para limitaciones detalladas por lenguaje.
+
+---
+
 ## 📈 Resumen de Métricas
 
 **Total de optimizaciones intentadas:** 11
 **Mejoras validadas:** 5 (MASSIVE: 4 módulos, Core: 1 función)
 **Experimentos fallidos:** 4 (revertidos)
-**Tests pasando:** 149/149 (100%)
+**Tests pasando:** 252/252 (100%) - *Actualizado con soporte multi-lenguaje UAST*
+
+**Impacto en ejecuciones de producción:**
+- MASSIVE: **35-60% más rápido** runtime de simulación
+- Core: Ahorra ~17 segundos por ejecución evolutiva (50 generaciones, 4 islas, 32 individuos)
+- En 100 ejecuciones: **28 minutos ahorrados**
+- Se acumula en todos los experimentos evolutivos futuros
+
+**Métricas detalladas:** [docs/METRICS.md](docs/METRICS.md)
 
 **Impacto en ejecuciones de producción:**
 - MASSIVE: **35-60% más rápido** runtime de simulación
