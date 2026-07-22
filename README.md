@@ -643,18 +643,55 @@ python cli.py uast run --config muta_ext/uast/config/cpp_template.yaml \
 
 ---
 
+## 🔬 Scientific Extension (Flujo A)
+
+Tier 1 optimization layer for scientific code with numerical correctness guarantees.
+
+### Capabilities
+
+- **Scientific Validation Layer (SVL)** — 5 invariantes (hard/soft) para verificar integridad científica
+- **Hot-path Profiling** — cProfile + call-graph extraction para optimización inter-procedural
+- **Domain Operators** — 5 mutadores especializados (strength reduction, numerical stability, etc.)
+
+### Scientific Invariants
+
+| Invariant | Severity | Description |
+|-----------|----------|-------------|
+| energy_non_negative | hard | Total energy ≥ -1e-9 |
+| mass_conservation | hard | \|Δmass\| < 1e-8 |
+| physical_bounds | soft | Quantities in [1e-15, 1e15] |
+| monotonicity_trend | soft | Entropy non-decreasing |
+| numerical_stability | hard | No NaN/Inf/overflow |
+
+### Domain Mutators
+
+| Mutator | Description |
+|---------|-------------|
+| StrengthReductionMutator | x² → x*x, x*2 → x<<1 |
+| NumericalStabilityMutator | (a+b)-c → a+(b-c) |
+| LoopFusionMutator | Merge adjacent loops |
+| LoopFissionMutator | Split multi-statement loops |
+| SafeVectorizationMutator | Loop → np.sum |
+
+### Activation
+
+```bash
+python cli.py run --scientific --hotpath
+```
+
+---
+
 ## 📈 Metrics Summary
 
 **Total optimizations attempted:** 11
 **Validated improvements:** 5 (MASSIVE: 4 modules, Core: 1 function)
 **Failed experiments:** 4 (reverted)
-**Tests passing:** 252/252 (100%) - *Updated with UAST multi-language support*
+**Tests passing:** 326/326 (100%) - *Updated with UAST + Scientific Extension*
 
 **Impact on production runs:**
 - MASSIVE: **35-60% faster** simulation runtime
 - Core: Saves ~17 seconds per evolution run (50 generations, 4 islands, 32 individuals)
-- Over 100 runs: **28 minutes saved**
-- Compounds across all future evolution experiments
+- Scientific Extension: **Validates numerical correctness** before performance evaluation
 
 **Detailed metrics:** [docs/METRICS.md](docs/METRICS.md)
 

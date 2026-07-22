@@ -579,6 +579,63 @@ python cli.py uast run --config muta_ext/uast/config/cpp_template.yaml \
 - `Match` / `MatchArm` — Coincidencia de patrones
 - `Reference` — Referencias y punteros
 
+---
+
+## 🔬 Extensión Científica (Flujo A)
+
+Capa de optimización Tier 1 para código científico con garantías de corrección numérica.
+
+### Capacidades
+
+- **Scientific Validation Layer (SVL)** — 5 invariantes (hard/soft) para verificar integridad científica
+- **Hot-path Profiling** — cProfile + call-graph extraction para optimización inter-procedural
+- **Domain Operators** — 5 mutadores especializados (strength reduction, numerical stability, etc.)
+
+### Invariantes Científicas
+
+| Invariante | Severidad | Descripción |
+|------------|-----------|-------------|
+| energy_non_negative | hard | Total energy ≥ -1e-9 |
+| mass_conservation | hard | \|Δmasa\| < 1e-8 |
+| physical_bounds | soft | Cantidades en [1e-15, 1e15] |
+| monotonicity_trend | soft | Entropía no decrece |
+| numerical_stability | hard | Sin NaN/Inf/overflow |
+
+### Mutadores de Dominio
+
+| Mutador | Descripción |
+|---------|-------------|
+| StrengthReductionMutator | x² → x*x, x*2 → x<<1 |
+| NumericalStabilityMutator | (a+b)-c → a+(b-c) |
+| LoopFusionMutator | Fusionar bucles adyacentes |
+| LoopFissionMutator | Dividir bucles |
+| SafeVectorizationMutator | Bucle → np.sum |
+
+### Activación
+
+```bash
+python cli.py run --scientific --hotpath
+```
+
+---
+
+## 📈 Resumen de Métricas
+
+**Total de optimizaciones intentadas:** 11
+**Mejoras validadas:** 5 (MASSIVE: 4 módulos, Core: 1 función)
+**Experimentos fallidos:** 4 (revertidos)
+**Tests pasando:** 326/326 (100%) - *Actualizado con UAST + Scientific Extension*
+    --code mi_codigo.cpp --generations 50
+```
+
+### Nuevos Nodos CoreUAST
+
+- `TryExcept` / `ExceptClause` — Manejo de excepciones
+- `StructDef` / `FieldDef` — Definiciones de struct/clase
+- `TypeAnnotation` — Anotaciones de tipo
+- `Match` / `MatchArm` — Coincidencia de patrones
+- `Reference` — Referencias y punteros
+
 ### Limitaciones
 
 Ver [muta_ext/uast/LIMITATIONS.md](muta_ext/uast/LIMITATIONS.md) para limitaciones detalladas por lenguaje.
