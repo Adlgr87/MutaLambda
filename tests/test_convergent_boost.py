@@ -14,8 +14,12 @@ from muta_lambda import (
 )
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────
+@pytest.mark.root
+class TestConvergentBoost:
+    """Tests for Convergent Evolution Boost."""
 
+
+# ── Helpers ────────────────────────────────────────────────────────────────
 
 def _make_individual(code: str, score: float = 10.0) -> Individual:
     """Create a minimal individual for boost tests."""
@@ -57,6 +61,7 @@ def _make_agent(config: EvolveConfig, similarity: float = 0.95) -> MutaLambdaAge
 # ── Tests ──────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.root
 def test_boost_applied_when_similar():
     """When 2+ islands have highly similar local_bests, scores get boosted."""
     config = EvolveConfig(
@@ -88,6 +93,7 @@ def test_boost_applied_when_similar():
     assert isl_b.local_best is not None
 
 
+@pytest.mark.root
 def test_boost_skipped_when_different():
     """When code similarity is below threshold, no boost is applied."""
     config = EvolveConfig(
@@ -116,6 +122,7 @@ def test_boost_skipped_when_different():
         assert ind.score == orig
 
 
+@pytest.mark.root
 def test_boost_disabled():
     """When convergent_boost_enabled=False, no boost even if identical code."""
     config = EvolveConfig(
@@ -138,6 +145,7 @@ def test_boost_disabled():
         assert ind.score == orig
 
 
+@pytest.mark.root
 def test_single_island_no_boost():
     """With only 1 island, no boost (minimum 2 for convergence check)."""
     config = EvolveConfig(
@@ -154,6 +162,7 @@ def test_single_island_no_boost():
     assert stats["pairs"] == 0
 
 
+@pytest.mark.root
 def test_code_similarity_fallback_no_archive():
     """_code_similarity works with Jaccard fallback when no archive."""
     config = EvolveConfig()
@@ -170,6 +179,7 @@ def test_code_similarity_fallback_no_archive():
     assert agent._code_similarity("", "") == 1.0
 
 
+@pytest.mark.root
 def test_recompute_local_best():
     """Island.recompute_local_best picks the highest score after external change."""
     isl = _make_island(island_id=0, pop_size=3, best_code="code_a")
@@ -185,6 +195,7 @@ def test_recompute_local_best():
     assert isl.local_best.score == non_best.score
 
 
+@pytest.mark.root
 def test_large_population_boost():
     """Boost scales correctly with larger populations across islands."""
     config = EvolveConfig(

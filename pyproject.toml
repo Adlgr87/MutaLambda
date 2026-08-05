@@ -104,6 +104,13 @@ packages = ["cli", "muta_ext", "muta_ext.evaluation", "muta_ext.lineage", "muta_
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "root: tests básicos del core",
+    "scientific: tests de extensión científica",
+    "uast: tests UAST",
+    "benchmarks: tests de benchmark",
+    "e2e: tests end-to-end",
+]
 
 [tool.ruff]
 line-length = 100

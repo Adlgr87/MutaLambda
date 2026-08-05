@@ -5,6 +5,7 @@ from muta_ext.evaluation.numerical_health import evaluate_numerical_health
 from muta_ext.diagnostics.tipping import detect_tipping
 
 
+@pytest.mark.scientific
 def test_numerical_health_disabled_returns_neutral():
     cfg = EvolutionaryExtensionConfig(enable_numerical_health=False)
     h = evaluate_numerical_health(
@@ -16,6 +17,7 @@ def test_numerical_health_disabled_returns_neutral():
     assert h.has_division is False
 
 
+@pytest.mark.scientific
 def test_numerical_health_enabled_detects_division():
     cfg = EvolutionaryExtensionConfig(enable_numerical_health=True)
     h = evaluate_numerical_health(
@@ -27,6 +29,7 @@ def test_numerical_health_enabled_detects_division():
     assert h.score < 1.0
 
 
+@pytest.mark.scientific
 def test_tipping_detection_disabled_returns_empty():
     cfg = EvolutionaryExtensionConfig(enable_tipping_detection=False)
     series = [1.0, 2.0, 1.0, 10.0, 1.0, 2.0, 1.0, 2.0]
@@ -39,6 +42,7 @@ def test_tipping_detection_disabled_returns_empty():
     assert events == []
 
 
+@pytest.mark.scientific
 def test_tipping_detection_enabled_runs():
     cfg = EvolutionaryExtensionConfig(enable_tipping_detection=True)
     series = [
@@ -61,6 +65,7 @@ def test_tipping_detection_enabled_runs():
         assert "timestamp" in ev.metadata
 
 
+@pytest.mark.scientific
 def test_adaptive_solver_flag_off_degrades_safely():
     # "OFF" debe conservar comportamiento neutral/estable para entradas simples.
     cfg = EvolutionaryExtensionConfig(enable_numerical_health=True, enable_adaptive_solver=False)
@@ -72,6 +77,7 @@ def test_adaptive_solver_flag_off_degrades_safely():
     assert h.has_division is True
 
 
+@pytest.mark.scientific
 def test_adaptive_solver_flag_on_runs_and_never_crashes():
     cfg = EvolutionaryExtensionConfig(enable_numerical_health=True, enable_adaptive_solver=True)
     h = evaluate_numerical_health(

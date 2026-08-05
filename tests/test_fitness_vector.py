@@ -7,6 +7,7 @@ import pytest
 from fitness_vector import FitnessVector
 
 
+@pytest.mark.root
 class TestFitnessVector:
     """Unit tests for the 6-dimensional fitness vector."""
 

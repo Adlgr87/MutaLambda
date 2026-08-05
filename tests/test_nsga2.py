@@ -15,6 +15,7 @@ from nsga2 import (
 )
 
 
+@pytest.mark.root
 def _make_ind(code: str, correctness: float = 0.5, latency: float = 0.01,
               throughput: float = 50.0, memory: float = 10.0,
               parsimony: float = 0.5) -> Individual:
@@ -31,8 +32,8 @@ def _make_ind(code: str, correctness: float = 0.5, latency: float = 0.01,
     )
 
 
+@pytest.mark.root
 class TestNonDominatedSort:
-    """Non-dominated sorting algorithm."""
 
     def test_empty_population(self):
         assert non_dominated_sort([]) == []
@@ -65,6 +66,7 @@ class TestNonDominatedSort:
         assert len(fronts[0].individuals) == 2  # both in Pareto frontier
 
 
+@pytest.mark.root
 class TestNSGA2Select:
     """NSGA-II selection."""
 
@@ -88,6 +90,7 @@ class TestNSGA2Select:
         assert len(selected) == 1
 
 
+@pytest.mark.root
 class TestNSGA2Tournament:
     """Tournament selection for breeding."""
 
@@ -100,6 +103,7 @@ class TestNSGA2Tournament:
         assert nsga2_tournament_select([], 5) == []
 
 
+@pytest.mark.root
 class TestParetoFrontier:
     """Pareto frontier extraction."""
 
@@ -113,6 +117,7 @@ class TestParetoFrontier:
         assert len(frontier) >= 1
 
 
+@pytest.mark.root
 class TestNSGA2Stats:
     """NSGA-II telemetry."""
 
@@ -124,6 +129,7 @@ class TestNSGA2Stats:
         assert stats["num_fronts"] >= 1
 
 
+@pytest.mark.root
 class TestCrowdingDistance:
     """Crowding distance calculation."""
 

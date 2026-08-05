@@ -1,6 +1,7 @@
 import ast
 
 from fitness_vector import FitnessVector
+import pytest
 from hfc_tiers import (
     HFCLeagueEngine,
     HFCTierConfig,
@@ -9,6 +10,11 @@ from hfc_tiers import (
     TIER_LABORATORY,
 )
 from models import EvalResult, Individual, LineageGraph
+
+
+@pytest.mark.root
+class TestHFC:
+    """Tests for HFC tiers."""
 
 
 class _MockEvaluator:
@@ -59,6 +65,7 @@ def _engine(lambda_clones=0, tier3_size=1):
     )
 
 
+@pytest.mark.root
 def test_hfc_keeps_failures_in_laboratory_and_promotes_functional_code():
     good_code = "def f(x):\n    return x + 1\n"
     bad_code = "def broken(:\n"
@@ -81,6 +88,7 @@ def test_hfc_keeps_failures_in_laboratory_and_promotes_functional_code():
     assert all(ind.tier == TIER_LABORATORY for ind in engine.tier1)
 
 
+@pytest.mark.root
 def test_tier2_bacterial_reproduction_clones_without_lineage_noise():
     parent_code = "def f(x):\n    return x + 1\n"
     engine = _engine(lambda_clones=3, tier3_size=1)
@@ -95,6 +103,7 @@ def test_tier2_bacterial_reproduction_clones_without_lineage_noise():
     assert all(clone.record_lineage is False for clone in clones)
 
 
+@pytest.mark.root
 def test_elite_domination_demotes_weakest_elite_to_factory():
     slow_code = "def f(x):\n    return x + 1\n"
     fast_code = "def f(x):\n    return x + 1\n"
@@ -137,6 +146,7 @@ def test_elite_domination_demotes_weakest_elite_to_factory():
     assert any(ind.id == slow.id for ind in engine.tier2)
 
 
+@pytest.mark.root
 def test_hfc_deduplicates_demoted_elite_duplicate_in_factory():
     existing_factory_code = "def f(x):\n    return x + 1\n"
     existing_elite_code = "def f(x):\n    return x + 2\n"
@@ -225,6 +235,7 @@ def test_hfc_deduplicates_demoted_elite_duplicate_in_factory():
     assert engine.tier2[0].id == "same-id"
 
 
+@pytest.mark.root
 def test_dedupe_by_id_keeps_highest_score():
     low = Individual(code="low", score=1.0, id="same-id")
     high = Individual(code="high", score=5.0, id="same-id")
@@ -232,6 +243,7 @@ def test_dedupe_by_id_keeps_highest_score():
     assert HFCLeagueEngine._dedupe_by_id([low, high]) == [high]
 
 
+@pytest.mark.root
 def test_elite_domination_does_not_demote_newly_promoted_candidate():
     slow_code = "def f(x):\n    return x + 1\n"
     medium_code = "def f(x):\n    return x * 2\n"
@@ -314,6 +326,7 @@ def test_elite_domination_does_not_demote_newly_promoted_candidate():
     assert any(ind.id == medium.id for ind in engine.tier3)
 
 
+@pytest.mark.root
 def test_micro_mutators_keep_syntax_valid():
     code = "def f(n):\n    for _ in range(1):\n        return sum([i for i in range(n)])\n"
     engine = _engine(lambda_clones=6, tier3_size=1)
@@ -323,6 +336,7 @@ def test_micro_mutators_keep_syntax_valid():
         ast.parse(mutated)
 
 
+@pytest.mark.root
 def test_top_down_distillation_extracts_concept_from_elite():
     elite_code = "def f(items):\n    seen = {}\n    return [seen.setdefault(x, x) for x in items]\n"
     engine = _engine(tier3_size=1)

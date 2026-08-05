@@ -100,8 +100,7 @@ def _add_solution(arch: SolutionArchive, code: str):
     arch.index.add.return_value = None  # mock
 
 
-# ── Tests ────────────────────────────────────────────────────────────────
-
+@pytest.mark.root
 class TestNoveltyScore:
     """Core Novelty Search tests."""
 
@@ -140,6 +139,7 @@ class TestNoveltyScore:
         assert 0.0 <= arch.novelty_score("x") <= 2.0
 
 
+@pytest.mark.root
 class TestDiverseSample:
     """Curriculum Learning — diverse sample retrieval."""
 
@@ -177,6 +177,7 @@ class TestDiverseSample:
         assert all(isinstance(c, str) for c in result)
 
 
+@pytest.mark.root
 class TestPersistence:
     """Save / Load round-trip."""
 
@@ -214,6 +215,7 @@ class TestPersistence:
         assert os.path.exists(f"{deep_path}.json")
 
 
+@pytest.mark.root
 class TestStats:
     """Archive telemetry."""
 

@@ -11,8 +11,12 @@ from muta_lambda import (
 )
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────
+@pytest.mark.root
+class TestLineage:
+    """Tests for LineageGraph."""
 
+
+# ── Helpers ────────────────────────────────────────────────────────────────
 
 def _make_ind(code: str, score: float = 10.0,
               parent_ids: list = None) -> Individual:
@@ -55,6 +59,7 @@ def _populate_chain(graph: LineageGraph, count: int = 5) -> list:
 # ── Tests ──────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.root
 def test_record_and_ancestors():
     """Registrar 5 generaciones y verificar ancestros del último."""
     graph = LineageGraph()
@@ -69,6 +74,7 @@ def test_record_and_ancestors():
         assert anc_id != last.id
 
 
+@pytest.mark.root
 def test_record_with_crossover():
     """Registrar un hijo con dos padres (crossover)."""
     graph = LineageGraph()
@@ -101,6 +107,7 @@ def test_record_with_crossover():
     assert graph.nodes[child.id].alive is True
 
 
+@pytest.mark.root
 def test_genealogical_distance_same():
     """Distancia de un nodo a sí mismo es 0."""
     graph = LineageGraph()
@@ -108,6 +115,7 @@ def test_genealogical_distance_same():
     assert graph.get_genealogical_distance(inds[0].id, inds[0].id) == 0
 
 
+@pytest.mark.root
 def test_genealogical_distance_parent_child():
     """Distancia padre→hijo = 1."""
     graph = LineageGraph()
@@ -115,6 +123,7 @@ def test_genealogical_distance_parent_child():
     assert graph.get_genealogical_distance(inds[0].id, inds[1].id) == 1
 
 
+@pytest.mark.root
 def test_genealogical_distance_siblings():
     """Distancia entre hermanos (mismo padre) = 2."""
     graph = LineageGraph()
@@ -136,6 +145,7 @@ def test_genealogical_distance_siblings():
     assert dist == 2  # c1 → pa → c2
 
 
+@pytest.mark.root
 def test_genealogical_distance_unrelated():
     """Nodos sin conexión → None."""
     graph = LineageGraph()
@@ -151,6 +161,7 @@ def test_genealogical_distance_unrelated():
     assert dist is None
 
 
+@pytest.mark.root
 def test_find_abandoned_branches_empty():
     """Sin ramas abandonadas → lista vacía."""
     graph = LineageGraph()
@@ -159,6 +170,7 @@ def test_find_abandoned_branches_empty():
     assert candidates == []
 
 
+@pytest.mark.root
 def test_find_abandoned_branches_finds_candidates():
     """Nodos fuera de la rama activa con score alto aparecen."""
     graph = LineageGraph()
@@ -180,6 +192,7 @@ def test_find_abandoned_branches_finds_candidates():
     assert any(c.id == lateral.id for c in candidates)
 
 
+@pytest.mark.root
 def test_find_abandoned_branches_skips_resurrected():
     """Nodo ya resucitado no aparece en candidatos."""
     graph = LineageGraph()
@@ -198,6 +211,7 @@ def test_find_abandoned_branches_skips_resurrected():
     assert not any(c.id == lateral.id for c in candidates)
 
 
+@pytest.mark.root
 def test_find_abandoned_branches_score_threshold():
     """Nodo con score bajo es filtrado."""
     graph = LineageGraph()
@@ -216,6 +230,7 @@ def test_find_abandoned_branches_score_threshold():
     assert not any(c.id == lateral.id for c in candidates)
 
 
+@pytest.mark.root
 def test_serialization_roundtrip():
     """to_dict() → from_dict() preserva datos."""
     graph = LineageGraph()
@@ -235,6 +250,7 @@ def test_serialization_roundtrip():
         assert rnode.parent_ids == node.parent_ids
 
 
+@pytest.mark.root
 def test_stats():
     """stats() retorna métricas correctas."""
     graph = LineageGraph()
@@ -247,6 +263,7 @@ def test_stats():
     assert s["resurrections"] == 0
 
 
+@pytest.mark.root
 def test_empty_graph_stats():
     """Grafo vacío tiene stats coherentes."""
     graph = LineageGraph()

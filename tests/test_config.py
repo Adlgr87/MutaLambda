@@ -19,6 +19,7 @@ from config_loader import (
 from muta_lambda import EvolveConfig
 
 
+@pytest.mark.root
 class TestConfigValidation:
     """Unit tests for YAML schema validation."""
 
@@ -108,6 +109,7 @@ class TestConfigValidation:
         assert _get_nested(cfg, "x.y.z", default=0) == 0
 
 
+@pytest.mark.root
 class TestEvolveConfigFromYaml:
     """Integration: YAML → EvolveConfig."""
 
@@ -227,6 +229,7 @@ hfc:
         assert any("hfc.promotion_correctness" in e for e in errors)
 
 
+@pytest.mark.root
 class TestCheckpointBasic:
     """Basic checkpoint structure (without agent instantiation)."""
 
