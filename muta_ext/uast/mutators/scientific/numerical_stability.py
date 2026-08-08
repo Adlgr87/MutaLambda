@@ -1,7 +1,7 @@
 """NumericalStabilityMutator: (a+b)-c → a+(b-c), sqrt(x²+y²) → hypot, near-equal subtraction"""
 
 import random
-from typing import Optional
+from typing import Any, Optional
 from muta_ext.uast.core_uast import CoreUAST, Node, BinaryOp, LiteralNode, Function
 from muta_ext.uast.mutators.scientific.base_mutator import BaseScientificMutator, MutationResult
 

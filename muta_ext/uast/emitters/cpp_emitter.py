@@ -2,7 +2,7 @@
 """CoreUAST → C++ source emitter."""
 import shutil
 import subprocess
-from typing import Optional
+from typing import Any, Optional
 
 from muta_ext.uast.core_uast import (
     CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,

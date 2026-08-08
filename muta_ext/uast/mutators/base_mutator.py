@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import copy
 import random
-from typing import Optional
+from typing import Any, Optional
 
 from muta_ext.uast.core_uast import (
-    CoreUAST, Node, BinaryOp, If, For, While, Assign, Identifier,
+    CoreUAST, Node, BinaryOp, UnaryOp, If, For, While, Assign, Identifier, Call,
     LiteralNode, TryExcept, StructDef, Match, Opaque
 )
 
