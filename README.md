@@ -1,13 +1,12 @@
-# MutaLambda: Evolutionary Code Optimization System
+# MutaLambda 2.0: Evolutionary Code Optimization System
 
 <div align="center">
 
-**Validated Performance Improvements through Evolutionary Optimization**
+**AI-Powered Code Optimization with Progressive Pipeline**
 
 [![Performance](https://img.shields.io/badge/Performance-50--263%25%20speedup-blue)]()
-[![Modules](https://img.shields.io/badge/Modules-5%20optimized-orange)]()
-[![Correctness](https://img.shields.io/badge/Correctness-189%2B%20tests-green)]()
-[![CLI](https://img.shields.io/badge/CLI-v3.1.0-orange)]()
+[![Tests](https://img.shields.io/badge/Correctness-189%2B%20tests-green)]()
+[![Version](https://img.shields.io/badge/Version-2.0.0-orange)]()
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-success)]()
 
 **English** | **[Español](README_ES.md)**
@@ -16,416 +15,19 @@
 
 ---
 
-## 📚 Documentation
-
-- [**Fitness Metrics**](docs/FITNESS_METRICS.md) — 6-objective fitness vector reference
-- [**Optimization Checklist**](PLANS/OPTIMIZATION_CHECKLIST.md) — FASE 1–4 workflow status
-- [**Test Execution Protocol**](docs/TEST_EXECUTION_PROTOCOL.md) — Phased test runner guide
-- [**Workflow Closeout**](PLANS/WORKFLOW_CLOSEOUT.md) — Remediation workflow closure report
-- [**Metrics**](docs/METRICS.md) — Detailed project metrics
-
----
-
-## 🎯 Overview
-
-MutaLambda is an evolutionary code optimization system that uses Large Language Models (LLMs) to automatically improve performance-critical components of scientific software. The system employs genetic algorithms with AST-based mutations to evolve Python functions for better performance while maintaining correctness.
-
-### Key Achievements
-
-✅ **MASSIVE Framework integration** — 50-263% speedups across 4 scientific modules, 100% correctness
-✅ **`_get_fitness()` optimization** — +10.2% speedup validated with 189+ tests passing
-✅ **FASE 1–4 optimization workflow** — Completed and merged to main (PR #4, PR #5)
-✅ **Multi-language UAST support** — Python, Rust, C++ adapters and emitters
-✅ **Scientific Extension (Flujo A)** — SVL invariants, hot-path profiling, domain mutators
-✅ **Phased test execution protocol** — root / scientific / uast / benchmarks / e2e gates
-✅ **Interactive CLI** — Full-featured command-line interface with retro animations
-✅ **Checkpoint system** — Save and resume evolution runs seamlessly
-
----
-
-## 🔄 FASE Optimization Workflow
-
-The project followed a structured **FASE** (evolutionary optimization) workflow, completed in 4 phases and merged to `main`:
-
-| Phase | PR | Status | Description |
-|-------|----|--------|-------------|
-| **FASE 1–3** | PR #4 (`7d2c73d`) | ✅ Merged | Core refactor, package exports, legacy policy, naming, `_get_fitness()` optimization |
-| **FASE 4** | PR #5 (`26fc294`) | ✅ Merged | Shared `conftest.py` helpers, fitness metrics documentation (`docs/FITNESS_METRICS.md`) |
-
-**Verification (FASE 4):**
-```bash
-pytest tests/ -q          # 189 passed
-```
-
-See [PLANS/OPTIMIZATION_CHECKLIST.md](PLANS/OPTIMIZATION_CHECKLIST.md) for the full checklist and [PLANS/WORKFLOW_CLOSEOUT.md](PLANS/WORKFLOW_CLOSEOUT.md) for the closeout report.
-
----
-
-## 📊 Validated Optimizations
-
-### MASSIVE Framework — 50-263% speedups
-
-MutaLambda was successfully applied to the **MASSIVE** cosmological simulation framework, achieving significant performance improvements while maintaining 100% scientific correctness.
-
-| Module | Speedup | Impact |
-|--------|---------|--------|
-| **utility_logic** | **3.6x faster** | Social pressure calculations |
-| **energy_engine_pure** | **2.3x faster** | Thermodynamic energy engine |
-| **social_architect_pure** | **1.5x faster** | Polarization analysis |
-| **intervention_optimizer** | **25.8% simpler** | Strategy optimization (code reduction) |
-
-**Real-world impact:**
-- **35% faster** simulation runtime (10K+ agents)
-- **60% faster** large-scale experiments (50K agents)
-- **50% faster** real-time analytics
-
-**Statistical rigor:**
-- Confidence level: 95%
-- P-value: < 0.001 for all improvements
-- Effect size: Large (Cohen's d > 0.8)
-- Iterations: 1,000 runs per module
-
-**Validation methodology:**
-- Numerical equivalence: ε < 1e-10
-- Unit tests: 100% pass rate
-- Integration testing: Identical simulation results
-- Peer review: Domain expert approval
-
-### `_get_fitness()` — +10.2% speedup
-
-**Problem:** The `_get_fitness()` helper function is called O(N²) times during NSGA-II selection. It extracts a `FitnessVector` from an `Individual`, checking if the `.fitness` attribute exists.
-
-**Solution:** Replace `hasattr()` check with `getattr()` using default `None`. This avoids double attribute lookup overhead.
-
-```python
-# Before
-def _get_fitness(ind: Individual) -> FitnessVector:
-    if hasattr(ind, 'fitness') and ind.fitness is not None:
-        return ind.fitness
-    return FitnessVector(
-        correctness=max(0.0, min(1.0, ind.score / 100.0)),
-        parsimony=0.5,
-    )
-
-# After
-def _get_fitness(ind: Individual) -> FitnessVector:
-    fitness = getattr(ind, 'fitness', None)
-    if fitness is not None:
-        return fitness
-    return FitnessVector(
-        correctness=max(0.0, min(1.0, ind.score / 100.0)),
-        parsimony=0.5,
-    )
-```
-
-**Impact:** ~17 seconds saved per typical evolution run (50 generations, 4 islands, 32 individuals).
-
-**Validation:** 13/13 nsga2 tests, 14/14 fitness_vector tests, 189+ total tests ✅
-
----
-
-## 🧪 Test Execution Protocol
-
-MutaLambda uses a **phased test execution protocol** with five gates, each representing a level of complexity. Run tests via the `run_tests.sh` script or pytest directly.
-
-### Phases
-
-| Phase | Description | Command |
-|-------|-------------|---------|
-| `root` | Core tests (config, fitness, HFC, NSGA-II, archive, lineage) | `./run_tests.sh root` |
-| `scientific` | Scientific extension tests (numerical health, tipping, invariants) | `./run_tests.sh scientific` |
-| `uast` | Universal AST tests (core UAST, roundtrip, LLM generator) | `./run_tests.sh uast` |
-| `benchmarks` | Performance benchmark tests | `./run_tests.sh benchmarks` |
-| `e2e` | End-to-end pipeline and workflow gate tests | `./run_tests.sh e2e` |
-| `all` | Run all phases | `./run_tests.sh all` |
-
-### Advanced Options
-
-```bash
-# Generate HTML/JSON test reports
-./run_tests.sh all --report
-
-# Generate coverage report
-./run_tests.sh root --coverage
-
-# Verbose output
-./run_tests.sh scientific -v
-
-# Custom timeout (seconds)
-./run_tests.sh all --timeout 60
-
-# Combined options
-./run_tests.sh all --report --coverage -v
-
-# Show help
-./run_tests.sh --help
-```
-
-### Direct pytest
-
-```bash
-# Run all tests
-pytest tests/ -q
-
-# Run a specific phase
-pytest tests/test_nsga2.py tests/test_fitness_vector.py -v
-
-# E2E with fast serial mode
-pytest tests/test_workflow_gates_integration.py -v
-```
-
-See [docs/TEST_EXECUTION_PROTOCOL.md](docs/TEST_EXECUTION_PROTOCOL.md) for the full protocol reference.
-
----
-
-## 🏗️ Architecture
-
-```
-cli.py                       CLI entry point (Click)
-└── cli/                     CLI package
-    ├── main.py              Main logic: MutaLambdaCLI, InteractiveREPL
-    ├── animator.py          Retro animations (ASCII art, progress bars)
-    ├── config_manager.py    Configuration management (templates: basic/advanced/research)
-    └── checkpoint_manager.py  Checkpoint management (pickle + gzip)
-
-muta_lambda.py               Slim orchestrator — wires all modules together
-├── models.py                Data: Individual, FitnessVector, LineageGraph, PromptGenome
-├── evolution_engine.py      AST mutations + LLM-guided code generation (ASTMutator, CoreEvolutionEngine)
-├── island.py                Island evolution unit (per-island population + protocol workflow)
-├── island_evolution.py      Parallel coordinator: IslandPool (thread/process), IslandDiversity
-├── migration.py             Inter-island migration bus (ring, fully_connected, mesh topologies)
-├── sandbox.py               Hard-limited subprocess evaluation (timeout, memory)
-├── archive.py               SolutionArchive (FAISS-backed semantic dedup, optional)
-├── nsga2.py                 NSGA-II multi-objective selection (Pareto fronts + crowding distance)
-├── fitness_vector.py        6-objective vector: correctness, latency_p50, latency_p99, throughput,
-│                                memory_peak_mb, parsimony
-├── hfc_tiers.py             HFC tiered speciation: Laboratory → Factory (bacterial clones) → Elite
-├── workflow_protocol.py     Protocol-driven gates: build → security → sandbox → tests → perf → decision
-├── interpretability.py      3-layer interpretability safeguards for self-evolved code
-├── llm_backend.py           LLM adapters: ollama, openai, anthropic, openrouter, mistral
-├── prompt_evolver.py        Basic PromptGenome evolution
-├── prompt_evolution.py      RichPromptEvolver — 15 mutation operators + crossover + archive-aware
-├── config_loader.py         Declarative YAML config loader with validation
-├── checkpoint_manager.py    Checkpoint save/resume (pickle + gzip)
-└── property_testing.py      Property-based test harness
-
-muta_ext/                    Extensions & advanced subsystems
-├── uast/                  Universal AST (CoreUAST) abstraction layer
-│   ├── core_uast.py       CoreUAST data structures
-│   ├── workflow.py        UAST workflow orchestration
-│   ├── adapters/          Language parsers
-│   ├── emitters/          Language emitters
-│   ├── validators/        AST safety validation
-│   └── mutators/          UAST mutation operators
-├── advanced_selection.py    UCB, Thompson Sampling, ε-greedy multi-armed bandit selection
-├── dialectic_engine.py      Thesis → Critique → Synthesis pre-sandbox LLM filter
-├── pattern_memory.py        Reusable AST pattern memory
-├── spatial_topology.py      2D grid (Moore/Von Neumann) structured migration
-├── thc_engine.py            Horizontal Code Transfer (fragment extraction + injection)
-├── config/
-│   └── scientific_extension.py  Scientific extension config
-├── diagnostics/
-│   ├── evolution_report.py  Shannon entropy, Lyapunov exponent, spectral stability report
-│   └── tipping.py           Phase-transition / tipping-point detection
-├── evaluation/
-│   ├── cache.py             AST-canonical evaluation cache (avoids re-running sandbox)
-│   └── numerical_health.py  Numerical stability health checks
-├── lineage/
-│   └── compression.py       Lineage DAG compression for long runs
-└── mutation/
-    └── stepper_protocol.py  Composable mutation stepper protocol (Strategy pattern)
-
-tests/
-├── benchmarks/              Performance benchmark suite
-└── test_*.py                Unit tests (149 total)
-```
-
-### Protocol-driven evolution workflow
-
-Every generated candidate moves through one mandatory pipeline before it is
-allowed to progress:
-
-```text
-select elite parent(s)
-  -> generate candidate (AST mutation or LLM prompt)
-  -> build gate (parse + compile)
-  -> security gate (blocks eval/exec/compile/os.system/subprocess.*)
-  -> sandbox evaluation (hard-limited subprocess, timeout + memory)
-  -> tests/correctness gate (configurable threshold, default 100%)
-  -> performance gate
-  -> decision gate (promote / retry / reject)
-```
-
-Operational notes:
-- each run has a `run_id`; recent per-stage traces exposed in `agent.get_metrics()["protocol"]`
-- retryable failures automatically fall back to a safer AST retry
-- security gate blocks `eval`, `exec`, `compile`, `__import__`, `os.system`, and `subprocess.*`
-- workflow configurable via `config.yaml` under the `workflow:` key
-
----
-
-## ⚙️ Advanced Features
-
-### HFC — Hierarchical Fair Competition (`hfc_tiers.py`)
-
-Three-tier speciation prevents premature convergence by separating populations by fitness level:
-
-| Tier | Name | Role |
-|------|------|------|
-| 1 | **Laboratory** | Chaotic exploration — LLM crossover + full AST mutation |
-| 2 | **Factory** | Bacterial reproduction (1 → λ clones) with micro-mutators |
-| 3 | **Elite** | Static Pareto frontier — validated, promotion-only |
-
-Top-down distillation extracts elite concepts and injects them back into the Laboratory (configurable interval). Promotion from Laboratory → Factory requires 100% correctness by default.
-
-### Convergent Evolution Boost
-
-When multiple islands converge on similar code (cosine similarity ≥ threshold), the system amplifies the score multiplicatively (`score *= 1 + factor × similarity`). Encourages consensus solutions.
-
-### Resurrection — Time-Travel Backtracking
-
-After N stalled generations, the engine revives the best abandoned branch from the lineage DAG and re-enters it into the population. Up to 3 resurrection attempts per run (configurable).
-
-### Cross-Branch Crossover
-
-Individuals separated by ≥ 3 genealogical hops can be crossed over, injecting diversity when the population converges. Probability: 5% per offspring.
-
-### THC — Horizontal Code Transfer (`muta_ext/thc_engine.py`)
-
-Extracts successful AST fragments from high-scoring individuals and injects them into unrelated individuals, analogous to horizontal gene transfer in bacteria.
-
-### Dialectic Engine (`muta_ext/dialectic_engine.py`)
-
-Before sandbox evaluation, candidate code goes through:
-1. **Thesis** — proposed mutation
-2. **Critique** — LLM identifies correctness / safety issues
-3. **Synthesis** — LLM rewrites taking critique into account
-
-Saves sandbox calls by rejecting syntactically invalid candidates early.
-
-### Advanced Selection (`muta_ext/advanced_selection.py`)
-
-Multi-armed bandit strategies for island operator selection:
-- **UCB** (Upper Confidence Bound)
-- **Thompson Sampling**
-- **ε-greedy**
-
-Combines fitness + novelty + entropy + discovery scores.
-
-### Spatial Topology (`muta_ext/spatial_topology.py`)
-
-Arranges islands on a 2D grid. Migration only between geographic neighbors (Moore or Von Neumann neighborhoods), creating spatial diversity gradients.
-
-### Pattern Memory (`muta_ext/pattern_memory.py`)
-
-Stores reusable AST patterns from successful individuals so future mutations can replay proven transformations rather than re-discovering them.
-
-### Evaluation Cache (`muta_ext/evaluation/cache.py`)
-
-Caches fitness results keyed by canonical AST hash (variable-name and whitespace independent). If a mutation produces structurally identical code to a previously evaluated individual, the cached `FitnessVector` is returned without running the sandbox.
-
----
-
-## 🤖 LLM Backends
-
-MutaLambda supports multiple LLM providers, configured via `llm.backend` in `config.yaml` or the `MUTALAMBDA_*` environment variables:
-
-| Backend | Key | Notes |
-|---------|-----|-------|
-| **Ollama** | `ollama` | Default — local model server |
-| **OpenAI** | `openai` | Requires `OPENAI_API_KEY` |
-| **Anthropic** | `anthropic` | Requires `ANTHROPIC_API_KEY` |
-| **OpenRouter** | `openrouter` | Requires `OPENROUTER_API_KEY` |
-| **Mistral** | `mistral` | Requires `MISTRAL_API_KEY` |
-
-Environment overrides: `MUTALAMBDA_OLLAMA_URL`, `MUTALAMBDA_OPENAI_URL`, `MUTALAMBDA_LLM_TIMEOUT_SEC`, `MUTALAMBDA_LLM_TEMPERATURE`.
-
-### Natural-language mutator generation with LLM
-
-MutaLambda can generate **custom CoreUAST mutators** from natural language descriptions using LLM models. This feature enables domain experts to create specialized mutation operators without writing AST code manually.
-
-#### Configuration
-
-Enable LLM mutator generation in `config.yaml` or via environment variables:
-
-```yaml
-llm:
-  enabled: true             # Required to activate generate-mutator command
-  provider: openai          # openai, anthropic, ollama, openrouter, mistral
-  mutator_model: gpt-4o-mini
-  mutator_temperature: 0.1    # Lower = more deterministic
-  mutator_max_tokens: 1400
-  mutator_timeout_sec: 60.0
-```
-
-Environment variables: `MUTALAMBDA_LLM_ENABLED`, `MUTALAMBDA_LLM_PROVIDER`, `MUTALAMBDA_LLM_MUTATOR_MODEL`.
-
-#### Generate a mutator
-
-```bash
-# Generate and save a mutator
-python cli.py generate-mutator "rename total_price to amount in assignment nodes" \
-    --lang python \
-    --name rename_total_price
-
-# Preview without saving
-python cli.py generate-mutator "optimize list comprehension performance" \
-    --lang python \
-    --dry-run
-```
-
-Note: Provider, model, and temperature are configured via `config.yaml` (see Configuration above).
-
-
-#### How it works
-
-1. **Prompt parsing** — LLM interprets natural language into AST transformation description
-2. **Code generation** — LLM generates Python code implementing a `CoreUASTMutator` subclass
-3. **Security validation** — AST-based scanner blocks dangerous patterns (`eval`, `exec`, `subprocess.*`)
-4. **Syntax validation** — Generated code is parsed and compiled to ensure correctness
-5. **Saving** — Mutator is saved to `muta_ext/uast/mutators/generated/{name}.py`
-
-#### Generated mutators integration
-
-Generated mutators are automatically discovered and loaded by `discover_generated_mutators()` and integrated with the existing mutation pipeline. They can be used in evolution runs like any other mutator.
-
-If `llm.enabled` is `false`, the command exits with instructions to enable it.
-
----
-
-## 📚 Lessons Learned
-
-### 1. Measure Before and After
-
-Never assume an optimization helps — benchmark it. We attempted several optimizations that actually **degraded** performance:
-
-- `dominates()` loop unrolling: **-15.6%** performance (reverted)
-- `weighted_sum()` fast path: **-13.4%** performance (reverted)
-- Fitness-directed migration: **57.6%** success rate vs ring topology's **92.2%** (reverted)
-
-### 2. Simplicity Beats Complexity
-
-Ring topology (92.2% success) outperformed our gradient-based migration system (57.6%). The simpler algorithm was more effective because:
-
-- Predictable genetic flow
-- No overhead from complex selection logic
-- Better diversity preservation
-
-### 3. Python Built-ins Are Fast
-
-`zip()`, `all()`, `any()` are implemented in C and often faster than manual alternatives. Our attempts to "optimize" `dominates()` with explicit variable assignments actually added overhead.
-
-### 4. Validation Is Non-Negotiable
-
-Performance measurement without correctness validation produces false positives. We saw AST mutations produce **+97% and +100% speedups** that were actually semantic bugs:
-
-- Off-by-one errors that made functions return early
-- Missing individuals in population fronts
-- Incorrect dominance relationships
-
-### 5. Small Improvements Compound
-
-A 10.2% speedup in a hot path saves 17 seconds per evolution run. Over 100 runs, that's **28 minutes saved**. Small, validated improvements are worth pursuing.
+## 🎯 What is MutaLambda?
+
+MutaLambda is an **evolutionary code optimization system** that combines LLMs with genetic algorithms to automatically improve Python code performance while maintaining correctness.
+
+### Key Features (v2.0)
+
+- **Progressive Pipeline**: Discovery → Test Synthesis → Fast Mode → Deep Evolution → Patch
+- **3-Objective Fitness**: Correctness, Latency P50, Memory Peak (simplified from 6)
+- **NumPy Optimizer**: Targeted mutations for vectorization, einsum, broadcasting
+- **Anti-Hallucination**: SymPy-based algebraic verification before sandbox
+- **Semantic Caching**: RAG-powered pattern retrieval from FAISS archive
+- **Complexity Gate**: Auto-detects trivial functions, skips unnecessary evolution
+- **Advanced Diagnostics**: P99, throughput, parsimony (opt-in via `--advanced-diagnostics`)
 
 ---
 
@@ -434,376 +36,187 @@ A 10.2% speedup in a hot path saves 17 seconds per evolution run. Over 100 runs,
 ### Installation
 
 ```bash
-git clone https://github.com/Adlgr87/MutaLambda
+git clone https://github.com/Adlgr87/MutaLambda.git
 cd MutaLambda
-python -m venv venv
-source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Run Tests
+### Basic Usage
 
 ```bash
-python -m pytest tests/ -v
+# Run progressive optimization on a script
+python muta_lambda.py --optimize my_script.py
+
+# Force fast mode only (no deep evolution)
+python muta_lambda.py --optimize my_script.py --mode fast
+
+# Deep evolution with NSGA-II fallback
+python muta_lambda.py --optimize my_script.py --mode deep
+
+# Enable advanced diagnostics
+python mutaLambda.py --optimize my_script.py --advanced-diagnostics
 ```
 
-All 149 tests should pass.
+### Example
 
-### Run CLI
+```python
+# target.py
+def compute_sum(n):
+    total = 0
+    for i in range(n):
+        total += i
+    return total
+```
 
 ```bash
-# View general help
-python cli.py --help
+$ python muta_lambda.py --optimize target.py
 
-# Run evolution with configuration
-python cli.py run --config config.yaml --generations 50
+🧬 MutaLambda 2.0 — Progressive Optimization Pipeline
+   Target: target.py
+   Mode: auto
 
-# Create configuration from template
-python cli.py config create --output config.yaml --template basic
+============================================================
+MUTALAMBDA 2.0 — OPTIMIZATION REPORT
+============================================================
+Success: True
+Phase reached: fast_mode
+Duration: 2.34s
+
+Fitness:
+  Correctness: 100.0%
+  Latency P50: 0.05ms (from 12.30ms)
+  Memory Peak: 24.1MB
+
+Hotspots found: 1
+  • compute_sum [CRITICAL]
+============================================================
+```
+
+---
+
+## 🔄 Progressive Pipeline (v2.0)
+
+```
+[INPUT: script.py + --optimize]
+   │
+   ▼
+[FASE 0: Discovery & Hotspots]
+   ├─> cProfile/sys.monitoring profiling
+   ├─> Extract Top 3 functions (>80% cost)
+   └─> Semantic translation report
+   │
+   ▼
+[FASE 1: Test Synthesis]
+   ├─> Scan for existing tests (pytest/unittest)
+   ├─> Auto-generate Hypothesis strategies from type hints
+   └─> Validate baseline correctness
+   │
+   ▼
+[FASE 2: Fast Mode (default)]
+   ├─> LLM generates 5 optimized variants
+   ├─> Parallel sandbox evaluation
+   └─> Success? → Skip to FASE 4
+   │
+   ▼
+[FASE 3: Deep Evolution (--deep)]
+   ├─> NSGA-II with 3 objectives
+   ├─> Island-based parallel evolution
+   └─> Budget-based termination
+   │
+   ▼
+[FASE 4: Patch & Report]
+   ├─> Git-style diff generation
+   ├─> Apply patch to source
+   └─> Comparative metrics table
+```
+
+---
+
+## 📊 Fitness Objectives (Simplified)
+
+MutaLambda 2.0 uses **3 core objectives** for stronger selective pressure:
+
+| Objective | Direction | Description |
+|-----------|-----------|-------------|
+| **Correctness** | ↑ Higher better | Fraction of tests passed (hard gate) |
+| **Latency P50** | ↓ Lower better | Median execution time (ms) |
+| **Memory Peak** | ↓ Lower better | Peak memory usage (MB) |
+
+Advanced metrics (P99, throughput, parsimony) available via `--advanced-diagnostics`.
+
+---
+
+## 🛠️ Architecture
+
+```
+muta_lambda.py          # Main orchestrator + CLI
+├── progressive_pipeline.py   # v2.0 workflow
+├── fitness_vector.py         # 3-objective fitness
+├── hotspot_profiler.py       # Discovery phase
+├── test_synthesizer.py       # Auto test generation
+├── numpy_optimizer.py        # NumPy-specific mutations
+├── ast_math_verifier.py      # Anti-hallucination
+├── diagnostics.py            # Advanced metrics
+├── evolution_engine.py       # AST mutations
+├── island_evolution.py       # NSGA-II islands
+├── archive.py                # FAISS semantic cache
+├── sandbox.py                # Secure evaluation
+└── workflow_protocol.py      # Complexity gates
+```
+
+---
+
+## 📈 Validated Results
+
+| Module | Speedup | Correctness |
+|--------|---------|-------------|
+| utility_logic | **3.6x faster** | 100% |
+| energy_engine_pure | **2.3x faster** | 100% |
+| social_architect_pure | **1.5x faster** | 100% |
+| intervention_optimizer | **25.8% simpler** | 100% |
+
+---
+
+## 🔧 Configuration
+
+```bash
+# Use custom config
+python muta_lambda.py --config my_config.yaml
 
 # Resume from checkpoint
-python cli.py resume --checkpoint checkpoints/gen_50.json --additional-gens 30
+python muta_lambda.py --resume checkpoints/run_xxx
 
-# Interactive mode
-python cli.py interactive
+# Enable HFC (Hierarchical Fitness Climbing)
+python muta_lambda.py --hfc-enabled
 ```
 
 ---
 
-## 🖥️ Command-Line Interface (CLI)
+## 📚 Documentation
 
-MutaLambda includes a complete CLI with retro animations, configuration management, and checkpoints.
-
-### Available Commands
-
-| Command | Description |
-|---------|-------------|
-| `run` | Execute complete evolutionary run |
-| `resume` | Resume evolution from checkpoint |
-| `config create` | Create configuration from template |
-| `config validate` | Validate configuration file |
-| `config show` | Display configuration summary |
-| `stats` | Show statistics from previous runs |
-| `evaluate` | Evaluate and summarize results |
-| `mutate` | Mutation operations (prompts, operators, hyperparameters) |
-| `generate-mutator` | Generate a CoreUAST mutator from natural language |
-| `interactive` | Interactive REPL mode |
-| `checkpoints` | Manage checkpoints |
-
-### Usage Examples
-
-**Run evolution with retro animations:**
-```bash
-python cli.py run --config config.yaml --generations 100 --animation retro
-```
-
-**Create advanced configuration:**
-```bash
-python cli.py config create --output advanced.yaml --template advanced
-```
-
-**Resume from checkpoint:**
-```bash
-python cli.py resume --checkpoint checkpoints/checkpoint_0050.json --additional-gens 50
-```
-
-**Interactive mode:**
-```bash
-python cli.py interactive
-```
-
-### Configuration Templates
-
-The CLI includes three predefined templates:
-
-- **basic** — Minimal configuration for quick tests (50 generations, 4 islands)
-- **advanced** — Production configuration (100 generations, 8 islands, fully_connected)
-- **research** — Experimental configuration (200 generations, 12 islands, complete tracking)
-
-### Checkpoint Management
-
-Checkpoints are saved automatically every N generations (configurable):
-
-```bash
-# List available checkpoints
-python cli.py checkpoints --list
-
-# Clean old checkpoints
-python cli.py checkpoints --clean --max-age 7
-
-# Resume from specific checkpoint
-python cli.py resume --checkpoint checkpoints/checkpoint_0050.json --additional-gens 30
-```
-
-**Complete documentation:** [docs/CLI.md](docs/CLI.md)
-
----
-
-## 🔬 Methodology
-
-### Optimization Process
-
-1. **Identify hot paths** — Profile code to find functions called frequently
-2. **Benchmark baseline** — Measure current performance with statistical rigor
-3. **Apply mutations** — Use AST transformations (loop unrolling, variable inlining, etc.)
-4. **Validate correctness** — Ensure outputs are identical (ε < 1e-10)
-5. **Measure improvement** — Only integrate if speedup is real and validated
-
-### Validation Requirements
-
-- ✅ Numerical equivalence: ε < 1e-10
-- ✅ Unit tests: 100% pass rate
-- ✅ Integration testing: Identical results
-- ✅ Performance improvement: Statistically significant (p < 0.05)
-
----
-
-## 📖 Documentation
-
-### User Documentation
-
-- **[docs/CLI.md](docs/CLI.md)** — Complete CLI guide: commands, configuration, checkpoints, interactive mode
-- **[docs/METRICS.md](docs/METRICS.md)** — Performance metrics, validated benchmarks, and efficiency analysis
-
-### Core Documentation
-
-- **[EMPIRICAL_EVIDENCE.md](EMPIRICAL_EVIDENCE.md)** — Comprehensive report of validated optimizations and failed experiments
-- **[PLANS/AUTO_IMPROVEMENT_PLAN.md](PLANS/AUTO_IMPROVEMENT_PLAN.md)** — 6-phase self-improvement plan
-
-### Code Documentation
-
-- **`nsga2.py`** — NSGA-II multi-objective selection with optimized `_get_fitness()`
-- **`fitness_vector.py`** — 6-objective fitness: correctness, latency_p50, latency_p99, throughput, memory_peak_mb, parsimony
-- **`interpretability.py`** — 3-layer safeguards against "alien code" from recursive self-improvement
-- **`workflow_protocol.py`** — Protocol gates, `ProtocolWorkflow`, `ProtocolTrace`, security scanner
-- **`hfc_tiers.py`** — HFC three-tier speciation (Laboratory / Factory / Elite)
-- **`island_evolution.py`** — Parallel `IslandPool` coordinator with diversity metrics
-- **`cli/main.py`** — Main CLI logic with evolutionary core integration
-
----
-
-## 🎓 Key Insights
-
-### What Works
-
-✅ **Small, targeted optimizations** in hot paths
-✅ **`getattr()` instead of `hasattr()`** for attribute access
-✅ **Simple algorithms** (ring topology) over complex ones (gradient migration)
-✅ **Rigorous validation** before integration
-✅ **Honest benchmarking** with before/after measurements
-
-### What Doesn't Work
-
-❌ **Aggressive AST mutations** without semantic validation
-❌ **Complex "intelligent" systems** that outperform simple alternatives
-❌ **Loop unrolling** in Python (C-level optimizations don't apply)
-❌ **Premature optimization** without measurement
-❌ **Automatic deployment** of evolved code without human review
+- [Fitness Metrics](docs/FITNESS_METRICS.md) — 3-objective fitness reference
+- [CLI Guide](docs/CLI.md) — Command-line interface
+- [Test Protocol](docs/TEST_EXECUTION_PROTOCOL.md) — Testing guide
+- [Scientific Mode](docs/SCIENTIFIC_OPTIMIZATION_MODE.md) — Scientific computing
 
 ---
 
 ## 🤝 Contributing
 
-### Adding Optimizations
-
-1. Identify a hot path with profiling
-2. Benchmark baseline performance
-3. Apply optimization
-4. Validate correctness (all tests must pass)
-5. Measure improvement (must be statistically significant)
-6. Update EMPIRICAL_EVIDENCE.md with results
-7. Submit pull request with benchmarks
-
-### Reporting Issues
-
-If you find a performance regression or correctness issue:
-
-1. Run `python -m pytest tests/ -v` to confirm
-2. Check EMPIRICAL_EVIDENCE.md for known limitations
-3. Open issue with reproduction steps
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- **NSGA-II algorithm** — Deb et al., 2002
-- **Python AST module** — Standard library
-- **Pytest framework** — Testing infrastructure
-- **Docker** — Secure sandbox execution
-- **Click framework** — CLI infrastructure
-- **Rich library** — Terminal UI components
-- **FASE workflow** — Structured evolutionary optimization phases (PR #4, PR #5)
-- **Universal AST (UAST)** — Multi-language AST abstraction layer
-
----
-
-## 📊 Project Status
-
-**Version:** 3.1.0 (CLI)
-**Last Updated:** 2026-08-05
-**Maintainer:** MutaLambda Development Team
-
-### Current Capabilities
-
-✅ **Multi-objective evolution** with NSGA-II selection (6 objectives: correctness, latency_p50, latency_p99, throughput, memory_peak_mb, parsimony)
-✅ **Secure sandbox execution** with hard-limited subprocess isolation
-✅ **Interactive CLI** with retro animations and checkpoint management
-✅ **Validated optimizations** with comprehensive phased test coverage (189+ tests across root/scientific/uast/benchmarks/e2e)
-✅ **Interpretability safeguards** for future self-evolution work
-✅ **Checkpoint system** for resuming long evolution runs
-✅ **Configuration templates** for different use cases (basic/advanced/research)
-✅ **Protocol-driven workflow** with sequential gates (build → security → sandbox → tests → perf)
-✅ **HFC tiers** — Laboratory / Factory / Elite speciation (opt-in)
-✅ **Convergent Evolution Boost** — score amplification for converging islands
-✅ **Resurrection** — time-travel backtracking to revive abandoned lineage branches
-✅ **Cross-branch crossover** — diversity injection from genealogically distant individuals
-✅ **Multiple LLM backends** — ollama, openai, anthropic, openrouter, mistral
-✅ **Dialectic Engine** — thesis/critique/synthesis pre-sandbox filter (opt-in)
-✅ **Horizontal Code Transfer (THC)** — fragment extraction and injection (opt-in)
-✅ **Evaluation cache** — canonical AST hash cache to skip redundant sandbox calls
-✅ **Universal AST (UAST)** — Language-agnostic AST abstraction (Python, Rust, C++, opt-in)
-✅ **Phased test protocol** — root / scientific / uast / benchmarks / e2e gates with `run_tests.sh`
-
-### Validated Performance Improvements
-
-| Component | Optimization | Speedup | Status |
-|-----------|-------------|---------|--------|
-| **MASSIVE Framework** | 4 modules optimized | **50-263%** | ✅ Production |
-| `_get_fitness()` | `getattr()` instead of `hasattr()` | **+10.2%** | ✅ Production |
-| Ring topology | Simple migration pattern | **92.2% success** | ✅ Production |
-| NSGA-II selection | Optimized hot paths | **Validated** | ✅ Production |
-### Failed Experiments (Reverted)
-
-❌ Fitness-directed migration (57.6% success vs 92.2% ring)
-❌ `dominates()` loop unrolling (-15.6% performance)
-❌ `weighted_sum()` fast path (-13.4% performance)
-❌ Aggressive AST mutations (semantic bugs)
-
-### Roadmap
-
-- [x] FASE 1–4 optimization workflow (merged to main)
-- [x] Multi-language UAST support (Python, Rust, C++)
-- [x] Scientific Extension with SVL invariants
-- [x] Phased test execution protocol
-- [ ] Web dashboard for monitoring evolution runs
-- [ ] Distributed evolution across multiple machines
-
----
-
-## 🌐 Multi-Language Support (UAST)
-
-MutaLambda supports evolutionary optimization for multiple languages through the Universal AST (UAST) abstraction layer.
-
-### Supported Languages
-
-| Language | Adapter | Emitter | Handler | Status |
-|----------|---------|---------|---------|--------|
-| Python   | ✅      | ✅      | ✅      | Production |
-| Rust     | ✅      | ✅      | ✅      | Beta |
-| C++      | ✅      | ✅      | ✅      | Beta |
-
-### Quick Start
-
-```bash
-# Optimize Python code
-python cli.py uast run --config muta_ext/uast/config/python_uast_template.yaml \
-    --code my_code.py --generations 50
-
-# Optimize Rust code
-python cli.py uast run --config muta_ext/uast/config/rust_template.yaml \
-    --code my_code.rs --generations 50
-
-# Optimize C++ code
-python cli.py uast run --config muta_ext/uast/config/cpp_template.yaml \
-    --code my_code.cpp --generations 50
-```
-
-### New CoreUAST Nodes
-
-- `TryExcept` / `ExceptClause` — Exception handling
-- `StructDef` / `FieldDef` — Struct/class definitions
-- `TypeAnnotation` — Type hints
-- `Match` / `MatchArm` — Pattern matching
-- `Reference` — References and pointers
-
----
-
-## 🔬 Scientific Extension (Flujo A)
-
-Tier 1 optimization layer for scientific code with numerical correctness guarantees.
-
-### Capabilities
-
-- **Scientific Validation Layer (SVL)** — 5 invariantes (hard/soft) para verificar integridad científica
-- **Hot-path Profiling** — cProfile + call-graph extraction para optimización inter-procedural
-- **Domain Operators** — 5 mutadores especializados (strength reduction, numerical stability, etc.)
-
-### Scientific Invariants
-
-| Invariant | Severity | Description |
-|-----------|----------|-------------|
-| energy_non_negative | hard | Total energy ≥ -1e-9 |
-| mass_conservation | hard | \|Δmass\| < 1e-8 |
-| physical_bounds | soft | Quantities in [1e-15, 1e15] |
-| monotonicity_trend | soft | Entropy non-decreasing |
-| numerical_stability | hard | No NaN/Inf/overflow |
-
-### Domain Mutators
-
-| Mutator | Description |
-|---------|-------------|
-| StrengthReductionMutator | x² → x*x, x*2 → x<<1 |
-| NumericalStabilityMutator | (a+b)-c → a+(b-c) |
-| LoopFusionMutator | Merge adjacent loops |
-| LoopFissionMutator | Split multi-statement loops |
-| SafeVectorizationMutator | Loop → np.sum |
-
-### Activation
-
-```bash
-python cli.py run --scientific --hotpath
-```
-
----
-
-## 📈 Metrics Summary
-
-**Total optimizations attempted:** 11
-**Validated improvements:** 5 (MASSIVE: 4 modules, Core: 1 function)
-**Failed experiments:** 4 (reverted)
-**Tests passing:** 189+ (100%) — *Phased: root / scientific / uast / benchmarks / e2e*
-
-**Impact on production runs:**
-- MASSIVE: **35-60% faster** simulation runtime
-- Core: Saves ~17 seconds per evolution run (50 generations, 4 islands, 32 individuals)
-- Scientific Extension: **Validates numerical correctness** before performance evaluation
-
-**Detailed metrics:** [docs/METRICS.md](docs/METRICS.md)
-
-### Recent Commits (origin/main)
-
-```
-515976e feat: add test execution protocol with phased tests and integration tests
-e38fab5 docs: update README with Scientific Extension documentation
-2d44b69 feat: Scientific Extension (SVL, Hot-path, Domain Operators)
-19e7e8d docs: update Spanish README with multi-language UAST support
-bc973b6 feat: multi-language UAST support (Python, Rust, C++)
-26fc294 Merge pull request #5: MutaLambda optimization FASE 4
-7d2c73d Merge pull request #4: MutaLambda optimization FASE 1–3
-```
+MIT License — see LICENSE file for details.
 
 ---
 
 <div align="center">
 
-**Built with evolutionary algorithms, validated with empirical evidence.**
+**MutaLambda 2.0** — Evolving code, intelligently.
 
-[Report Bug](https://github.com/Adlgr87/MutaLambda/issues) · [Request Feature](https://github.com/Adlgr87/MutaLambda/issues)
+⭐ Star us on GitHub!
 
 </div>
