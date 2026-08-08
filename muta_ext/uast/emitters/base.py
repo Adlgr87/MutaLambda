@@ -1,6 +1,9 @@
 """Base emitter interface for emitting CoreUAST back to source."""
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from muta_ext.uast.core_uast import CoreUAST
 
 
 class BaseEmitter(ABC):

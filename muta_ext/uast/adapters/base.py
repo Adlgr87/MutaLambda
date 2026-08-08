@@ -1,6 +1,9 @@
 """Base adapter interface for parsing source to CoreUAST."""
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from muta_ext.uast.core_uast import CoreUAST
 
 
 class BaseAdapter(ABC):

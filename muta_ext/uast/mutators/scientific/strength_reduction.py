@@ -1,7 +1,7 @@
 """StrengthReductionMutator: x²→x*x, x*2→x<<1, x/2→x*0.5, x³→x*x*x"""
 
 import random
-from typing import Optional
+from typing import Any, Optional
 from muta_ext.uast.core_uast import CoreUAST, Node, BinaryOp, LiteralNode, Function
 from muta_ext.uast.mutators.scientific.base_mutator import BaseScientificMutator, MutationResult
 
