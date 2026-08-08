@@ -1475,6 +1475,17 @@ def main() -> None:
                         help="Activar evolución por ligas HFC")
     parser.add_argument("--hfc-lambda-clones", type=int, default=8,
                         help="Clones bacterianos por individuo Tier2")
+    # MutaLambda 2.0 Progressive Pipeline
+    parser.add_argument("--optimize", type=str, default=None,
+                        help="Path to Python script to optimize (progressive pipeline)")
+    parser.add_argument("--mode", type=str, default="auto",
+                        choices=["auto", "fast", "deep"],
+                        help="Optimization mode (default: auto)")
+    parser.add_argument("--advanced-diagnostics", action="store_true",
+                        help="Enable advanced metrics (P99, throughput, parsimony)")
+    parser.add_argument("--min-improvement", type=float, default=0.15,
+                        help="Minimum improvement threshold (default: 0.15)")
+
     args = parser.parse_args()
 
     logging.getLogger("MutaLambda").setLevel(args.log_level)
@@ -1513,6 +1524,40 @@ def main() -> None:
         config.sandbox_timeout = 5.0
         config.sandbox_workers = 4
         agent_kwargs = {"config": config}
+
+
+    # MutaLambda 2.0 Progressive Pipeline
+    if args.optimize:
+        from progressive_pipeline import ProgressivePipeline
+        from pathlib import Path
+
+        script_path = Path(args.optimize)
+        if not script_path.exists():
+            print(f"Error: File not found: {script_path}")
+            sys.exit(1)
+
+        code = script_path.read_text()
+        print(f"\n🧬 MutaLambda 2.0 — Progressive Optimization Pipeline")
+        print(f"   Target: {script_path}")
+        print(f"   Mode: {args.mode}")
+        print(f"   Advanced Diagnostics: {args.advanced_diagnostics}")
+        print()
+
+        pipeline = ProgressivePipeline(
+            llm_fn=_demo_llm_fn,
+            min_improvement=args.min_improvement,
+        )
+
+        result = pipeline.run(code, mode=args.mode)
+        print(result.summary())
+
+        if result.success and result.optimized_code:
+            print("\n" + "=" * 60)
+            print("OPTIMIZED CODE:")
+            print("=" * 60)
+            print(result.optimized_code)
+
+        sys.exit(0 if result.success else 1)
 
     if args.resume:
         from checkpoint_manager import resume_agent
