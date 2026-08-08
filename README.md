@@ -6,13 +6,23 @@
 
 [![Performance](https://img.shields.io/badge/Performance-50--263%25%20speedup-blue)]()
 [![Modules](https://img.shields.io/badge/Modules-5%20optimized-orange)]()
-[![Correctness](https://img.shields.io/badge/Correctness-149%2F149%20tests-green)]()
+[![Correctness](https://img.shields.io/badge/Correctness-189%2B%20tests-green)]()
 [![CLI](https://img.shields.io/badge/CLI-v3.1.0-orange)]()
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-success)]()
 
 **English** | **[Español](README_ES.md)**
 
 </div>
+
+---
+
+## 📚 Documentation
+
+- [**Fitness Metrics**](docs/FITNESS_METRICS.md) — 6-objective fitness vector reference
+- [**Optimization Checklist**](PLANS/OPTIMIZATION_CHECKLIST.md) — FASE 1–4 workflow status
+- [**Test Execution Protocol**](docs/TEST_EXECUTION_PROTOCOL.md) — Phased test runner guide
+- [**Workflow Closeout**](PLANS/WORKFLOW_CLOSEOUT.md) — Remediation workflow closure report
+- [**Metrics**](docs/METRICS.md) — Detailed project metrics
 
 ---
 
@@ -23,9 +33,31 @@ MutaLambda is an evolutionary code optimization system that uses Large Language 
 ### Key Achievements
 
 ✅ **MASSIVE Framework integration** — 50-263% speedups across 4 scientific modules, 100% correctness
-✅ **`_get_fitness()` optimization** — +10.2% speedup validated with 149/149 tests passing
+✅ **`_get_fitness()` optimization** — +10.2% speedup validated with 189+ tests passing
+✅ **FASE 1–4 optimization workflow** — Completed and merged to main (PR #4, PR #5)
+✅ **Multi-language UAST support** — Python, Rust, C++ adapters and emitters
+✅ **Scientific Extension (Flujo A)** — SVL invariants, hot-path profiling, domain mutators
+✅ **Phased test execution protocol** — root / scientific / uast / benchmarks / e2e gates
 ✅ **Interactive CLI** — Full-featured command-line interface with retro animations
 ✅ **Checkpoint system** — Save and resume evolution runs seamlessly
+
+---
+
+## 🔄 FASE Optimization Workflow
+
+The project followed a structured **FASE** (evolutionary optimization) workflow, completed in 4 phases and merged to `main`:
+
+| Phase | PR | Status | Description |
+|-------|----|--------|-------------|
+| **FASE 1–3** | PR #4 (`7d2c73d`) | ✅ Merged | Core refactor, package exports, legacy policy, naming, `_get_fitness()` optimization |
+| **FASE 4** | PR #5 (`26fc294`) | ✅ Merged | Shared `conftest.py` helpers, fitness metrics documentation (`docs/FITNESS_METRICS.md`) |
+
+**Verification (FASE 4):**
+```bash
+pytest tests/ -q          # 189 passed
+```
+
+See [PLANS/OPTIMIZATION_CHECKLIST.md](PLANS/OPTIMIZATION_CHECKLIST.md) for the full checklist and [PLANS/WORKFLOW_CLOSEOUT.md](PLANS/WORKFLOW_CLOSEOUT.md) for the closeout report.
 
 ---
 
@@ -88,7 +120,61 @@ def _get_fitness(ind: Individual) -> FitnessVector:
 
 **Impact:** ~17 seconds saved per typical evolution run (50 generations, 4 islands, 32 individuals).
 
-**Validation:** 13/13 nsga2 tests, 14/14 fitness_vector tests, 149/149 total tests ✅
+**Validation:** 13/13 nsga2 tests, 14/14 fitness_vector tests, 189+ total tests ✅
+
+---
+
+## 🧪 Test Execution Protocol
+
+MutaLambda uses a **phased test execution protocol** with five gates, each representing a level of complexity. Run tests via the `run_tests.sh` script or pytest directly.
+
+### Phases
+
+| Phase | Description | Command |
+|-------|-------------|---------|
+| `root` | Core tests (config, fitness, HFC, NSGA-II, archive, lineage) | `./run_tests.sh root` |
+| `scientific` | Scientific extension tests (numerical health, tipping, invariants) | `./run_tests.sh scientific` |
+| `uast` | Universal AST tests (core UAST, roundtrip, LLM generator) | `./run_tests.sh uast` |
+| `benchmarks` | Performance benchmark tests | `./run_tests.sh benchmarks` |
+| `e2e` | End-to-end pipeline and workflow gate tests | `./run_tests.sh e2e` |
+| `all` | Run all phases | `./run_tests.sh all` |
+
+### Advanced Options
+
+```bash
+# Generate HTML/JSON test reports
+./run_tests.sh all --report
+
+# Generate coverage report
+./run_tests.sh root --coverage
+
+# Verbose output
+./run_tests.sh scientific -v
+
+# Custom timeout (seconds)
+./run_tests.sh all --timeout 60
+
+# Combined options
+./run_tests.sh all --report --coverage -v
+
+# Show help
+./run_tests.sh --help
+```
+
+### Direct pytest
+
+```bash
+# Run all tests
+pytest tests/ -q
+
+# Run a specific phase
+pytest tests/test_nsga2.py tests/test_fitness_vector.py -v
+
+# E2E with fast serial mode
+pytest tests/test_workflow_gates_integration.py -v
+```
+
+See [docs/TEST_EXECUTION_PROTOCOL.md](docs/TEST_EXECUTION_PROTOCOL.md) for the full protocol reference.
 
 ---
 
@@ -552,13 +638,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Docker** — Secure sandbox execution
 - **Click framework** — CLI infrastructure
 - **Rich library** — Terminal UI components
+- **FASE workflow** — Structured evolutionary optimization phases (PR #4, PR #5)
+- **Universal AST (UAST)** — Multi-language AST abstraction layer
 
 ---
 
 ## 📊 Project Status
 
 **Version:** 3.1.0 (CLI)
-**Last Updated:** 2026-07-12
+**Last Updated:** 2026-08-05
 **Maintainer:** MutaLambda Development Team
 
 ### Current Capabilities
@@ -566,7 +654,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ✅ **Multi-objective evolution** with NSGA-II selection (6 objectives: correctness, latency_p50, latency_p99, throughput, memory_peak_mb, parsimony)
 ✅ **Secure sandbox execution** with hard-limited subprocess isolation
 ✅ **Interactive CLI** with retro animations and checkpoint management
-✅ **Validated optimizations** with comprehensive test coverage (149/149 tests)
+✅ **Validated optimizations** with comprehensive phased test coverage (189+ tests across root/scientific/uast/benchmarks/e2e)
 ✅ **Interpretability safeguards** for future self-evolution work
 ✅ **Checkpoint system** for resuming long evolution runs
 ✅ **Configuration templates** for different use cases (basic/advanced/research)
@@ -579,7 +667,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ✅ **Dialectic Engine** — thesis/critique/synthesis pre-sandbox filter (opt-in)
 ✅ **Horizontal Code Transfer (THC)** — fragment extraction and injection (opt-in)
 ✅ **Evaluation cache** — canonical AST hash cache to skip redundant sandbox calls
-✅ **Universal AST (UAST)** — Language-agnostic AST abstraction (Python support, opt-in)
+✅ **Universal AST (UAST)** — Language-agnostic AST abstraction (Python, Rust, C++, opt-in)
+✅ **Phased test protocol** — root / scientific / uast / benchmarks / e2e gates with `run_tests.sh`
 
 ### Validated Performance Improvements
 
@@ -598,8 +687,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Roadmap
 
-- [ ] Integration testing with real-world Python functions
-- [ ] Extended benchmark suite for diverse workloads
+- [x] FASE 1–4 optimization workflow (merged to main)
+- [x] Multi-language UAST support (Python, Rust, C++)
+- [x] Scientific Extension with SVL invariants
+- [x] Phased test execution protocol
 - [ ] Web dashboard for monitoring evolution runs
 - [ ] Distributed evolution across multiple machines
 
@@ -686,7 +777,7 @@ python cli.py run --scientific --hotpath
 **Total optimizations attempted:** 11
 **Validated improvements:** 5 (MASSIVE: 4 modules, Core: 1 function)
 **Failed experiments:** 4 (reverted)
-**Tests passing:** 326/326 (100%) - *Updated with UAST + Scientific Extension*
+**Tests passing:** 189+ (100%) — *Phased: root / scientific / uast / benchmarks / e2e*
 
 **Impact on production runs:**
 - MASSIVE: **35-60% faster** simulation runtime
@@ -694,6 +785,18 @@ python cli.py run --scientific --hotpath
 - Scientific Extension: **Validates numerical correctness** before performance evaluation
 
 **Detailed metrics:** [docs/METRICS.md](docs/METRICS.md)
+
+### Recent Commits (origin/main)
+
+```
+515976e feat: add test execution protocol with phased tests and integration tests
+e38fab5 docs: update README with Scientific Extension documentation
+2d44b69 feat: Scientific Extension (SVL, Hot-path, Domain Operators)
+19e7e8d docs: update Spanish README with multi-language UAST support
+bc973b6 feat: multi-language UAST support (Python, Rust, C++)
+26fc294 Merge pull request #5: MutaLambda optimization FASE 4
+7d2c73d Merge pull request #4: MutaLambda optimization FASE 1–3
+```
 
 ---
 
