@@ -1,39 +1,59 @@
-# MutaLambda 2.0: Evolutionary Code Optimization System
+# MutaLambda 2.0
 
-<div align="center">
+**MutaLambda** is an evolutionary code optimization system that combines LLMs with genetic algorithms (NSGA-II) to automatically improve code performance while maintaining correctness. It supports Python, Rust, and C++ via a Universal AST (UAST) layer for cross-language mutation.
 
-**AI-Powered Code Optimization with Progressive Pipeline**
+## Architecture
 
-[![Performance](https://img.shields.io/badge/Performance-50--263%25%20speedup-blue)]()
-[![Tests](https://img.shields.io/badge/Correctness-189%2B%20tests-green)]()
-[![Version](https://img.shields.io/badge/Version-2.0.0-orange)]()
-[![Status](https://img.shields.io/badge/Status-Production%20Ready-success)]()
+```
+MutaLambda/
+├── muta_lambda.py            # Main orchestrator + CLI entrypoint
+├── progressive_pipeline.py   # 5-phase workflow orchestration
+├── evolution_engine.py       # AST mutation operators & CoreEvolutionEngine
+├── island.py                 # Island evolution unit (NSGA-II)
+├── fitness_vector.py         # 3-objective Pareto fitness
+├── mutation_filters.py       # Security/correctness gates
+├── component_evolution.py    # Coupling/cohesion analysis
+├── hfc_tiers.py              # Hierarchical Fitness Climbing (Tier 1/2/3)
+├── config_loader.py          # YAML → Pydantic config loader
+├── checkpoint_manager.py     # JSON-based evolution state persistence
+├── sandbox.py                # Secure candidate evaluation
+├── archive.py                # FAISS semantic cache (RAG)
+└── muta_ext/uast/            # Universal AST (multi-language)
+    ├── adapters/             # Source → UAST parsers (Python, Rust, C++)
+    ├── emitters/             # UAST → source code generators
+    └── mutators/             # Structural mutation operators
+```
 
-**English** | **[Español](README_ES.md)**
+## Key Features
 
-</div>
+### Core Pipeline
+- **Progressive Pipeline**: 5-phase workflow — Discovery → Test Synthesis → Fast Mode → Deep Evolution → Patch
+- **3-Objective Fitness**: Correctness (hard gate) + Latency P50 + Memory Peak (Pareto optimization)
+- **HFC (Hierarchical Fitness Climbing)**: 3-tier system — Tier1 lab (100), Tier2 factory (50), Tier3 elite (10)
 
----
+### Genetic Evolution
+- **NSGA-II**: Multi-island evolution with ring/mesh/random topology
+- **Component Evolution**: Coupling/cohesion metrics, interface-level crossover and mutation
+- **Prompt Evolution**: Meta-evolution of LLM system prompts
 
-## 🎯 What is MutaLambda?
+### Safety & Correctness
+- **Mutation Filters**: Regex-based blocking of eval/exec/subprocess/OS calls
+- **Anti-Hallucination**: SymPy-based algebraic verification
+- **Scientific Mode**: Domain invariants (energy conservation, mass balance, monotonicity)
 
-MutaLambda is an **evolutionary code optimization system** that combines LLMs with genetic algorithms to automatically improve Python code performance while maintaining correctness.
+### Performance Optimization
+- **NumPy Optimizer**: Vectorization, einsum, broadcasting mutations
+- **ParallelFor Mutator**: Detects reduction patterns in loops and transforms to map/reduce
+- **Semantic Caching**: FAISS-based RAG retrieval of past solutions
 
-### Key Features (v2.0)
+### Language Support (via UAST)
+| Language | Adapter | Emitter | Status |
+|----------|---------|---------|--------|
+| Python | ✅ | ✅ | Primary |
+| Rust | ✅ | ✅ | Supported |
+| C++ | ✅ | ✅ | Supported |
 
-- **Progressive Pipeline**: Discovery → Test Synthesis → Fast Mode → Deep Evolution → Patch
-- **3-Objective Fitness**: Correctness, Latency P50, Memory Peak (simplified from 6)
-- **NumPy Optimizer**: Targeted mutations for vectorization, einsum, broadcasting
-- **Anti-Hallucination**: SymPy-based algebraic verification before sandbox
-- **Semantic Caching**: RAG-powered pattern retrieval from FAISS archive
-- **Complexity Gate**: Auto-detects trivial functions, skips unnecessary evolution
-- **Advanced Diagnostics**: P99, throughput, parsimony (opt-in via `--advanced-diagnostics`)
-
----
-
-## 🚀 Quick Start
-
-### Installation
+## Installation
 
 ```bash
 git clone https://github.com/Adlgr87/MutaLambda.git
@@ -41,182 +61,84 @@ cd MutaLambda
 pip install -r requirements.txt
 ```
 
-### Basic Usage
+## Usage
 
 ```bash
-# Run progressive optimization on a script
+# Basic optimization
 python muta_lambda.py --optimize my_script.py
 
-# Force fast mode only (no deep evolution)
+# Force fast mode only
 python muta_lambda.py --optimize my_script.py --mode fast
 
-# Deep evolution with NSGA-II fallback
+# Deep evolution with NSGA-II
 python muta_lambda.py --optimize my_script.py --mode deep
 
-# Enable advanced diagnostics
-python mutaLambda.py --optimize my_script.py --advanced-diagnostics
+# With HFC enabled
+python muta_lambda.py --optimize my_script.py --hfc-enabled
+
+# Resume from checkpoint
+python muta_lambda.py --resume checkpoints/run_xxx
+
+# Advanced diagnostics (P99, throughput, parsimony)
+python muta_lambda.py --optimize my_script.py --advanced-diagnostics
 ```
 
-### Example
+## Configuration
 
-```python
-# target.py
-def compute_sum(n):
-    total = 0
-    for i in range(n):
-        total += i
-    return total
+Configuration is managed via `config.yaml` with Pydantic validation:
+
+```yaml
+evolution:
+  islands: 4
+  generations: 100
+  topology: ring
+  
+population:
+  size: 50
+  elite: 10
+  migration_interval: 10
+
+sandbox:
+  timeout: 30
+  workers: 4
+  
+llm:
+  backend: ollama
+  model: codestral
+  
+uast:
+  enabled: false
+  languages: [python, rust, cpp]
 ```
 
-```bash
-$ python muta_lambda.py --optimize target.py
+## Pipeline Stages
 
-🧬 MutaLambda 2.0 — Progressive Optimization Pipeline
-   Target: target.py
-   Mode: auto
+1. **Discovery & Hotspots** — profiling + top-3 function extraction
+2. **Test Synthesis** — auto-generate Hypothesis strategies
+3. **Fast Mode** — LLM generates 5 optimized variants, parallel sandbox eval
+4. **Deep Evolution** — NSGA-II with island-based parallel evolution
+5. **Patch & Report** — git-style diff + comparative metrics
 
-============================================================
-MUTALAMBDA 2.0 — OPTIMIZATION REPORT
-============================================================
-Success: True
-Phase reached: fast_mode
-Duration: 2.34s
+## Validation Results
 
-Fitness:
-  Correctness: 100.0%
-  Latency P50: 0.05ms (from 12.30ms)
-  Memory Peak: 24.1MB
-
-Hotspots found: 1
-  • compute_sum [CRITICAL]
-============================================================
-```
-
----
-
-## 🔄 Progressive Pipeline (v2.0)
-
-```
-[INPUT: script.py + --optimize]
-   │
-   ▼
-[FASE 0: Discovery & Hotspots]
-   ├─> cProfile/sys.monitoring profiling
-   ├─> Extract Top 3 functions (>80% cost)
-   └─> Semantic translation report
-   │
-   ▼
-[FASE 1: Test Synthesis]
-   ├─> Scan for existing tests (pytest/unittest)
-   ├─> Auto-generate Hypothesis strategies from type hints
-   └─> Validate baseline correctness
-   │
-   ▼
-[FASE 2: Fast Mode (default)]
-   ├─> LLM generates 5 optimized variants
-   ├─> Parallel sandbox evaluation
-   └─> Success? → Skip to FASE 4
-   │
-   ▼
-[FASE 3: Deep Evolution (--deep)]
-   ├─> NSGA-II with 3 objectives
-   ├─> Island-based parallel evolution
-   └─> Budget-based termination
-   │
-   ▼
-[FASE 4: Patch & Report]
-   ├─> Git-style diff generation
-   ├─> Apply patch to source
-   └─> Comparative metrics table
-```
-
----
-
-## 📊 Fitness Objectives (Simplified)
-
-MutaLambda 2.0 uses **3 core objectives** for stronger selective pressure:
-
-| Objective | Direction | Description |
-|-----------|-----------|-------------|
-| **Correctness** | ↑ Higher better | Fraction of tests passed (hard gate) |
-| **Latency P50** | ↓ Lower better | Median execution time (ms) |
-| **Memory Peak** | ↓ Lower better | Peak memory usage (MB) |
-
-Advanced metrics (P99, throughput, parsimony) available via `--advanced-diagnostics`.
-
----
-
-## 🛠️ Architecture
-
-```
-muta_lambda.py          # Main orchestrator + CLI
-├── progressive_pipeline.py   # v2.0 workflow
-├── fitness_vector.py         # 3-objective fitness
-├── hotspot_profiler.py       # Discovery phase
-├── test_synthesizer.py       # Auto test generation
-├── numpy_optimizer.py        # NumPy-specific mutations
-├── ast_math_verifier.py      # Anti-hallucination
-├── diagnostics.py            # Advanced metrics
-├── evolution_engine.py       # AST mutations
-├── island_evolution.py       # NSGA-II islands
-├── archive.py                # FAISS semantic cache
-├── sandbox.py                # Secure evaluation
-└── workflow_protocol.py      # Complexity gates
-```
-
----
-
-## 📈 Validated Results
-
-| Module | Speedup | Correctness |
-|--------|---------|-------------|
+| Target | Improvement | Correctness |
+|--------|-------------|-------------|
 | utility_logic | **3.6x faster** | 100% |
 | energy_engine_pure | **2.3x faster** | 100% |
 | social_architect_pure | **1.5x faster** | 100% |
 | intervention_optimizer | **25.8% simpler** | 100% |
 
----
-
-## 🔧 Configuration
+## Testing
 
 ```bash
-# Use custom config
-python muta_lambda.py --config my_config.yaml
+# Run all tests
+python -m pytest tests/ -v
 
-# Resume from checkpoint
-python muta_lambda.py --resume checkpoints/run_xxx
-
-# Enable HFC (Hierarchical Fitness Climbing)
-python muta_lambda.py --hfc-enabled
+# Run specific module tests
+python -m pytest tests/test_component_evolution.py -v
+python -m pytest tests/scientific/ -v
 ```
 
----
+## License
 
-## 📚 Documentation
-
-- [Fitness Metrics](docs/FITNESS_METRICS.md) — 3-objective fitness reference
-- [CLI Guide](docs/CLI.md) — Command-line interface
-- [Test Protocol](docs/TEST_EXECUTION_PROTOCOL.md) — Testing guide
-- [Scientific Mode](docs/SCIENTIFIC_OPTIMIZATION_MODE.md) — Scientific computing
-
----
-
-## 🤝 Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
----
-
-## 📄 License
-
-MIT License — see LICENSE file for details.
-
----
-
-<div align="center">
-
-**MutaLambda 2.0** — Evolving code, intelligently.
-
-⭐ Star us on GitHub!
-
-</div>
+MIT License
