@@ -9,6 +9,9 @@ import random
 from dataclasses import dataclass
 from typing import Any, Callable, List, Optional, Tuple
 
+from mutation_filters import _filter_mutant, ProfileMode
+from component_evolution import ComponentGraph, ComponentMutator, ModuleExtractor
+
 
 class ASTMutator:
     """Mutaciones sobre el AST que garantizan código sintácticamente válido."""
@@ -404,7 +407,9 @@ RULES:
         region = self._top_region(code)
         prompt = self.build_mutation_prompt(code, region, score, error_info)
         generated = self.extract_valid_code(llm_fn(prompt))
-        return generated if generated is not None else ASTMutator.apply_random_mutation(code)
+        result = generated if generated is not None else ASTMutator.apply_random_mutation(code)
+        filtered = _filter_mutant(result, ProfileMode.PERMISSIVE)
+        return filtered if filtered is not None else result
 
     def crossover_with_llm(
         self,
@@ -503,3 +508,57 @@ def ast_crossover(parent_a: str, parent_b: str, rng: random.Random = random) -> 
         return result
     except Exception:
         return parent_a
+
+
+def component_evolve(
+    code: str,
+    rng: Optional[random.Random] = None,
+) -> str:
+    """Component-evolution operator: restructure code via component mutations.
+
+    Extracts components from the code, applies a random structural mutation
+    (split / merge / interface evolution), and returns the reconstructed code.
+    Falls back to the original code when no meaningful mutation can be applied.
+    """
+    try:
+        extractor = ModuleExtractor()
+        mutator = ComponentMutator(rng or random.Random())
+        graph = extractor.analyze(code)
+        if not graph.components:
+            return code
+
+        # Pick a random component to mutate
+        names = list(graph.components.keys())
+        name = rng.choice(names) if rng else random.choice(names)
+        comp = graph.components[name]
+
+        op = (rng or random).choice(["split", "merge", "evolve"])
+        if op == "split":
+            split = mutator.split_component(comp)
+            if split:
+                graph.add_component(split)
+        elif op == "merge" and len(graph.components) > 1:
+            others = [n for n in graph.components if n != name]
+            other_name = (rng or random).choice(others)
+            merged = mutator.merge_components(comp, graph.components[other_name])
+            if merged:
+                graph.add_component(merged)
+                graph.remove_component(name)
+                graph.remove_component(other_name)
+        elif op == "evolve":
+            evolved = mutator.evolve_interface(comp)
+            graph.components[name] = evolved
+        else:
+            return code
+
+        # Reconstruct code from the mutated graph
+        reconstructed_lines: List[str] = []
+        for comp in graph.components.values():
+            reconstructed_lines.append(comp.source_code)
+            reconstructed_lines.append("")
+
+        result = "\n".join(reconstructed_lines).strip()
+        ast.parse(result)
+        return result
+    except Exception:
+        return code

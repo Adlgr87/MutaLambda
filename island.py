@@ -10,7 +10,7 @@ import random
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from evolution_engine import ASTMutator, CoreEvolutionEngine, ast_crossover
+from evolution_engine import ASTMutator, CoreEvolutionEngine, ast_crossover, component_evolve
 from models import EvalResult, Individual, IslandConfig
 from sandbox import SandboxEvaluator
 from workflow_protocol import (
@@ -272,6 +272,8 @@ class Island:
                 from evolution_engine import ASTMutator
 
                 mutated_code = ASTMutator.apply_random_mutation(parent.code)
+            elif strategy == "component":
+                mutated_code = component_evolve(parent.code, rng=self.rng)
             else:
                 # llm / mutation — context-aware LLM path with AST fallback
                 strategy = "llm" if strategy == "llm" else "mutation"
@@ -310,6 +312,8 @@ class Island:
                     return "crossover"
                 if op == "ast":
                     return "ast"
+                if op == "component":
+                    return "component"
                 return "llm"  # treated as mutation+LLM path
             except Exception:
                 pass

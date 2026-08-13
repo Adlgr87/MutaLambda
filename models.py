@@ -9,6 +9,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+import enum
+import logging
 import numpy as np
 
 from code_hash import stable_code_hash
@@ -480,3 +482,51 @@ class ArchivedSolution:
     metrics: Dict[str, float]
     embedding: np.ndarray
     timestamp: float = field(default_factory=time.time)
+
+
+
+
+# ── Profile Mode Enum ──────────────────────────────────────────────────────────
+
+class ProfileMode(str, enum.Enum):
+    """Profile mode for evolution filters."""
+    HOTFIX = "hotfix"       # Conservative: prioritize correctness and security
+    BALANCED = "balanced"   # Default: balance between speed and safety
+    DEBT = "debt"           # Permissive: allow technical debt for experimentation
+    RELEASE = "release"     # Strict: maximum validation, no risky patterns
+
+    @classmethod
+    def from_str(cls, value: str) -> "ProfileMode":
+        """Parse profile mode from string."""
+        try:
+            return cls(value.lower())
+        except ValueError:
+            logger = logging.getLogger("MutaLambda")
+            logger.warning(f"Unknown profile '{value}', defaulting to 'balanced'")
+            return cls.BALANCED
+
+
+# ── Fitness Report (ML-F01) ────────────────────────────────────────────────────
+
+@dataclass
+class FitnessReport:
+    """Resultado de la validación post‑evaluación de un individuo.
+
+    Atributos
+    ---------
+    passed : bool
+        True si el código pasó todos los filtros aplicables.
+    blocked : bool
+        True si un filtro de bloqueo detuvo el individuo.
+    issues : list[str]
+        Lista de problemas detectados (warnings o errores).
+    severity : Literal["none","low","medium","high","critical"]
+        Nivel más alto de severidad encontrado.
+    """
+
+    passed: bool = True
+    blocked: bool = False
+    issues: List[str] = field(default_factory=list)
+    severity: str = "none"
+    is_valid: bool = True
+    fixed_code: str = ""

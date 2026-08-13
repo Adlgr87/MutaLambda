@@ -120,6 +120,36 @@ class PythonEmitter:
             for method in node.methods:
                 lines.extend(self._emit_function(method, indent + 1))
             return lines
+        if isinstance(node, ParallelFor):
+            var = " ".join(self._emit_node(node.var, indent))
+            start_code = " ".join(self._emit_node(node.start, indent)) if node.start else "0"
+            end_code = " ".join(self._emit_node(node.end, indent)) if node.end else "len(iterable)"
+            
+            # Emit body as lambda expression
+            body_lines = []
+            for child in node.body:
+                body_lines.extend(self._emit_node(child, indent + 1))
+            body_str = " ".join(body_lines) if body_lines else "pass"
+            
+            if node.reduction:
+                # Map-reduce pattern for parallel execution
+                map_expr = f"map(lambda {var}: ({body_str}), range({start_code}, {end_code}))"
+                if node.reduction == "sum":
+                    return [f"{indent_str}{var} = sum({map_expr})"]
+                elif node.reduction == "prod":
+                    return [f"{indent_str}import math", f"{indent_str}{var} = math.prod({map_expr})"]
+                elif node.reduction == "max":
+                    return [f"{indent_str}{var} = max({map_expr})"]
+                elif node.reduction == "min":
+                    return [f"{indent_str}{var} = min({map_expr})"]
+            else:
+                # Parallel execution without reduction
+                return [
+                    f"{indent_str}from concurrent.futures import ThreadPoolExecutor",
+                    f"{indent_str}with ThreadPoolExecutor() as _exec:",
+                    f"{indent_str}    list(_exec.map(lambda {var}: ({body_str}), range({start_code}, {end_code})))",
+                ]
+            return []
         if isinstance(node, Match):
             subject = " ".join(self._emit_node(node.subject, indent))
             lines = [f"{indent_str}match {subject}:"]

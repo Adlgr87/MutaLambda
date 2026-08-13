@@ -184,6 +184,20 @@ class RustEmitter:
         if isinstance(node, Opaque):
             return [f"{indent_str}// Opaque: {node.original_text[:50]}"]
         
+        if isinstance(node, ParallelFor):
+            var = " ".join(self._emit_node(node.var, indent))
+            start_code = " ".join(self._emit_node(node.start, indent)) if node.start else "0"
+            end_code = " ".join(self._emit_node(node.end, indent)) if node.end else "n"
+            
+            body_lines = []
+            for child in node.body:
+                body_lines.extend(self._emit_node(child, indent + 1))
+            body_str = " ".join(body_lines) if body_lines else "()"
+            
+            return [
+                f"{indent_str}// Requires rayon crate for parallel iteration",
+                f"{indent_str}let result: Vec<_> = ({start_code}..{end_code}).into_par_iter().map(|{var}| {{ {body_str} }}).collect();",
+            ]
         return [f"{indent_str}// Unimplemented: {type(node).__name__}"]
 
     def _emit_function(self, func: "Function", indent: int = 0) -> list:

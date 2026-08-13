@@ -58,6 +58,7 @@ PROJECT_NAME = "MutaLambda"
 # ─── Re-exported modules/classes for backward-compatible imports ─────────────
 from archive import SolutionArchive
 from evolution_engine import ASTMutator, CodeRegion, CoreEvolutionEngine
+from mutation_filters import run_all_filters, ProfileMode
 from island import Island
 from llm_backend import LLMBackend, _resolve_llm_backend
 from migration import MigrationBus
@@ -637,7 +638,7 @@ class MutaLambdaAgent:
         if getattr(config, "operator_bandit_enabled", False):
             from operator_bandit import OperatorBandit
             self._operator_bandit = OperatorBandit(
-                operators=["ast", "llm", "crossover", "redesign"],
+                operators=["ast", "llm", "crossover", "redesign", "component"],
                 strategy=getattr(config, "operator_bandit_strategy", "ucb1"),
                 rng=self.rng_session.stream("bandit"),
             )
@@ -701,6 +702,7 @@ class MutaLambdaAgent:
                     variant = code
                     for _ in range(i):
                         variant = ASTMutator.apply_random_mutation(variant)
+                        variant = _filter_mutant(variant, ProfileMode.STRICT) or variant
                     mutated.append(variant)
                 island.seed_population(mutated)
         logger.info(
@@ -851,10 +853,11 @@ class MutaLambdaAgent:
 
         code = base_code
         if should_mutate:
-            for _ in range(3):
+            for attempt in range(10):
                 mutated = ASTMutator.apply_random_mutation(code)
-                if mutated.strip() != code.strip():
-                    code = mutated
+                filtered = _filter_mutant(mutated, ProfileMode.STRICT)
+                if filtered is not None and filtered.strip() != code.strip():
+                    code = filtered
                     break
 
         resurrected = Individual(

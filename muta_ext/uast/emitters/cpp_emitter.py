@@ -8,7 +8,7 @@ from muta_ext.uast.core_uast import (
     CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
     Assign, If, For, While, Return, Function, Comment, Opaque,
     TryExcept, ExceptClause, StructDef, FieldDef, TypeAnnotation,
-    Match, MatchArm, Reference, Break
+    Match, MatchArm, Reference, Break, ParallelFor
 )
 
 
@@ -159,6 +159,25 @@ class CppEmitter:
         if isinstance(node, Opaque):
             return [f"{indent_str}// Opaque: {node.original_text[:50]}"]
         
+        if isinstance(node, ParallelFor):
+            var = " ".join(self._emit_node(node.var, indent))
+            start_code = " ".join(self._emit_node(node.start, indent)) if node.start else "0"
+            end_code = " ".join(self._emit_node(node.end, indent)) if node.end else "n"
+            
+            body_lines = []
+            for child in node.body:
+                body_lines.extend(self._emit_node(child, indent + 1))
+            body_str = " ".join(body_lines) if body_lines else "{}"
+            
+            if node.reduction:
+                return [
+                    f"{indent_str}// Requires <numeric> and <execution>",
+                    f"{indent_str}auto result = std::transform_reduce(std::execution::par, {start_code}, {end_code}, 0, std::plus<>(),",
+                    f"{indent_str}    [{var}](int {var}) {{ {body_str} }});",
+                ]
+            else:
+                return [f"{indent_str}// ParallelFor requires parallel algorithms support"]
+
         return [f"{indent_str}// Unimplemented: {type(node).__name__}"]
 
 
