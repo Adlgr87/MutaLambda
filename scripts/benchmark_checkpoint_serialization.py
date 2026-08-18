@@ -2,7 +2,8 @@
 """Benchmark: Checkpoint serialization optimization (JSON vs msgpack).
 
 Compares JSON vs compressed msgpack serialization for large checkpoints.
-Tests with population sizes that trigger the msgpack path (> 2000 individuals).
+Tests with population sizes that trigger the msgpack path (> 256 individuals,
+Phase 6 lowered the threshold from 2000 → 256 for realistic population sizes).
 """
 import sys
 import os
