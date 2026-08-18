@@ -226,3 +226,47 @@ The experiment's greatest value is the lessons learned: simpler algorithms often
 **Artifacts:**
 - `optimize_hot_paths.py` — Benchmark script for hot-path functions
 - `benchmark_migration_before_after.py` — Migration topology comparison
+
+---
+
+## New Analysis: SWE-Agent Profiling Integration
+
+**Date:** 2026-08-17  
+**Tool:** `scripts/swe_agent_profiler.py` (SWE-Agent style profiling protocol)
+
+### Profiling Results (100 iterations)
+
+| Module | Function | Calls | Time/call (ms) | Total Time (s) | Hotspots |
+|--------|----------|-------|----------------|----------------|----------|
+| nsga2 | non_dominated_sort + _get_fitness | 2,182,200 | 0.0007 | 1.6050 | O(N²) fitness extraction, sorting overhead |
+| sandbox | evaluate_code_sync | 100 | 0.0007 | 0.0001 | subprocess.Popen spawn, JSON serialization |
+| checkpoint_manager | save/load checkpoint | 100 | 0.0033 | 0.0003 | JSON serialization, file I/O |
+| evolution_engine | ASTMutator.apply_random_mutation | 100 | 0.0010 | 0.0001 | AST node copying, tree traversal |
+
+### Proposal: SWE-Agent Integration for Empirical-Guided Optimization
+
+```
+SWE-Agent Explora → Profiling → Propone Refactor → 
+OpenHands Implementa → Benchmarks → Decide Basado en Evidencia
+```
+
+### SWE-Agent Style Analysis Protocol
+
+The sub-agent `performance-analyzer` uses this protocol:
+
+1. **Autonomous code navigation** using architectural patterns
+2. **Hot path identification** via cProfile + heuristics
+3. **Concretaspecific proposals** including:
+   - Current metric (measured empirically)
+   - Specific proposal with code
+   - Estimated impact (with upper/lower bounds)
+   - Implementation risk (low/medium/high)
+4. **Validation with rigorous benchmarks:**
+   - Minimum 3 runs per benchmark
+   - Metrics: P50/P95/P99 latency, peak memory, CPU usage
+   - 95% confidence intervals
+5. **Documentation in `EMPIRICAL_EVIDENCE.md`** with format:
+   - Initial hypothesis
+   - Implementation
+   - Measured results
+   - Conclusion (accept/revert)

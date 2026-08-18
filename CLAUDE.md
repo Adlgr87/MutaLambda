@@ -71,3 +71,21 @@ evolve = MutaLambdaConfig.from_yaml("config.yaml").to_evolve_config()
 
 `sandbox.runner=container` is recommended for untrusted code when Docker/Podman is available.
 
+## SWE-Agent Integration Protocol
+
+When working with SWE-Agent or performance-analyzer sub-agents:
+
+1. **Run profiler first**: `python scripts/swe_agent_profiler.py --module nsga2 --iterations 500`
+2. **Proposals must include**: metric baseline, code suggestion, risk level, confidence interval
+3. **Validate with min 3 runs**: use `scripts/benchmark_runner.py` for statistical rigor
+4. **Update EMPIRICAL_EVIDENCE.md**: every accepted/rejected proposal documented
+5. **Backward compatibility**: all refactors must preserve existing test suite (355 tests)
+
+### Profiling Hotspots
+
+Key hotspots identified via SWE-Agent profiling:
+- **NSGA-II**: O(N²) dominance checks, `_get_fitness()` calls
+- **Sandbox**: subprocess spawn overhead, JSON serialization
+- **Checkpoint manager**: JSON serialization, file I/O
+- **Evolution engine**: AST node copying (`copy.deepcopy`), tree traversal
+

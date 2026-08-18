@@ -15,6 +15,7 @@ dependencies = [
   "pydantic>=2",
   "pyyaml",
   "requests",
+  "tree-sitter-go>=0.23.4",
 ]
 
 [project.optional-dependencies]
@@ -96,7 +97,7 @@ py-modules = [
   "logging_setup",
   "constants",
 ]
-packages = ["cli", "muta_ext", "muta_ext.evaluation", "muta_ext.lineage", "muta_ext.mutation", "muta_ext.config", "muta_ext.diagnostics"]
+packages = ["cli", "muta_ext", "muta_ext.evaluation", "muta_ext.lineage", "muta_ext.mutation", "muta_ext.config", "muta_ext.diagnostics", "lsp"]
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.md", "*.json"]
@@ -110,6 +111,9 @@ markers = [
     "uast: tests UAST",
     "benchmarks: tests de benchmark",
     "e2e: tests end-to-end",
+    "v4: tests de nuevas funcionalidades v4.0",
+    "go: tests de soporte Go",
+    "ci: tests de integración CI/CD",
 ]
 
 [tool.ruff]

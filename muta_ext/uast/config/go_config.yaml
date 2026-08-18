@@ -1,0 +1,133 @@
+# Go Language Configuration for MutaLambda
+
+language: go
+description: "Go (Golang) - systems programming and cloud infrastructure"
+
+# UAST configuration
+uast:
+  adapter: "go_adapter"
+  emitter: "go_emitter"
+  formatter: "gofmt"
+  
+  # Tree-sitter parser
+  parser:
+    package: "tree-sitter-go"
+    version: ">=0.23.0"
+  
+  # Syntax validation
+  validation:
+    tool: "gofmt"
+    flags: ["-e"]  # Continue on errors
+    timeout_seconds: 5
+  
+  # Compilation
+  compilation:
+    tool: "go"
+    build_command: ["go", "build", "-o", "{{output}}", "{{input}}"]
+    timeout_seconds: 30
+    env:
+      GOOS: ""  # Target OS (empty for native)
+      GOARCH: ""  # Target arch (empty for native)
+  
+  # Testing
+  testing:
+    tool: "go"
+    test_command: ["go", "test", "-v", "{{path}}"]
+    benchmark_command: ["go", "test", "-bench=.", "-benchtime=1x", "{{path}}"]
+    timeout_seconds: 60
+  
+  # Benchmarking
+  benchmarking:
+    tool: "{{binary}}"
+    command: ["{{binary}}", "-test.bench=.", "-test.benchtime={{iterations}}x"]
+    default_iterations: 1000
+    timeout_seconds: 120
+
+# Mutation configuration
+mutations:
+  # Concurrency mutations
+  concurrency:
+    enabled: true
+    operators:
+      - name: "sequential_to_goroutine"
+        description: "Convert sequential loop to goroutine with channel"
+        priority: 1
+      - name: "channel_buffering"
+        description: "Add buffering to channels for performance"
+        priority: 2
+      - name: "mutex_to_channel"
+        description: "Replace mutex with channel-based synchronization"
+        priority: 3
+  
+  # Memory mutations
+  memory:
+    enabled: true
+    operators:
+      - name: "slice_preallocation"
+        description: "Pre-allocate slice capacity"
+        priority: 1
+      - name: "string_pooling"
+        description: "Use strings.Builder for concatenation"
+        priority: 2
+      - name: "sync_pool_usage"
+        description: "Use sync.Pool for object reuse"
+        priority: 3
+  
+  # Algorithmic mutations
+  algorithmic:
+    enabled: true
+    operators:
+      - name: "linear_to_map_lookup"
+        description: "Replace linear search with map lookup"
+        priority: 1
+      - name: "inline_small_function"
+        description: "Inline small function calls"
+        priority: 2
+      - name: "reduce_allocation"
+        description: "Reduce heap allocations"
+        priority: 3
+
+# Fitness objectives (multi-objective optimization)
+fitness:
+  objectives:
+    - name: "correctness"
+      weight: 3.0
+      type: "hard"  # Must be 1.0 for valid candidate
+    - name: "latency_p50"
+      weight: 1.0
+      type: "soft"
+    - name: "memory_peak_mb"
+      weight: 0.5
+      type: "soft"
+    - name: "goroutine_count"
+      weight: 0.3
+      type: "soft"
+      description: "Prefer fewer goroutines when performance is equal"
+
+# Performance targets
+targets:
+  latency:
+    p50_max_ms: 100
+    p99_max_ms: 500
+  memory:
+    peak_max_mb: 256
+  goroutines:
+    max_per_function: 100
+
+# Code style guidelines (for explainable mode)
+style:
+  conventions:
+    - "Use gofmt for formatting"
+    - "Follow Effective Go guidelines"
+    - "Prefer interfaces for flexibility"
+    - "Use channels for communication, not shared memory"
+  anti_patterns:
+    - "Avoid global variables"
+    - "Avoid nested locks"
+    - "Avoid excessive goroutine spawning"
+
+# Benchmark configuration
+benchmark:
+  warmup_iterations: 10
+  measurement_iterations: 100
+  min_time_seconds: 0.1

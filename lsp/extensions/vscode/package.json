@@ -1,0 +1,101 @@
+{
+  "name": "mutalambda",
+  "displayName": "MutaLambda",
+  "description": "Evolutionary code optimization assistant",
+  "version": "4.0.0",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:python",
+    "onLanguage:go",
+    "onLanguage:rust",
+    "onLanguage:cpp",
+    "onLanguage:c"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "mutalambda.optimize",
+        "title": "MutaLambda: Optimize Function",
+        "category": "MutaLambda"
+      },
+      {
+        "command": "mutalambda.explain",
+        "title": "MutaLambda: Explain Optimization",
+        "category": "MutaLambda"
+      },
+      {
+        "command": "mutalambda.analyzeProject",
+        "title": "MutaLambda: Analyze Project",
+        "category": "MutaLambda"
+      }
+    ],
+    "configuration": {
+      "title": "MutaLambda",
+      "properties": {
+        "mutalambda.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable MutaLambda optimizations"
+        },
+        "mutalambda.mode": {
+          "type": "string",
+          "enum": ["fast", "deep"],
+          "default": "fast",
+          "description": "Optimization mode"
+        },
+        "mutalambda.llm.provider": {
+          "type": "string",
+          "enum": ["ollama", "openai", "anthropic"],
+          "default": "ollama",
+          "description": "LLM provider for explanations"
+        },
+        "mutalambda.showExplanations": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show optimization explanations"
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "python",
+        "extensions": [".py"]
+      },
+      {
+        "id": "go",
+        "extensions": [".go"]
+      },
+      {
+        "id": "rust",
+        "extensions": [".rs"]
+      },
+      {
+        "id": "cpp",
+        "extensions": [".cpp", ".c", ".h", ".hpp"]
+      }
+    ],
+    "grammars": [],
+    "snippets": []
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "^18.x",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.0"
+  }
+}
