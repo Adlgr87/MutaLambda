@@ -75,7 +75,7 @@ class SandboxEvaluator:
         allow_untested: bool = True,
         runner_mode: str = "subprocess",
         allow_expression_eval: bool = False,
-        enforce_ast_scan: bool = False,
+        enforce_ast_scan: bool = True,
         cache_enabled: bool = True,
         benchmark_warmups: int = 0,
         benchmark_samples: int = 1,

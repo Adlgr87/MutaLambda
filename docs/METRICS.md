@@ -28,20 +28,20 @@ Este documento presenta las métricas de rendimiento validadas del sistema MutaL
 
 ### Contexto
 
-**MASSIVE** es un framework de simulación cosmológica que MutaLambda optimizó exitosamente. Se aplicaron mutaciones evolutivas a 4 módulos críticos del framework, logrando mejoras significativas de rendimiento mientras se mantenía el 100% de correctitud científica.
+**MASSIVE** es un framework de simulación social (multi-agente) sobre el que MutaLambda optimizó exitosamente. Se aplicaron mutaciones evolutivas a 4 módulos críticos del framework, logrando mejoras significativas de rendimiento mientras se mantenía el 100% de correctitud científica.
 
 ### Resultados por Módulo
 
 #### `utility_logic` — 3.6x más rápido
 
-Cálculos de presión social en simulaciones multi-agente. Este módulo computa las fuerzas de presión social entre agentes en el modelo cosmológico MASSIVE.
+Cálculos de presión social en simulaciones multi-agente. Este módulo computa las fuerzas de presión social entre agentes en el modelo MASSIVE (simulación social).
 
 **Impacto:** 3.6x speedup en cálculos de presión social
 **Validación:** 1000 iteraciones, p-value < 0.001, Cohen's d > 0.8
 
 #### `energy_engine_pure` — 2.3x más rápido
 
-Motor termodinámico puro que gestiona los cálculos de energía en el modelo cosmológico. Incluye transferencias de energía, balance termodinámico y cálculos de entropía.
+Motor termodinámico puro que gestiona los cálculos de energía en el modelo MASSIVE (simulación social). Incluye transferencias de energía, balance termodinámico y cálculos de entropía.
 
 **Impacto:** 2.3x speedup en motor de energía
 **Validación:** 1000 iteraciones, p-value < 0.001, Cohen's d > 0.8

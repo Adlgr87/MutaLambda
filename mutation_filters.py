@@ -13,6 +13,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from typing import List, Optional
+from runners import scan_code_security  # AST-based escape detection
 
 _LOG_LEVEL = os.environ.get("MUTALAMBDA_LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
@@ -126,10 +127,25 @@ def check_max_length(code, max_lines=500):
 
 
 def check_no_critical_patterns(code):
+    """Block both regex-detected and AST-escape patterns.
+
+    The regex patterns (_CRITICAL_PATTERNS) catch obvious syntactic forms but
+    are trivially evaded (e.g. ``import os as _o``; ``f = exec``).  The AST
+    SecurityVisitor in ``runners`` catches the structural variants; combining
+    both removes that entire class of evasion (see test_sandbox_escapes.py).
+    """
     issues = []
     for pattern in _CRITICAL_PATTERNS:
         if pattern.search(code):
             issues.append(f"blocked pattern detected: {pattern.pattern[:40]}...")
+    # AST structural scan — catches aliasing / getattr(__builtins__, ...) / chr().
+    try:
+        ast_findings = scan_code_security(code)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("AST security scan failed: %r", exc)
+        ast_findings = []
+    if ast_findings:
+        issues.extend(f"ast:{f}" for f in ast_findings)
     if issues:
         logger.warning("CriticalPatternsFilter blocked: %s", issues)
         return _make_report(False, True, issues, "critical")

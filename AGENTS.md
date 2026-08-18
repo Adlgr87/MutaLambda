@@ -104,3 +104,42 @@ evolution operators. Target: 80%+ coverage.
 - All CLI output uses `rich` for formatting (tables, panels, colors).
 - Config validation uses Pydantic models.
 - Every refactor must be documented in `EMPIRICAL_EVIDENCE.md` with benchmarks.
+
+## Security
+
+Sandbox hardening (Bloque C — remediated 2026-08-18):
+
+- `SecurityVisitor` (AST `NodeVisitor`) in `runners.py` defeats the documented
+  evasion class: `getattr(__builtins__, chr(...)("...")`, `import os as _o; _o.system`,
+  `f = exec; f(...)`, `subprocess.Popen`, `open(...,"a")`, `__import__`,
+  `importlib`, `pickle`, `ctypes`, network modules.
+- `runners.scan_code_security(code)` now delegates to `SecurityVisitor`;
+  legacy prefix strings (`import:os`, `call:exec`, `call:os.system`,
+  `syntax_error:...`) are preserved for backward compatibility.
+- `runners.scan_findings(code) -> List[SecurityFinding]` exposes detailed
+  findings with `lineno`/`col` for reporting.
+- `enforce_ast_scan` defaults to **True** everywhere (SandboxSection,
+  config_loader `_DEFAULTS`, EvolveConfig, SandboxEvaluator, EvaluationService).
+- `mutation_filters.check_no_critical_patterns` is backed by the AST visitor,
+  so the regex `_CRITICAL_PATTERNS` are no longer evadible by aliasing.
+- `SubprocessRunner` emits a `RuntimeWarning` advising `runner_mode="container"`
+  for untrusted code (silence with `MUTALAMBDA_UNSAFE_LOCAL=1`). Container
+  mode uses `--network=none`, read-only rootfs, `--cap-drop=ALL`, non-root user.
+- Regression suite: `tests/security/test_sandbox_escapes.py` (all six
+  documented escapes plus extras; 0 false positives on safe stdlib code).
+
+Note: `sys`/`json` are intentionally allowed by the import gate (the wrapper
+harness and candidates legitimately use them).
+
+
+## Phase 7 — Security Hardening (completed)
+- `SecurityVisitor` AST-based sandbox scanner blocks all 6 documented escape patterns + extras
+- AST scan enabled by default (`enforce_ast_scan=True`) across all config layers
+- SubprocessRunner warns once; ContainerRunner recommended for untrusted code
+- Mutation filter consults `SecurityVisitor` to block evasive aliases before execution
+- Cache stats instrumentation: `cache_stats()` / `report_cache_stats()` expose hit-rate telemetry
+
+## Dependencies
+- `tree-sitter>=0.21` and language packs moved to `[uast]` optional extra
+- Core dependencies: numpy, msgpack, pydantic, pyyaml, requests
+- Install with uast support: `pip install -e ".[uast]"`

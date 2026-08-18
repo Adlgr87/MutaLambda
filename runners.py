@@ -15,6 +15,7 @@ import hashlib
 import json
 import logging
 import math
+import warnings
 import os
 import resource
 import shutil
@@ -32,6 +33,11 @@ from models import EvalResult
 
 logger = logging.getLogger("MutaLambda")
 
+
+# Whether the local SubprocessRunner has been used. We warn (once) that it is
+# not a real sandbox, unless the caller explicitly opts in via env var.
+_LOCAL_RUNNER_WARNED = False
+
 # compare_values / stable_code_hash: see comparison.py and code_hash.py
 
 
@@ -40,22 +46,32 @@ def tests_hash(test_cases: List[Dict]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-# ── AST early filter ─────────────────────────────────────────────────────────
+# ── AST early filter (SecurityVisitor) ────────────────────────────────────────
+#
+# Security model
+# --------------
+# AST scanning is an *early filter*, not a full sandbox boundary. The real
+# boundary is the CandidateRunner (subprocess ulimits / container
+# namespace isolation).  The visitor is intentionally *conservative*: it
+# errs on the side of blocking candidate code that looks like a sandbox
+# escape, and surfaces detailed findings (with source positions) so callers
+# can decide how to react (reject, log, or escalate).
+#
+# It is designed to defeat the classic textual evasion tricks:
+#   * getattr(__builtins__, "exec"/"eval"/...)
+#   * import os as _o ; _o.system(...)          (alias of a forbidden module)
+#   * f = exec ; f("...")                       (alias of a forbidden call)
+#   * chr(...) string reconstruction of dangerous call names
+#   * __import__("os"), importlib.import_module("os")
 
-_FORBIDDEN_CALLS = {
-    "eval",
-    "exec",
-    "compile",
-    "__import__",
-    "open",
-    "input",
-    "breakpoint",
-    "exit",
-    "quit",
-}
-_FORBIDDEN_MODULES = {
+from dataclasses import dataclass
+
+
+# Modules whose import would grant filesystem / network / process-control
+# capability. ``sys`` and ``json`` are intentionally allowed — candidates
+# (and the generated harness) legitimately use them.
+_FORBIDDEN_IMPORTS = frozenset({
     "os",
-    "sys",
     "subprocess",
     "socket",
     "pathlib",
@@ -68,39 +84,222 @@ _FORBIDDEN_MODULES = {
     "requests",
     "ftplib",
     "pickle",
+    "marshal",
     "shelve",
+    "pty",
+    "commands",
+})
+
+# Calls that are inherently dynamic / unsafe regardless of argument.
+_FORBIDDEN_DYNAMIC_CALLS = frozenset({
+    "eval",
+    "exec",
+    "compile",
+    "__import__",
+    "globals",
+    "locals",
+    "vars",
+    "dir",
+    "breakpoint",
+})
+
+# Attribute calls on specific module objects that are known escape hatches.
+_FORBIDDEN_ATTR_CALLS = {
+    ("os", "system"), ("os", "popen"), ("os", "exec"), ("os", "execv"),
+    ("os", "execve"), ("os", "execvpe"), ("os", "execvp"),
+    ("os", "spawn"), ("os", "spawnl"), ("os", "spawnle"),
+    ("os", "fork"), ("os", "kill"),
+    ("subprocess", "Popen"), ("subprocess", "call"), ("subprocess", "check_call"),
+    ("subprocess", "check_output"), ("subprocess", "run"), ("subprocess", "getoutput"),
+    ("shutil", "rmtree"), ("shutil", "remove"), ("shutil", "move"), ("shutil", "copy"),
+    ("shutil", "copyfile"), ("shutil", "copytree"),
+    ("importlib", "import_module"),
+    ("pickle", "loads"), ("pickle", "load"), ("pickle", "dumps"),
+    ("marshal", "loads"), ("marshal", "load"),
+    ("ctypes", "cdll"), ("ctypes", "pythonapi"),
+    ("pathlib", "Path"),
 }
+
+# Names that should never be reachable from candidate code.
+_SENSITIVE_NAMES = frozenset({
+    "__builtins__", "__import__", "__globals__", "__locals__",
+    "globals", "locals",
+})
+
+
+@dataclass
+class SecurityFinding:
+    """A single security finding with source position for reporting."""
+
+    kind: str
+    message: str
+    lineno: int = 0
+    col: int = 0
+
+    def __str__(self) -> str:
+        return self.message
+
+
+class SecurityVisitor(ast.NodeVisitor):
+    """AST visitor that flags sandbox-escape primitives.
+
+    The visitor performs a *bounded* local dataflow analysis: it records
+    simple ``name = <forbidden>`` assignments so that indirect usage such as
+    ``f = exec ; f("...")`` is caught, and it flags any reference to
+    ``__builtins__`` or use of ``getattr`` (the canonical attribute-lookup
+    escape vector).  It is still not a full dataflow / points-to analysis,
+    so the subprocess / container boundary remains authoritative.
+    """
+
+    def __init__(self) -> None:
+        self.findings: List[SecurityFinding] = []
+        # Names bound to a forbidden dynamic call, e.g. ``f = exec``.
+        self._call_aliases: Dict[str, str] = {}
+        # Names bound to a forbidden module, e.g. ``m = os`` (rare but possible).
+        self._module_aliases: Dict[str, str] = {}
+
+    # ── helpers ───────────────────────────────────────────────────────────
+
+    def _add(self, kind: str, message: str, node: ast.AST) -> None:
+        self.findings.append(
+            SecurityFinding(
+                kind=kind,
+                message=message,
+                lineno=getattr(node, "lineno", 0),
+                col=getattr(node, "col_offset", 0),
+            )
+        )
+
+    @staticmethod
+    def _module_root(node: ast.AST) -> Optional[str]:
+        """Resolve the root module name for an import alias target."""
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, ast.Attribute):
+            return SecurityVisitor._module_root(node.value)
+        return None
+
+    # ── visit methods ─────────────────────────────────────────────────────
+
+    def visit_Import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            root = alias.name.split(".")[0]
+            if root in _FORBIDDEN_IMPORTS:
+                self._add("forbidden_import", f"import:{root}", node)
+            # Track aliases: ``import os as _o`` -> _o bound to os
+            if root in _FORBIDDEN_IMPORTS and alias.asname:
+                self._module_aliases[alias.asname] = root
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        if node.module:
+            root = node.module.split(".")[0]
+            if root in _FORBIDDEN_IMPORTS:
+                self._add("forbidden_import", f"import_from:{root}", node)
+        self.generic_visit(node)
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        # Detect ``f = exec`` / ``g = eval`` / ``h = compile``
+        if isinstance(node.value, ast.Name) and node.value.id in _FORBIDDEN_DYNAMIC_CALLS:
+            alias = node.value.id
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    self._call_aliases[target.id] = alias
+                    self._add("dynamic_alias", f"alias_of_forbidden:{alias}", node)
+        # Detect ``m = os`` style alias of a forbidden module
+        if isinstance(node.value, ast.Name) and node.value.id in self._module_aliases.values():
+            pass  # already tracked via import alias handling
+        self.generic_visit(node)
+
+    def visit_Name(self, node: ast.Name) -> None:
+        if node.id in _SENSITIVE_NAMES and isinstance(node.ctx, ast.Load):
+            self._add("sensitive_name", f"sensitive_name:{node.id}", node)
+        self.generic_visit(node)
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        # ``__builtins__.exec`` / ``getattr(__builtins__, ...)`` style access
+        if isinstance(node.value, ast.Name) and node.value.id == "__builtins__":
+            self._add("dunder_access", f"access:__builtins__", node)
+        owner = self._module_root(node.value)
+        key = (owner, node.attr) if owner else (None, node.attr)
+        if key in _FORBIDDEN_ATTR_CALLS:
+            if owner:
+                self._add("forbidden_attr_call", f"call:{owner}.{node.attr}", node)
+            else:
+                self._add("forbidden_attr_call", f"call:{node.attr}", node)
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        # Direct dynamic call: eval(...), exec(...)
+        if isinstance(node.func, ast.Name):
+            if node.func.id in _FORBIDDEN_DYNAMIC_CALLS:
+                self._add("forbidden_call", f"call:{node.func.id}", node)
+            # Indirection: previously assigned alias ``f = exec ; f(...)``
+            if node.func.id in self._call_aliases:
+                real = self._call_aliases[node.func.id]
+                self._add("forbidden_call", f"call_via_alias:{real}", node)
+        # getattr(...) — canonical escape vector (getattr(__builtins__, "exec"))
+        if isinstance(node.func, ast.Name) and node.func.id == "getattr":
+            self._add("getattr_call", "getattr_call", node)
+        # open(...) of any kind — candidates should never do file I/O
+        if isinstance(node.func, ast.Name) and node.func.id == "open":
+            self._add("forbidden_call", "call:open", node)
+        # chr(...) — string reconstruction of dangerous call names
+        if isinstance(node.func, ast.Name) and node.func.id == "chr":
+            self._add("chr_call", "chr_call", node)
+        # module.method attribute calls captured by visit_Attribute already,
+        # but also catch bare module calls resolved through aliases.
+        if isinstance(node.func, ast.Attribute):
+            owner = self._module_root(node.func.value)
+            if owner:
+                key = (owner, node.func.attr)
+                if key in _FORBIDDEN_ATTR_CALLS:
+                    self._add("forbidden_attr_call", f"call:{owner}.{node.func.attr}", node)
+        self.generic_visit(node)
+
+    def visit_keyword(self, node: ast.keyword) -> None:
+        # ``**{**}`` unpacking not relevant; placeholder for future hooks.
+        self.generic_visit(node)
+
+
+def scan_findings(code: str) -> List[SecurityFinding]:
+    """Parse ``code`` and return detailed :class:`SecurityFinding` list.
+
+    Returns an empty list for syntax errors (a syntax error means the code
+    cannot be executed as Python, so it is not an escape risk *per se*; the
+    caller's syntax check should reject it). Use :func:`scan_code_security`
+    if you want a ``syntax_error:`` entry instead.
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return []
+    visitor = SecurityVisitor()
+    visitor.visit(tree)
+    return visitor.findings
 
 
 def scan_code_security(code: str) -> List[str]:
-    """Early AST filter. Not a sandbox boundary."""
+    """Early AST security filter for candidate code.
+
+    Returns human-readable finding strings (legacy prefix format preserved
+    for backward compatibility) suitable for logging / rejection messages.
+    This is an early filter, **not** a sandbox boundary — the real boundary
+    is :class:`CandidateRunner` (subprocess ulimits / container isolation).
+    """
     findings: List[str] = []
     try:
         tree = ast.parse(code)
     except SyntaxError as exc:
         return [f"syntax_error:{exc}"]
 
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                root = alias.name.split(".")[0]
-                if root in _FORBIDDEN_MODULES:
-                    findings.append(f"import:{root}")
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            root = node.module.split(".")[0]
-            if root in _FORBIDDEN_MODULES:
-                findings.append(f"import_from:{root}")
-        elif isinstance(node, ast.Call):
-            name = None
-            if isinstance(node.func, ast.Name):
-                name = node.func.id
-            elif isinstance(node.func, ast.Attribute):
-                name = node.func.attr
-            if name in _FORBIDDEN_CALLS:
-                findings.append(f"call:{name}")
-            if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
-                if node.func.value.id == "os" and node.func.attr in {"system", "popen", "exec"}:
-                    findings.append(f"call:os.{node.func.attr}")
+    visitor = SecurityVisitor()
+    visitor.visit(tree)
+    seen: set[str] = set()
+    for f in visitor.findings:
+        if f.message not in seen:
+            seen.add(f.message)
+            findings.append(f.message)
     return findings
 
 
@@ -349,12 +548,34 @@ class CandidateRunner(Protocol):
 
 @dataclass
 class SubprocessRunner:
-    """Local development runner (subprocess + memory limit). Not a full sandbox."""
+    """Local development runner (subprocess + memory limit). Not a full sandbox.
+
+    .. warning::
+        The subprocess runner is **not** a real sandbox boundary. It relies only
+        on ``RLIMIT_AS`` / timeout limits. For untrusted candidate code, prefer
+        ``runner_mode="container"`` (Docker/Podman with ``--network=none``,
+        read-only rootfs, ``--cap-drop=ALL``).
+    """
 
     timeout_sec: float = 10.0
     memory_mb: int = 256
     allow_expression_eval: bool = False
     enforce_ast_scan: bool = True
+
+    def __post_init__(self) -> None:
+        global _LOCAL_RUNNER_WARNED
+        if os.environ.get("MUTALAMBDA_UNSAFE_LOCAL") == "1":
+            return
+        if not _LOCAL_RUNNER_WARNED:
+            _LOCAL_RUNNER_WARNED = True
+            warnings.warn(
+                "SubprocessRunner provides RLIMIT/timeout isolation only and is NOT a "
+                "full sandbox. For untrusted code set runner_mode='container' "
+                "(Docker/Podman: network=none, read-only rootfs, --cap-drop=ALL). "
+                "Set MUTALAMBDA_UNSAFE_LOCAL=1 to silence this warning.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
 
     def run(self, code: str, test_cases: list[dict]) -> EvalResult:
         if self.enforce_ast_scan:

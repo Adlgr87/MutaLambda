@@ -55,7 +55,7 @@ _DEFAULTS: Dict[str, Any] = {
     "sandbox.max_workers": 4,
     "sandbox.runner": "subprocess",
     "sandbox.allow_expression_eval": False,
-    "sandbox.enforce_ast_scan": False,
+    "sandbox.enforce_ast_scan": True,
     "archive.enabled": True,
     "archive.max_size": 10000,
     "archive.prune_threshold": 50,

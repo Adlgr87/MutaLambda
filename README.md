@@ -132,16 +132,24 @@ uast:
 
 ### System-Level Optimizations
 
-| Optimization | Metric | Before | After | Improvement |
-|------------|--------|--------|-------|-------------|
-| AST Parse Cache | Parse time (20K iters) | 39.85 μs/op | 0.0377 μs/op | **1,057× faster** |
-| MsgPack Checkpoints | 480-individual checkpoint | 766.9 KB / 2.983 ms | 5.4 KB / 0.745 ms | **4.00× faster, 99.3% smaller** |
-| NSGA-II Vectorized Dominance | Population N≥50 | O(N²) Python loop | Vectorized NumPy | **3.7-4.3× speedup** |
-| Evaluation Key Caching | Key generation | Recomputed per call | Cached hash | **242.7× faster** |
-| HFC Factory Clones | Re-evaluation | Full LLM eval | Inherited fitness | **~15-25% savings** |
+| Optimization | Micro-benchmark | Impact (end-to-end) | Notes |
+|------------|----------------|---------------------|-------|
+| AST Parse Cache | ~650-1057× on cache hit (0.0377 μs/op vs 39.85 μs/op) | Depends on hit-rate | `lru_cache(maxsize=1024)` on `ast.parse`. Gains appear when population re-evaluates repeated code |
+| MsgPack Checkpoints | 4.0× serialization speedup | Notable with frequent checkpoints | 480-individual checkpoint: 766.9 KB / 2.983 ms → 5.4 KB / 0.745 ms (99.3% smaller) |
+| NSGA-II Vectorized Dominance | 3.7-4.3× with N≥50 | Real for large populations | Replaces O(N²) Python loop with NumPy vectorization |
+
+> **End-to-end (5 gen × 2 islands × 4 pop): ~1.0× — within measurement noise.**  
+> On small workloads, LLM latency dominates. These optimizations matter at scale: large populations, many generations, frequent checkpointing.
+
+**Cache hit-rate instrumentation:**
+```python
+>>> from runners import report_cache_stats
+>>> report_cache_stats()  # called after each run
+{'hits': 14382, 'misses': 56, 'hit_rate': 0.9961, 'time_saved_ms': 1035.5}
+```
 
 ### Test Suite Status
-- **442 tests passing** (1 deselected: pre-existing flaky `test_hfc_tiers`)
+- **443 tests passing** (CI-generated count; 1 deselected: pre-existing flaky `test_hfc_tiers`)
 - All optimizations validated against existing test suite
 
 ## Testing

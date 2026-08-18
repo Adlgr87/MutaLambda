@@ -68,7 +68,7 @@ class SandboxSection(BaseModel):
         "subprocess"
     )
     allow_expression_eval: bool = False
-    enforce_ast_scan: bool = False
+    enforce_ast_scan: bool = True
     memory_mb: int = Field(256, ge=0)
 
 

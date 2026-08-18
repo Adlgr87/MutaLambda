@@ -33,7 +33,7 @@ MutaLambda es un sistema de optimización evolutiva de código que utiliza Model
 
 ### MASSIVE Framework — 50-263% de speedup
 
-MutaLambda fue aplicado exitosamente al framework de simulación cosmológica **MASSIVE**, logrando mejoras significativas de rendimiento manteniendo el 100% de correctitud científica.
+MutaLambda fue aplicado exitosamente al framework de simulación social (multi-agente) **MASSIVE**, logrando mejoras significativas de rendimiento manteniendo el 100% de correctitud científica.
 
 | Módulo | Speedup | Impacto |
 |--------|---------|---------|

@@ -164,7 +164,7 @@ class EvolveConfig:
     uast_cache_dir: str = ".uast_cache"
     runner_mode: str = "subprocess"  # subprocess | container | microvm
     allow_expression_eval: bool = False
-    enforce_ast_scan: bool = False
+    enforce_ast_scan: bool = True
     require_tests: bool = False  # CLI sets True unless --allow-untested
     enforce_api_fingerprint: bool = False
     enforce_differential: bool = False
@@ -301,7 +301,7 @@ class EvolveConfig:
             allow_untested=cfg.get("allow_untested", True),
             runner_mode=sand.get("runner", sand.get("mode", "subprocess")),
             allow_expression_eval=sand.get("allow_expression_eval", False),
-            enforce_ast_scan=sand.get("enforce_ast_scan", False),
+            enforce_ast_scan=sand.get("enforce_ast_scan", True),
             privacy_allow_external_llm=privacy.get("allow_external_llm", False),
             privacy_redact_secrets=privacy.get("redact_secrets", True),
             target_source_file=target.get("source_file", ""),
@@ -469,7 +469,7 @@ class MutaLambdaAgent:
             allow_untested=allow_untested,
             runner_mode=getattr(config, "runner_mode", "subprocess"),
             allow_expression_eval=getattr(config, "allow_expression_eval", False),
-            enforce_ast_scan=getattr(config, "enforce_ast_scan", False),
+            enforce_ast_scan=getattr(config, "enforce_ast_scan", True),
             benchmark_warmups=int(getattr(config, "benchmark_warmups", 0) or 0),
             benchmark_samples=int(getattr(config, "benchmark_samples", 1) or 1),
             benchmark_operations_per_case=int(

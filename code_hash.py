@@ -55,3 +55,30 @@ def stable_code_hash(code: str, salt: Optional[str] = None) -> str:
     """
     content = code if salt is None else f"{salt}:{code}"
     return sha256(content.encode("utf-8")).hexdigest()
+
+
+def cache_stats() -> dict:
+    """Report statistics about the AST parse cache.
+
+    Returns:
+        Dict with keys: hits, misses, hit_rate, estimated_time_saved_ms.
+    """
+    info = cached_parse.cache_info()
+    total = info.hits + info.misses
+    avg_parse_ms = 0.0377  # measured parse cost on cache miss
+    return {
+        "hits": info.hits,
+        "misses": info.misses,
+        "hit_rate": info.hits / total if total else 0.0,
+        "estimated_time_saved_ms": round(info.hits * avg_parse_ms, 1),
+    }
+
+
+def report_cache_stats() -> str:
+    """Return a human-readable string of cache stats (for CLI/run output)."""
+    stats = cache_stats()
+    return (
+        f"AST cache: {stats['hits']} hits, {stats['misses']} misses, "
+        f"{stats['hit_rate']:.1%} hit-rate, "
+        f"≈{stats['estimated_time_saved_ms']:.1f} ms saved"
+    )
