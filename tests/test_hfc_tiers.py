@@ -157,9 +157,9 @@ def test_hfc_deduplicates_demoted_elite_duplicate_in_factory():
         score=2.0,
         fitness=FitnessVector(
             correctness=1.0,
-            latency_p50=0.01,
-            latency_p99=0.01,
-            throughput=80.0,
+            latency_p50=0.03,
+            latency_p99=0.03,
+            throughput=50.0,
             memory_peak_mb=1.0,
             parsimony=0.8,
         ),

@@ -411,7 +411,6 @@ RULES:
 
         for ind in evaluated:
             if ind.id in demoted_ids:
-                next_tier2.append(ind)
                 continue
             if not self._is_functional(ind):
                 next_tier1.append(ind)
@@ -422,11 +421,11 @@ RULES:
                 stats["promoted"] += 1
                 existing_elites = [
                     elite for elite in self.tier3
-                    if elite.id != ind.id
+                    if elite.code != ind.code
                 ]
                 if had_existing_elite:
                     demoted = self._remove_weakest(existing_elites)
-                    if demoted is not None:
+                    if demoted is not None and demoted.id not in demoted_ids:
                         demoted_ids.add(demoted.id)
                         next_tier2.append(demoted)
                         stats["demoted"] += 1
