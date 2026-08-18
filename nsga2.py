@@ -46,24 +46,30 @@ class ParetoFront:
 
 def non_dominated_sort(population: List[Individual]) -> List[ParetoFront]:
     """
-    Fast non-dominated sorting (Deb 2002).
+    Fast non-dominated sorting (Deb 2002 optimized).
 
     Returns fronts sorted by rank (0 = Pareto frontier).
     Each individual must have a FitnessVector accessible via ind.score
     or ind.fitness attribute.
+
+    Optimization: precompute fitness vectors to avoid O(N²) redundant lookups.
+    Previously _get_fitness() was called O(N²) times; now only O(N).
     """
     n = len(population)
     if n == 0:
         return []
+
+    # Precompute fitness vectors — O(N) instead of O(N²) redundant getattr calls
+    fitnesses: List[FitnessVector] = [_get_fitness(ind) for ind in population]
 
     # Dominance counts
     dominated_by: List[int] = [0] * n         # how many dominate this ind
     dominates: List[List[int]] = [[] for _ in range(n)]  # which inds this dominates
 
     for i in range(n):
-        fi = _get_fitness(population[i])
+        fi = fitnesses[i]  # Cache hit — no function call
         for j in range(i + 1, n):
-            fj = _get_fitness(population[j])
+            fj = fitnesses[j]  # Cache hit — no function call
             if fi.dominates(fj):
                 dominates[i].append(j)
                 dominated_by[j] += 1
@@ -200,6 +206,9 @@ def _crowding_distance(individuals: List[Individual]) -> List[float]:
 
     Measures how isolated each individual is in objective space.
     Higher = more isolated = better for diversity.
+
+    Optimization: precompute fitness vectors to avoid redundant _get_fitness calls
+    across multiple dimension lookups.
     """
     n = len(individuals)
     if n <= 2:
@@ -207,14 +216,17 @@ def _crowding_distance(individuals: List[Individual]) -> List[float]:
 
     distances = [0.0] * n
 
+    # Precompute fitness vectors once — O(N) instead of O(N * dims) calls
+    fitnesses: List[FitnessVector] = [_get_fitness(ind) for ind in individuals]
+
     # For each objective dimension
     dims = ["correctness", "latency_p50", "latency_p99",
             "throughput", "memory_peak_mb", "parsimony"]
 
     for dim in dims:
         # Sort by this dimension
-        values = [(i, getattr(_get_fitness(ind), dim, 0.0))
-                   for i, ind in enumerate(individuals)]
+        values = [(i, getattr(fitnesses[i], dim, 0.0))
+                   for i in range(n)]
         values.sort(key=lambda x: x[1])
 
         min_val = values[0][1]

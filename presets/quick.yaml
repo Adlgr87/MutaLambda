@@ -1,0 +1,25 @@
+# Quick preset - fast feedback
+general:
+  population_size: 4
+  generations: 20
+  checkpoint_interval: 5
+  timeout_sec: 15.0
+
+evolution:
+  engine: steady_state
+
+island:
+  num_islands: 2
+  migration_interval: 10
+
+fitness:
+  objectives: [correctness, latency]
+  weights: [-1.0, -1.0]
+  fast_mode: true
+
+sandbox:
+  timeout_sec: 15.0
+  memory_limit_mb: 512
+
+mutators:
+  enabled: [simple_math, loop_optimize]

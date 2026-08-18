@@ -138,7 +138,189 @@ class ConfigManager:
                     'track_diversity': True,
                     'export_interval': 10,
                 }
-            }
+            },
+
+            # ── New user-friendly presets (ML-C02) ──────────────────────────
+            'quick': {
+                'evolution': {
+                    'generations': 10,
+                    'num_islands': 2,
+                    'population_size': 6,
+                    'top_k': 2,
+                },
+                'migration': {
+                    'interval': 10,
+                    'migrants_per_island': 1,
+                    'topology': 'ring',
+                },
+                'mutation': {
+                    'rate': 0.1,
+                    'crossover_rate': 0.7,
+                },
+                'fitness': {
+                    'weights': {
+                        'correctness': 0.5,
+                        'performance': 0.3,
+                        'complexity': 0.2,
+                    },
+                },
+                'sandbox': {
+                    'timeout_sec': 5.0,
+                },
+                'checkpoint': {
+                    'enabled': True,
+                    'interval': 5,
+                    'directory': 'checkpoints',
+                },
+                'early_stop': {
+                    'enabled': True,
+                    'patience': 5,
+                    'delta': 0.01,
+                },
+                'logging': {
+                    'level': 'WARNING',
+                },
+            },
+
+            'production': {
+                'evolution': {
+                    'generations': 100,
+                    'num_islands': 6,
+                    'population_size': 12,
+                    'top_k': 4,
+                },
+                'migration': {
+                    'interval': 8,
+                    'migrants_per_island': 2,
+                    'topology': 'ring',
+                },
+                'mutation': {
+                    'rate': 0.12,
+                    'crossover_rate': 0.75,
+                    'strategies': ['random', 'guided', 'crossover'],
+                },
+                'fitness': {
+                    'weights': {
+                        'correctness': 0.6,
+                        'performance': 0.3,
+                        'complexity': 0.1,
+                    },
+                },
+                'sandbox': {
+                    'timeout_sec': 30.0,
+                },
+                'checkpoint': {
+                    'enabled': True,
+                    'interval': 5,
+                    'directory': 'checkpoints',
+                    'compress': True,
+                },
+                'early_stop': {
+                    'enabled': True,
+                    'patience': 20,
+                    'delta': 0.001,
+                },
+                'logging': {
+                    'level': 'INFO',
+                    'file': 'mutalambda.log',
+                },
+                'hfc': {
+                    'enabled': True,
+                    'tier1_size': 50,
+                    'tier2_size': 100,
+                    'tier3_size': 50,
+                },
+            },
+
+            'scientific': {
+                'evolution': {
+                    'generations': 200,
+                    'num_islands': 8,
+                    'population_size': 16,
+                    'top_k': 6,
+                },
+                'migration': {
+                    'interval': 5,
+                    'migrants_per_island': 3,
+                    'topology': 'fully_connected',
+                },
+                'mutation': {
+                    'rate': 0.15,
+                    'crossover_rate': 0.8,
+                    'strategies': ['random', 'guided', 'crossover', 'elite'],
+                    'adaptive': True,
+                },
+                'fitness': {
+                    'weights': {
+                        'correctness': 0.5,
+                        'performance': 0.35,
+                        'complexity': 0.15,
+                    },
+                    'novelty_bonus': 0.1,
+                },
+                'sandbox': {
+                    'timeout_sec': 60.0,
+                },
+                'checkpoint': {
+                    'enabled': True,
+                    'interval': 2,
+                    'directory': 'checkpoints',
+                    'compress': True,
+                    'keep_best': True,
+                },
+                'early_stop': {
+                    'enabled': False,  # Scientific mode runs full course
+                },
+                'logging': {
+                    'level': 'DEBUG',
+                    'file': 'mutalambda.log',
+                    'detailed_stats': True,
+                },
+                'analytics': {
+                    'track_lineage': True,
+                    'track_diversity': True,
+                    'export_interval': 10,
+                },
+                'invariant_validation': {
+                    'enabled': True,
+                },
+            },
+
+            'numpy': {
+                'evolution': {
+                    'generations': 150,
+                    'num_islands': 6,
+                    'population_size': 12,
+                    'top_k': 4,
+                },
+                'mutation': {
+                    'rate': 0.1,
+                    'crossover_rate': 0.75,
+                    'strategies': ['numpy_optimized', 'guided', 'crossover'],
+                },
+                'fitness': {
+                    'weights': {
+                        'correctness': 0.6,
+                        'performance': 0.35,
+                        'complexity': 0.05,
+                    },
+                },
+                'sandbox': {
+                    'timeout_sec': 30.0,
+                },
+                'numpy_optimizer': {
+                    'enabled': True,
+                    'target_functions': ['np.dot', 'np.sum', 'np.mean'],
+                },
+                'checkpoint': {
+                    'enabled': True,
+                    'interval': 5,
+                    'directory': 'checkpoints',
+                },
+                'logging': {
+                    'level': 'INFO',
+                },
+            },
         }
 
     def load(self, config_path: str) -> Dict[str, Any]:
@@ -238,6 +420,108 @@ class ConfigManager:
                 errors.append("crossover_rate must be between 0 and 1")
 
         return len(errors) == 0, errors
+
+    def diagnostic(self, config: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Return a list of diagnostic issues with human-readable explanations.
+
+        Each issue is a dict: {severity, code, message, fix_suggestion}
+        """
+        issues = []
+
+        # Sandbox timeout
+        sandbox = config.get('sandbox', {}) or {}
+        timeout = sandbox.get('timeout_sec', 10.0)
+        if timeout < 15:
+            issues.append({
+                "severity": "warning",
+                "code": "sandbox.timeout",
+                "message": (
+                    f"Tu sandbox timeout es muy bajo ({timeout}s). "
+                    f"Para código general, recomendamos al menos 30s; "
+                    f"para código científico/NumPy, 60s o más."
+                ),
+                "fix_suggestion": f"Set sandbox.timeout_sec a 30.0 (production) o 60.0 (scientific)",
+                "fix_key": ("sandbox", "timeout_sec"),
+                "fix_value": 30.0 if timeout >= 10 else 60.0,
+            })
+
+        # Population size warning
+        evo = config.get('evolution', {}) or {}
+        pop_size = evo.get('population_size', 8)
+        if pop_size < 4:
+            issues.append({
+                "severity": "warning",
+                "code": "evolution.population",
+                "message": (
+                    f"Tu population_size es bajo ({pop_size}). "
+                    f"Valores menores a 4 pueden converger muy rápido "
+                    f"y perder diversidad evolutiva."
+                ),
+                "fix_suggestion": "Incrementa a al menos 6-8 individuos por isla.",
+                "fix_key": ("evolution", "population_size"),
+                "fix_value": 8,
+            })
+
+        # Generations
+        gens = evo.get('generations', 50)
+        if gens < 20:
+            issues.append({
+                "severity": "info",
+                "code": "evolution.generations",
+                "message": (
+                    f"Tu número de generaciones ({gens}) es bajo. "
+                    f"Para resultados significativos, considera 50-100+."
+                ),
+            })
+
+        # Migration topology
+        mig = config.get('migration', {}) or {}
+        topology = mig.get('topology', 'ring')
+        if topology == 'ring' and evo.get('num_islands', 4) > 8:
+            issues.append({
+                "severity": "info",
+                "code": "migration.topology",
+                "message": (
+                    f"Topology 'ring' con {evo.get('num_islands', 4)} islas puede "
+                    f"ser lento. Considera 'fully_connected' para mejor convergencia."
+                ),
+                "fix_suggestion": "Set migration.topology to 'fully_connected'",
+                "fix_key": ("migration", "topology"),
+                "fix_value": "fully_connected",
+            })
+
+        # Checkpoint
+        chk = config.get('checkpoint', {}) or {}
+        if chk.get('interval', 10) > 50:
+            issues.append({
+                "severity": "warning",
+                "code": "checkpoint.interval",
+                "message": (
+                    f"Tu checkpoint interval ({chk.get('interval', 10)}) es muy alto. "
+                    f"Puedes perder trabajo valioso si la evolución falla."
+                ),
+                "fix_suggestion": "Reduce a 10-20 generaciones.",
+                "fix_key": ("checkpoint", "interval"),
+                "fix_value": 10,
+            })
+
+        return issues
+
+    def apply_fix(self, config: Dict[str, Any], issue: Dict[str, Any]) -> bool:
+        """Apply a fix to the config based on an issue dict."""
+        if "fix_key" not in issue or "fix_value" not in issue:
+            return False
+        key_path = issue["fix_key"]
+        value = issue["fix_value"]
+
+        # Navigate/create nested dict
+        d = config
+        for k in key_path[:-1]:
+            if k not in d or not isinstance(d[k], dict):
+                d[k] = {}
+            d = d[k]
+        d[key_path[-1]] = value
+        return True
 
     def create_from_template(self, template_name: str,
                             output_path: str) -> bool:

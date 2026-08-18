@@ -1,174 +1,40 @@
-# MutaLambda — Configuración Declarativa de Referencia
-# =====================================================
-# Este archivo define TODOS los parámetros del motor evolutivo.
-# Cópialo, modifícalo y pásalo con:
-#   python muta_lambda.py --config my_config.yaml
-
-# ── Motor evolutivo ─────────────────────────────────────────────────
 evolution:
-  num_islands: 4              # Número de islas semi‑aisladas
-  generations: 50             # Generaciones totales
-  topology: ring              # ring | fully_connected | random | mesh
-  early_stop_patience: 15     # Generaciones sin mejora para parada temprana
-  early_stop_delta: 0.001     # Mejora relativa mínima (0 = desactivado)
-  novelty_alpha: 0.15         # Peso del bonus de novedad (0.0–1.0)
-  fitness_normalize: true     # gains vs baseline (latency/throughput/memory)
-  use_uast: false             # Usar Universal AST para mutaciones
-  operator_bandit:
-    enabled: false            # UCB1 adaptive operator selection
-    strategy: ucb1            # ucb1 | epsilon_greedy
-
-  # ── Convergent Evolution Boost ──────────────────────────────────
-  convergent_boost:
-    enabled: true             # Activar refuerzo de convergencia entre islas
-    threshold: 0.85           # Similitud coseno mínima para considerar convergencia
-    factor: 0.15              # Multiplicador del score (score *= 1 + factor * sim)
-
-  # ── Resurrection (time-travel backtracking, Fase 7) ──────────────
-  resurrection:
-    enabled: true               # Activar resurrección de ramas abandonadas
-    threshold: 8                # Generaciones estancadas antes del primer intento
-    max_attempts: 3             # Máximo de resurrecciones por run
-    min_score_ratio: 0.3        # Score mínimo (ratio vs global_best)
-
-  # ── Cross-branch crossover (Fase 7) ──────────────────────────────
-  cross_branch_crossover:
-    enabled: true               # Activar crossover entre ramas distantes
-    prob: 0.05                  # Probabilidad de usar cross-branch por hijo
-    min_distance: 3             # Distancia genealógica mínima
-
-# ── Workflow protocolar integrado ──────────────────────────────────────
-workflow:
-  enabled: true                 # Ejecuta gates secuenciales por candidato
-  max_retries: 1                # Reintentos automáticos ante fallos retryable
-  correctness_threshold: 1.0    # Umbral de tests/correctitud para promoción
-  require_score_improvement: false  # Si true, rechaza candidatos peores que su padre
-  enforce_security: true        # Bloquea eval/exec/subprocess/os.system en candidatos
-  enforce_api_fingerprint: false  # Requiere target.seed / baseline API
-  enforce_differential: false   # Compara outputs vs baseline en los mismos inputs
-  trace_limit: 200              # Máximo de trazas recientes retenidas en métricas
-
-# ── Evolution Upgrade v2.0 (opt-in) ─────────────────────────────────
-advanced_selection:
-  enabled: false               # Fitness + novelty + entropy + discovery score
-  fitness_weight: 1.0
-  novelty_weight: 0.15
-  entropy_weight: 0.20
-  discovery_weight: 0.35
-
-thc:
-  enabled: false               # Transferencia horizontal de código entre individuos
-  max_transfers_per_generation: 1
-  min_donor_score: 0.0
-  validate_in_sandbox: true
-
-dialectic:
-  enabled: false               # Tesis → crítica → síntesis antes de sandbox
-  critique_intensity: medium
-
-spatial:
-  enabled: false               # Grid 2D/Moore para migración local estructurada
-  neighborhood: moore          # moore | von_neumann
-
-pattern_memory:
-  enabled: false               # Almacenar patrones reutilizables, no individuos completos
-
-# ── Población por isla ──────────────────────────────────────────────
-population:
-  size: 8                     # Individuos por isla
-  top_k: 3                    # Elite size (≤ population.size)
-  migration_interval: 10      # Cada cuántas generaciones migrar
-  migrants_per_island: 2      # Cuántos emigrantes por isla
-
-# ── Target (código a evolucionar) ───────────────────────────────────
-target:
-  source_file: examples/target.py
-  entrypoint: solution
-  task: "Improve solution while preserving behavior"
-  tests_file: examples/target_tests.json
-  benchmark_file: examples/target_benchmark.json
-  api_policy: strict          # strict | relaxed
-  enforce_api_fingerprint: false
-  enforce_differential: false
-
-# ── Benchmark estadístico (ML-F04/F05) ──────────────────────────────
-benchmark:
-  warmups: 0                  # 0 = single-shot (dev); 5+ for real p50/p99
-  samples: 1                  # >1 enables multi-sample percentiles
-  operations_per_case: 1
-
-# ── Privacy / LLM egress ────────────────────────────────────────────
-privacy:
-  allow_external_llm: false   # true only if code may leave the host
-  redact_secrets: true
-  allowed_backends:
-    - ollama
-
-# ── Sandbox ─────────────────────────────────────────────────────────
+  generations: 100
+  num_islands: 6
+  population_size: 12
+  top_k: 4
+migration:
+  interval: 8
+  migrants_per_island: 2
+  topology: ring
+mutation:
+  rate: 0.12
+  crossover_rate: 0.75
+  strategies:
+  - random
+  - guided
+  - crossover
+fitness:
+  weights:
+    correctness: 0.6
+    performance: 0.3
+    complexity: 0.1
 sandbox:
-  timeout_sec: 10.0           # Timeout por evaluación (segundos)
-  max_workers: 4              # Workers paralelos en ProcessPoolExecutor
-  # subprocess = local dev only (NOT a security boundary).
-  # container  = recommended for untrusted candidates (Docker/Podman).
-  runner: subprocess          # subprocess | container | microvm
-  allow_expression_eval: false  # expression/assert via eval (dev only)
-  enforce_ast_scan: false     # early AST filter (not a security boundary)
-
-# ── HFC / Ligas evolutivas ─────────────────────────────────────────
-hfc:
-  enabled: false                # Activar HFC: Tier1 exploración, Tier2 refinamiento bacteriano, Tier3 élite
-  tier1_size: 100               # Laboratorio experimental
-  tier2_size: 50                # Fábrica de clones 1 -> lambda
-  tier3_size: 10                # Élite estática con validación pesada futura
-  lambda_clones: 8              # Clones bacterianos por individuo Tier2
-  top_down_distillation: true   # Extraer concepto de Tier3 para inyectarlo en Tier1
-  top_down_interval: 5          # Cada cuántas generaciones destilar élite
-  promotion_correctness: 1.0    # Umbral duro para pasar de Laboratorio a Fábrica
-
-# ── Archivo de soluciones ───────────────────────────────────────────
-archive:
-  enabled: true               # Activar SolutionArchive + FAISS
-  max_size: 10000             # Máximo de soluciones en el archivo
-  prune_threshold: 50         # Purgas diferidas antes de rebuild
-  embedder_model: all-MiniLM-L6-v2  # Modelo de sentence-transformers
-  dedupe_similarity: 0.98     # No insertar vecinos semánticos por encima del umbral
-
-# ── Evolución de prompts ────────────────────────────────────────────
-prompt_evolution:
-  enabled: true               # Activar meta‑evolución de prompts
-  pop_size: 6                 # Tamaño de población de prompts
-  elite_frac: 0.5             # Fracción de élite preservada
-
-# ── Checkpointing ───────────────────────────────────────────────────
+  timeout_sec: 30.0
 checkpoint:
-  interval: 10                # Cada cuántas generaciones guardar
-  dir: checkpoints            # Directorio de checkpoints
-  save_archive: true          # Guardar archivo en checkpoint
-  save_prompts: true          # Guardar prompts en checkpoint
-
-# ── Logging ─────────────────────────────────────────────────────────
+  enabled: true
+  interval: 5
+  directory: checkpoints
+  compress: true
+early_stop:
+  enabled: true
+  patience: 20
+  delta: 0.001
 logging:
-  level: INFO                 # DEBUG | INFO | WARNING | ERROR
-  log_file: null              # Archivo de log (null = stderr)
-
-# ── Proveedor LLM ───────────────────────────────────────────────────
-llm:
-  backend: ollama             # ollama | openai | anthropic | openrouter | mistral
-  model: llama3.2:3b          # Nombre del modelo en el backend seleccionado
-  timeout_sec: 60.0           # Timeout por llamada al LLM
-  temperature: 0.2            # Temperatura de generación para APIs compatibles
-  max_retries: 3              # exponential backoff retries
-  max_calls_per_generation: 20  # 0 = unlimited
-  max_total_calls: 1000         # 0 = unlimited
-  prompt_evolution_interval: 5
-  replay_log: checkpoints/llm_replay.jsonl
-  # Variables opcionales:
-  #   MUTALAMBDA_OLLAMA_URL, MUTALAMBDA_OPENAI_URL, MUTALAMBDA_ANTHROPIC_URL,
-  #   MUTALAMBDA_OPENROUTER_URL, MUTALAMBDA_MISTRAL_URL, MUTALAMBDA_LLM_TIMEOUT_SEC,
-  #   MUTALAMBDA_LLM_TEMPERATURE, OPENAI_API_KEY, ANTHROPIC_API_KEY,
-  #   OPENROUTER_API_KEY, MISTRAL_API_KEY
-
-# ── Reproducibilidad ────────────────────────────────────────────────
-reproducibility:
-  seed: null                  # Semilla RNG (null = aleatorio)
-  track_git_commit: true      # Guardar hash de commit en checkpoint
+  level: INFO
+  file: mutalambda.log
+hfc:
+  enabled: true
+  tier1_size: 50
+  tier2_size: 100
+  tier3_size: 50

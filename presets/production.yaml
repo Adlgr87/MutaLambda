@@ -1,0 +1,25 @@
+# Production preset - balanced settings
+general:
+  population_size: 8
+  generations: 100
+  checkpoint_interval: 10
+  timeout_sec: 30.0
+
+evolution:
+  engine: nsga2
+
+island:
+  num_islands: 6
+  migration_interval: 20
+
+fitness:
+  objectives: [correctness, latency, memory]
+  weights: [-1.0, -1.0, -1.0]
+  hfc_enabled: true
+
+sandbox:
+  timeout_sec: 30.0
+  memory_limit_mb: 1024
+
+mutators:
+  enabled: [simple_math, loop_optimize, dead_code_elimination, constant_folding]

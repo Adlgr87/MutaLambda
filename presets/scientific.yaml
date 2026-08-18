@@ -1,0 +1,27 @@
+# Scientific preset - with SVL and invariant validation
+general:
+  population_size: 8
+  generations: 80
+  checkpoint_interval: 10
+  timeout_sec: 60.0
+
+evolution:
+  engine: svl
+  svl_enabled: true
+
+island:
+  num_islands: 4
+  migration_interval: 20
+
+fitness:
+  objectives: [correctness, latency]
+  weights: [-1.0, -1.0]
+  preserve_invariants: true
+  validate_semantics: true
+
+sandbox:
+  timeout_sec: 60.0
+  memory_limit_mb: 2048
+
+mutators:
+  enabled: [simple_math, loop_optimize, algebraic_simplification, common_subexpression]
