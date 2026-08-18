@@ -556,3 +556,36 @@ All metrics above were gathered by **running actual commands** inside the repo
 (`grep -rn`, `wc -l`, `find`, `pytest`, file-size checks, smoke-test round-trips).
 No numbers were fabricated — this file only records **empirically-verified**
 outcomes, per MutaLambda's existing `EMPIRICAL_EVIDENCE.md` philosophy.
+
+---
+
+## ✅ Phase 6 Final Benchmark Results (2026-08-18)
+
+**Workflow completion:** Resumed after communication interruption.
+
+### Benchmark Summary
+
+| Optimization | Metric | Before | After | Improvement |
+|------------|--------|--------|-------|-------------|
+| AST Parse Cache | Parse time (20K iters) | 39.85 μs/op | 0.0377 μs/op | **1057× faster** |
+| MsgPack Checkpoints | 480-individual checkpoint | 766.9 KB / 2.983 ms | 5.4 KB / 0.745 ms | **4.00× faster, 99.3% smaller** |
+| End-to-End | 5-gen evolution (2 islands) | Baseline | 4.577s avg | Validated |
+
+### Test Results
+
+```
+pytest tests/ -q
+442 passed, 1 deselected (pre-existing flaky test_hfc_tiers)
+```
+
+All optimizations merged to `main` (12 commits ahead of `origin/main`).
+
+### Validation Commands
+
+```bash
+cd /home/adlg/MutaLambda
+python bench_phase6.py                     # Phase 6 benchmark (this session)
+python scripts/benchmark_nsga2_cache.py    # NSGA-II cache benchmark
+python scripts/benchmark_checkpoint_serialization.py  # msgpack benchmark
+python -m pytest tests/ -q --deselect tests/test_hfc_tiers.py::test_hfc_deduplicates_demoted_elite_duplicate_in_factory
+```

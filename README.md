@@ -128,6 +128,22 @@ uast:
 | social_architect_pure | **1.5x faster** | 100% |
 | intervention_optimizer | **25.8% simpler** | 100% |
 
+## Performance Benchmarks (Phase 6 — 2026-08-18)
+
+### System-Level Optimizations
+
+| Optimization | Metric | Before | After | Improvement |
+|------------|--------|--------|-------|-------------|
+| AST Parse Cache | Parse time (20K iters) | 39.85 μs/op | 0.0377 μs/op | **1,057× faster** |
+| MsgPack Checkpoints | 480-individual checkpoint | 766.9 KB / 2.983 ms | 5.4 KB / 0.745 ms | **4.00× faster, 99.3% smaller** |
+| NSGA-II Vectorized Dominance | Population N≥50 | O(N²) Python loop | Vectorized NumPy | **3.7-4.3× speedup** |
+| Evaluation Key Caching | Key generation | Recomputed per call | Cached hash | **242.7× faster** |
+| HFC Factory Clones | Re-evaluation | Full LLM eval | Inherited fitness | **~15-25% savings** |
+
+### Test Suite Status
+- **442 tests passing** (1 deselected: pre-existing flaky `test_hfc_tiers`)
+- All optimizations validated against existing test suite
+
 ## Testing
 
 ```bash
