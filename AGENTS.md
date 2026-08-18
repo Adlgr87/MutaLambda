@@ -56,9 +56,20 @@ Tests cover config management, checkpoint logic, fitness caching, and
 evolution operators. Target: 80%+ coverage.
 
 ## Performance Notes
+- AST parse cache: `code_hash.cached_parse` wraps `ast.parse` with an
+  `lru_cache(maxsize=1024)`. Hot path call sites in `evolution_engine.py`,
+  `island.py`, and `hfc_tiers.py` use it for read-only parse results; mutating
+  call sites (NodeTransformer pipelines) deepcopy the cached tree first. Call
+  `code_hash.clear_ast_cache()` between independent runs if memory pressure
+  is a concern.
 - Fitness cache must be cleared between runs with different configs.
 - Sandbox timeout defaults to 30s; scientific presets may need more.
-- Checkpoint compression (msgpack) reduces I/O by ~60% vs JSON.
+- Checkpoint serialization: `checkpoint.format` controls output ('auto' default,
+  'json', or 'msgpack'). In 'auto' mode, msgpack (zlib-compressed) is used when
+  total individuals > 256 (MSGPACK_THRESHOLD), otherwise JSON. msgpack reduces
+  I/O by ~60-95% vs JSON for large populations. Existing JSON checkpoints still
+  load (backward compatible). Use `mutalambda migrate-checkpoints --format msgpack`
+  to re-save older JSON checkpoints as msgpack.
 
 ## Conventions
 - Python 3.10+; use `pathlib.Path` for all filesystem paths.

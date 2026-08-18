@@ -11,6 +11,7 @@ from typing import Any, Callable, List, Optional, Tuple
 
 from mutation_filters import _filter_mutant, ProfileMode
 from component_evolution import ComponentGraph, ComponentMutator, ModuleExtractor
+from code_hash import cached_parse
 
 
 class ASTMutator:
@@ -31,7 +32,7 @@ class ASTMutator:
     def apply_random_mutation(cls, code: str) -> str:
         """Aplica una mutación aleatoria; devuelve código original si falla."""
         try:
-            tree = ast.parse(code)
+            tree = cached_parse(code)
         except SyntaxError:
             return code
 
@@ -259,7 +260,7 @@ class CoreEvolutionEngine:
     def select_code_regions(self, code: str, max_regions: int = 5) -> List[CodeRegion]:
         """Devuelve los bloques AST más prometedores para optimizar."""
         try:
-            tree = ast.parse(code)
+            tree = cached_parse(code)
         except SyntaxError:
             return []
 
@@ -390,7 +391,7 @@ RULES:
             if not candidate:
                 continue
             try:
-                ast.parse(candidate)
+                cached_parse(candidate)
                 return candidate
             except SyntaxError:
                 continue

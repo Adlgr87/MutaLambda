@@ -105,6 +105,7 @@ class EvolveConfig:
     checkpoint_enabled: bool = True
     checkpoint_interval: int = 10
     checkpoint_dir: str = "checkpoints"
+    checkpoint_format: str = "auto"  # 'auto' (threshold-based), 'json', or 'msgpack'
     early_stop_patience: int = 15
     early_stop_delta: float = 0.001
     novelty_alpha: float = 0.15
@@ -241,6 +242,7 @@ class EvolveConfig:
             checkpoint_enabled=chk.get("enabled", True),
             checkpoint_interval=chk.get("interval", 10),
             checkpoint_dir=chk.get("dir", "checkpoints"),
+            checkpoint_format=chk.get("format", "auto"),
             early_stop_patience=evo.get("early_stop_patience", 15),
             early_stop_delta=evo.get("early_stop_delta", 0.001),
             novelty_alpha=evo.get("novelty_alpha", 0.15),

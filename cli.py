@@ -10,8 +10,9 @@ Uso:
     python cli.py stats
     python cli.py evaluate --results results.json
     python cli.py mutate --target function.py --type prompt --strategy adaptive
-    python cli.py interactive
     python cli.py checkpoints
+    python cli.py migrate-checkpoints checkpoints/run_xxx --format msgpack
+    python cli.py interactive
 """
 
 import sys
@@ -254,6 +255,59 @@ def checkpoints(ctx, list_mode, clean, max_age):
             cli_instance.checkpoint_manager.display_checkpoints(chk_list)
         else:
             console.print("[dim]No hay checkpoints. Ejecuta 'run' para crearlos.[/dim]")
+
+
+# ============================================================================
+# MIGRATE-CHECKPOINTS
+# ============================================================================
+@cli.command("migrate-checkpoints")
+@click.argument("paths", nargs=-1, type=click.Path(exists=True), required=True)
+@click.option('--format', '-f', 'format_mode', type=click.Choice(['auto', 'json', 'msgpack'], case_sensitive=False), default='msgpack', help='Formato de destino')
+@click.option('--overwrite', is_flag=True, help='Sobrescribir si ya existe el destino')
+@click.pass_context
+def migrate_checkpoints(ctx, paths, format_mode, overwrite):
+    """🔄 Migrar checkpoints JSON a msgpack (o viceversa)."""
+    from checkpoint_manager import load_checkpoint, _serialise_checkpoint
+    import zlib
+    import msgpack
+
+    for path in paths:
+        p = Path(path)
+        if p.is_dir():
+            # Directory: migrate each full checkpoint inside
+            json_file = p / "checkpoint.json"
+            msgpack_file = p / "checkpoint.msgpack"
+            if msgpack_file.exists() and not overwrite:
+                console.print(f"[dim]↷ {path}: ya es msgpack, salta[/dim]")
+                continue
+            src = json_file if json_file.exists() else None
+            dst = msgpack_file if format_mode == "msgpack" else (p / "checkpoint.json")
+        else:
+            src = p
+            if format_mode == "auto":
+                suffix = ".msgpack" if p.suffix == ".json" else ".json"
+            else:
+                suffix = f".{format_mode}"
+            dst = p.with_suffix(suffix)
+
+        if src is None or not src.exists():
+            console.print(f"[yellow]⚠ {path}: sin checkpoint.json[/yellow]")
+            continue
+
+        try:
+            cp = load_checkpoint(src)
+            serialised = _serialise_checkpoint(cp)
+
+            if format_mode == "msgpack":
+                packed = msgpack.packb(serialised, use_bin_type=True)
+                compressed = zlib.compress(packed, level=6)
+                dst.write_bytes(compressed)
+                console.print(f"[green]✓ {src} → msgpack ({len(compressed)} bytes)[/green]")
+            else:
+                dst.write_text(json.dumps(serialised, indent=2, ensure_ascii=False), encoding="utf-8")
+                console.print(f"[green]✓ {src} → json[/green]")
+        except Exception as e:
+            console.print(f"[red]✗ {path}: {e}[/red]")
 
 
 # ============================================================================

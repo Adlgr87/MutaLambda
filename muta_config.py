@@ -121,6 +121,7 @@ class CheckpointSection(BaseModel):
     directory: Optional[str] = None  # CLI legacy alias
     save_archive: bool = True
     save_prompts: bool = True
+    format: Literal["auto", "json", "msgpack"] = "auto"  # auto = threshold-based
 
     @property
     def checkpoint_dir(self) -> str:
@@ -271,6 +272,7 @@ class MutaLambdaConfig(BaseModel):
             checkpoint_enabled=chk.enabled,
             checkpoint_interval=chk.interval,
             checkpoint_dir=chk.checkpoint_dir,
+            checkpoint_format=chk.format,
             early_stop_patience=evo.early_stop_patience,
             early_stop_delta=evo.early_stop_delta,
             novelty_alpha=evo.novelty_alpha,

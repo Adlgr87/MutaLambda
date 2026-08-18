@@ -12,6 +12,7 @@ license = { text = "MIT" }
 authors = [{ name = "Adlgr87" }]
 dependencies = [
   "numpy",
+  "msgpack",
   "pydantic>=2",
   "pyyaml",
   "requests",
@@ -21,6 +22,7 @@ dependencies = [
 [project.optional-dependencies]
 core = [
   "numpy",
+  "msgpack",
   "pydantic>=2",
   "pyyaml",
   "requests",

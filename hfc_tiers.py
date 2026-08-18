@@ -23,6 +23,7 @@ from typing import Callable, Dict, List, Optional
 
 from evolution_engine import ASTMutator, CoreEvolutionEngine, ast_crossover
 from fitness_vector import FitnessVector
+from code_hash import cached_parse
 from models import EvalResult, Individual
 
 logger = logging.getLogger("MutaLambda")
@@ -641,7 +642,7 @@ MODULE:
     @staticmethod
     def _parsimony_prune(code: str, _llm_fn: Optional[Callable[[str], str]]) -> str:
         try:
-            tree = ast.parse(code)
+            tree = copy.deepcopy(cached_parse(code))
 
             class Pruner(ast.NodeTransformer):
                 @staticmethod
@@ -673,7 +674,7 @@ MODULE:
     @staticmethod
     def _memory_optimization(code: str, _llm_fn: Optional[Callable[[str], str]]) -> str:
         try:
-            tree = ast.parse(code)
+            tree = copy.deepcopy(cached_parse(code))
 
             class MemoryOptimizer(ast.NodeTransformer):
                 def visit_Call(self, node: ast.Call) -> ast.AST:  # noqa: N802
@@ -701,7 +702,7 @@ MODULE:
     @staticmethod
     def _loop_unrolling(code: str, _llm_fn: Optional[Callable[[str], str]]) -> str:
         try:
-            tree = ast.parse(code)
+            tree = copy.deepcopy(cached_parse(code))
 
             class LoopUnroller(ast.NodeTransformer):
                 def visit_For(self, node: ast.For) -> ast.AST:  # noqa: N802
@@ -727,7 +728,7 @@ MODULE:
     @staticmethod
     def _type_hint_inference(code: str, _llm_fn: Optional[Callable[[str], str]]) -> str:
         try:
-            tree = ast.parse(code)
+            tree = copy.deepcopy(cached_parse(code))
 
             class TypeHintInferer(ast.NodeTransformer):
                 def visit_Assign(self, node: ast.Assign) -> ast.AST:  # noqa: N802
@@ -756,7 +757,7 @@ MODULE:
     @staticmethod
     def _for_to_while(code: str) -> str:
         try:
-            tree = ast.parse(code)
+            tree = copy.deepcopy(cached_parse(code))
 
             class ForToWhile(ast.NodeTransformer):
                 def visit_For(self, node: ast.For) -> ast.AST:  # noqa: N802

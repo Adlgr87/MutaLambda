@@ -42,6 +42,11 @@ from muta_lambda import (
 )
 
 
+# Below this many total individuals, use JSON (fast, human-readable);
+# above it, msgpack is typically more compact and faster.
+MSGPACK_THRESHOLD: int = 256
+
+
 @dataclass
 class CheckpointData:
     """Full experiment state snapshot."""
@@ -230,18 +235,27 @@ def save_full_checkpoint(
     # ── Serialise ────────────────────────────────────────────────────
     ckpt_path = chk_dir / "checkpoint.json"
     
-    # Empirically, JSON serialization of large populations becomes a bottleneck.
-    # For populations > 2000 individuals total, use compressed msgpack.
+    # Determine serialization format.
+    # - 'auto': use msgpack for populations > MSGPACK_THRESHOLD individuals,
+    #   otherwise JSON (fast, human-readable).
+    # - 'json' / 'msgpack': force the named format.
+    # The threshold (256) captures production preset range (e.g. 6 islands x 8 pop = 48).
+    format_mode = getattr(config, "checkpoint_format", "auto") or "auto"
     total_individuals = sum(len(pop) for pop in checkpoint.island_populations)
     
-    if total_individuals > 2000:
-        # Try msgpack for large checkpoints (60-70% smaller, 2-3x faster)
+    use_msgpack = (
+        format_mode == "msgpack"
+        or (format_mode == "auto" and total_individuals > MSGPACK_THRESHOLD)
+    )
+    
+    if use_msgpack:
+        # msgpack for large/parallel populations (60-70% smaller, 2-3x faster)
         try:
             import msgpack
             import zlib
             ckpt_path = chk_dir / "checkpoint.msgpack"
             serialised = _serialise_checkpoint(checkpoint)
-            packed = msgpack.packb(serialised, use_bin_type=True)
+            packed = msgpack.packb(serialised, use_bin_type=True, default=_msgpack_default)
             compressed = zlib.compress(packed, level=6)
             ckpt_path.write_bytes(compressed)
             logger.debug(
@@ -349,6 +363,24 @@ def _to_json_safe(obj):
         return int(obj)
     if isinstance(obj, (np.floating,)):
         return float(obj)
+    return obj
+
+
+def _msgpack_default(obj):
+    """Default fallback for msgpack.packb: convert numpy types for packing.
+
+    msgpack natively handles tuples, lists, dicts, bytes and standard scalars,
+    but numpy arrays/scalars must be converted. Tuples are preserved as tuples
+    (msgpack keeps them) so the round-trip is lossless for RNG state.
+    """
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if hasattr(obj, "tobytes"):
+        return obj.tolist()
     return obj
 
 

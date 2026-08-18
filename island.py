@@ -11,6 +11,7 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 from evolution_engine import ASTMutator, CoreEvolutionEngine, ast_crossover, component_evolve
+from code_hash import cached_parse
 from models import EvalResult, Individual, IslandConfig
 from sandbox import SandboxEvaluator
 from workflow_protocol import (
@@ -380,7 +381,7 @@ class Island:
         result = self.llm_fn(prompt)
 
         try:
-            ast.parse(result)
+            cached_parse(result)
             return result
         except SyntaxError:
             return code
@@ -425,7 +426,7 @@ class Island:
     def _pattern_signature(self, code: str) -> str:
         """Compact AST shape signature for PatternMemory."""
         try:
-            tree = ast.parse(code)
+            tree = cached_parse(code)
         except SyntaxError:
             return "syntax:error"
         names = [type(node).__name__ for node in ast.walk(tree)]
@@ -576,7 +577,7 @@ class Island:
         code = context["candidate_code"]
         stage_start = time.perf_counter()
         try:
-            ast.parse(code)
+            cached_parse(code)
             compile(code, "<candidate>", "exec")
             return make_stage_result(
                 "build_gate",
