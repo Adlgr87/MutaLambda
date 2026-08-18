@@ -257,134 +257,467 @@ def checkpoints(ctx, list_mode, clean, max_age):
 
 
 # ============================================================================
-# DOCTOR
+# INIT (Wizard Interactivo)
 # ============================================================================
 @cli.command()
-@click.option('--config', '-c', type=click.Path(exists=True), help='Config YAML opcional')
+@click.option('--output', '-o', type=click.Path(), default=None, help='Archivo de salida (default: config.yaml)')
 @click.pass_context
-def doctor(ctx, config):
-    """🩺 Validar entorno, backend LLM, runner y dependencias."""
+def init(ctx, output):
+    """✨ Asistente interactivo para crear configuración optimizada."""
+    from cli.config_manager import ConfigManager
+    from rich.prompt import Prompt, Confirm
+    from rich.panel import Panel
+
+    cm = ConfigManager()
+    console.print(Panel(
+        "[bold cyan]MutaLambda Configuration Wizard[/bold cyan]\n"
+        "Crearé una configuración optimizada para tu código.",
+        title="✨ Bienvenido"
+    ))
+
+    console.print("\n[bold]1. ¿Qué tipo de código vas a optimizar?[/bold]")
+    code_type = Prompt.ask(
+        "Selecciona",
+        choices=["1", "2", "3", "4"],
+        default="3",
+        show_choices=True,
+    )
+    type_labels = {
+        "1": "NumPy/Data Science",
+        "2": "Código Científico",
+        "3": "Aplicación General",
+        "4": "Código Legacy",
+    }
+    console.print(f"  → {type_labels[code_type]} seleccionado")
+
+    console.print("\n[bold]2. ¿Qué tan agresiva debe ser la optimización?[/bold]")
+    aggressiveness = Prompt.ask(
+        "Selecciona",
+        choices=["1", "2", "3"],
+        default="2",
+        show_choices=True,
+    )
+    console.print(f"  → {['Conservador', 'Balanceado', 'Agresivo'][int(aggressiveness)-1]} seleccionado")
+
+    preset_map = {
+        ("1", "1"): "numpy", ("1", "2"): "numpy", ("1", "3"): "numpy",
+        ("2", "1"): "scientific", ("2", "2"): "scientific", ("2", "3"): "research",
+        ("3", "1"): "quick", ("3", "2"): "production", ("3", "3"): "advanced",
+        ("4", "1"): "quick", ("4", "2"): "production", ("4", "3"): "production",
+    }
+    preset = preset_map.get((code_type, aggressiveness), "basic")
+    console.print(f"\n[bold green]✓ Configuración recomendada: preset '{preset}'[/bold green]")
+
+    if Confirm.ask("¿Crear config.yaml con este preset?", default=True):
+        out = output or "config.yaml"
+        if cm.create_from_template(preset, out):
+            console.print(f"\n[green]✓ Configuración guardada en {out}[/green]")
+        else:
+            console.print("[red]✗ Error creando configuración[/red]")
+            sys.exit(1)
+
+
+# ============================================================================
+# DOCTOR --FIX  (enhanced)
+# ============================================================================
+@cli.command()
+@click.option('--config', '-c', type=click.Path(exists=True), help='Opcional: configurar YAML para diagnosticar')
+@click.option('--fix', is_flag=True, help='Aplicar correcciones automáticas')
+@click.pass_context
+def doctor(ctx, config, fix):
+    """🩺 Validar entorno, backend LLM, runner y dependencias, con opción --fix."""
     import importlib
     import shutil
+    from cli.config_manager import ConfigManager
+    from rich.panel import Panel
+    from rich.table import Table
 
     ok = True
     console.print("[bold]MutaLambda doctor[/bold]\n")
 
-    # Python
+    # --- Environment checks (unchanged) ---
     console.print(f"Python: {sys.version.split()[0]}")
-
-    # Core imports
     try:
-        import muta_lambda  # noqa: F401
-        from sandbox import SandboxEvaluator  # noqa: F401
-        from runners import create_runner  # noqa: F401
+        import muta_lambda  # noqa
+        from sandbox import SandboxEvaluator  # noqa
+        from runners import create_runner  # noqa
         console.print("[green]✓ core imports[/green]")
     except Exception as e:
         console.print(f"[red]✗ core imports: {e}[/red]")
         ok = False
 
-    # Optional deps
-    for name, mod in [
-        ("click", "click"),
-        ("rich", "rich"),
-        ("numpy", "numpy"),
-        ("pydantic", "pydantic"),
-        ("yaml", "yaml"),
-        ("faiss", "faiss"),
-        ("sentence-transformers", "sentence_transformers"),
-    ]:
+    for name, mod in [("click","click"),("rich","rich"),("numpy","numpy"),
+                      ("pydantic","pydantic"),("yaml","yaml"),
+                      ("faiss","faiss"),("sentence-transformers","sentence_transformers")]:
         try:
             importlib.import_module(mod)
             console.print(f"[green]✓ {name}[/green]")
         except Exception:
-            console.print(f"[yellow]· {name} missing (optional or install extras)[/yellow]")
+            console.print(f"[dim]· {name} (opcional)[/dim]")
 
-    # Container engines (recommended isolation for untrusted candidates)
     has_container = False
     for eng in ("docker", "podman"):
         path = shutil.which(eng)
         if path:
-            console.print(f"[green]✓ {eng} at {path}[/green]")
+            console.print(f"[green]✓ {eng} en {path}[/green]")
             has_container = True
         else:
-            console.print(f"[dim]· {eng} not found[/dim]")
+            console.print(f"[dim]· {eng} no encontrado[/dim]")
     if has_container:
-        console.print(
-            "[green]✓ container runner available[/green] "
-            "[dim](set sandbox.runner: container for hardened isolation)[/dim]"
-        )
+        console.print("[green]✓ runner de contenedor disponible[/green]")
     else:
-        console.print(
-            "[yellow]! no container engine — only sandbox.runner=subprocess "
-            "(local dev; not a security boundary)[/yellow]"
-        )
+        console.print("[yellow]! sin motor de contenedor — solo subprocess[/yellow]")
 
-    # Unified config validation
-    backend = "ollama"
-    model = "llama3.2:3b"
-    runner = "subprocess"
+    # --- Config diagnostics ---
     if config:
-        try:
-            from muta_config import MutaLambdaConfig
+        cm = ConfigManager()
+        cfg = cm.load(config)
+        if cfg is None:
+            console.print(f"[red]✗ No se pudo cargar {config}[/red]")
+            sys.exit(1)
 
-            ml = MutaLambdaConfig.from_yaml(config)
-            backend = ml.llm.backend
-            model = ml.llm.model
-            runner = ml.sandbox.runner
-            console.print("[green]✓ MutaLambdaConfig (Pydantic) valid[/green]")
-            console.print(f"[dim]{ml.recommended_runner_message()}[/dim]")
-            if (
-                not ml.privacy.allow_external_llm
-                and backend not in ("ollama",)
-            ):
-                console.print(
-                    f"[yellow]! privacy.allow_external_llm=false but "
-                    f"llm.backend={backend}[/yellow]"
-                )
-                ok = False
-            if runner in {"container", "docker", "podman"} and not has_container:
-                console.print(
-                    "[red]✗ config requests container runner but docker/podman missing[/red]"
-                )
-                ok = False
-        except Exception as e:
-            console.print(f"[yellow]! config load/validate warning: {e}[/yellow]")
-            try:
-                from config_loader import load_yaml
+        issues = cm.diagnostic(cfg)
+        if not issues:
+            console.print(Panel("[green]✓ Configuración válida — sin problemas.[/green]"))
+        else:
+            table = Table(title="Diagnóstico de configuración", show_lines=True)
+            table.add_column("#", style="dim")
+            table.add_column("Severidad", style="bold")
+            table.add_column("Problema")
+            table.add_column("Solución sugerida", style="cyan")
+            for i, issue in enumerate(issues, 1):
+                sev = issue.get("severity", "warning")
+                color = {"error":"red","warning":"yellow","info":"blue"}.get(sev, "yellow")
+                table.add_row(str(i), f"[{color}]{sev}[/{color}]", issue["message"], issue.get("fix_suggestion",""))
+            console.print(table)
 
-                cfg = load_yaml(config)
-                backend = cfg.get("llm", {}).get("backend", backend)
-                model = cfg.get("llm", {}).get("model", model)
-            except Exception as e2:
-                console.print(f"[red]✗ legacy config load failed: {e2}[/red]")
-                ok = False
-
-    console.print(f"LLM backend: {backend} / model: {model}")
-    console.print(f"Sandbox runner: {runner}")
-    if backend == "ollama":
-        try:
-            import requests
-
-            url = "http://127.0.0.1:11434/api/tags"
-            r = requests.get(url, timeout=2)
-            if r.ok:
-                console.print("[green]✓ ollama reachable[/green]")
-            else:
-                console.print(f"[yellow]! ollama HTTP {r.status_code}[/yellow]")
-                ok = False
-        except Exception as e:
-            console.print(f"[yellow]! ollama not reachable: {e}[/yellow]")
-            ok = False
-
-    # MASSIVE is a separate project; MutaLambda only optimizes pure targets via adapter.
-    console.print(
-        "\n[dim]MASSIVE note: external consumer project "
-        "(https://github.com/Adlgr87/MASSIVE). "
-        "Use massive_adapter.MassiveTargetAdapter against pure functions; "
-        "do not couple MutaLambda core to MASSIVE imports.[/dim]"
-    )
+            if fix:
+                applied = 0
+                for issue in issues:
+                    if "fix_key" in issue and cm.apply_fix(cfg, issue):
+                        applied += 1
+                cm.save(cfg, config)
+                console.print(f"\n[green]✓ {applied} corrección(es) aplicadas en {config}[/green]")
+                ok = ok and True
 
     sys.exit(0 if ok else 1)
+
+
+# ============================================================================
+# MODO PRESETS  (quick/production/scientific/numpy)
+# ============================================================================
+def _run_with_preset(ctx, preset_name, file_arg):
+    from cli.config_manager import ConfigManager
+    import yaml
+    cm = ConfigManager()
+    preset_path = Path("presets") / f"{preset_name}.yaml"
+    if not preset_path.exists():
+        console.print(f"[red]✗ Preset no encontrado: {preset_path}[/red]")
+        sys.exit(1)
+    cfg = yaml.safe_load(preset_path.read_text())
+    out = Path(f"config.{preset_name}.yaml")
+    out.write_text(yaml.dump(cfg, default_flow_style=False, sort_keys=False))
+    console.print(f"[green]✓ Preset '{preset_name}' cargado → {out}[/green]")
+    if file_arg:
+        console.print(f"[cyan]Ejecutando evolve con {file_arg}...[/cyan]")
+        cli_inst = ctx.obj['cli']
+        success = cli_inst.run_evolution(config_path=str(out), verbose=False, animation='none', source=file_arg)
+        sys.exit(0 if success else 1)
+    else:
+        console.print(f"  Ejecuta: [cyan]mutalambda evolve --config {out.name} my_script.py[/cyan]")
+
+
+@cli.command(name="quick")
+@click.argument("file", required=False)
+@click.pass_context
+def quick(ctx, file):
+    """⚡ Ejecutar con preset 'quick' (feedback rápido)."""
+    _run_with_preset(ctx, "quick", file)
+
+
+@cli.command(name="production")
+@click.argument("file", required=False)
+@click.pass_context
+def production(ctx, file):
+    """🏭 Ejecutar con preset 'production' (balanceado)."""
+    _run_with_preset(ctx, "production", file)
+
+
+@cli.command(name="scientific")
+@click.argument("file", required=False)
+@click.pass_context
+def scientific(ctx, file):
+    """🧪 Ejecutar con preset 'scientific' (SVL + invariantes)."""
+    _run_with_preset(ctx, "scientific", file)
+
+
+@cli.command(name="numpy")
+@click.argument("file", required=False)
+@click.pass_context
+def numpy_mode(ctx, file):
+    """🔢 Ejecutar con preset 'numpy' (optimización NumPy)."""
+    _run_with_preset(ctx, "numpy", file)
+
+
+# ============================================================================
+# RECOMMEND
+# ============================================================================
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+@click.option("--apply/--no-apply", default=False, help="Generar config recomendado")
+@click.option("--output", "-o", type=click.Path(), default=None)
+@click.pass_context
+def recommend(ctx, file, apply, output):
+    """📋 Analizar código y recomendar preset + configuración óptima."""
+    from cli.config_manager import ConfigManager
+    import yaml
+    cm = ConfigManager()
+    src = Path(file).read_text(encoding="utf-8")
+    code_type = _detect_code_type_cli(src)
+    lines = src.count("\n")
+
+    if "numpy" in code_type or "ml" in code_type:
+        preset, reason = "numpy", "Código numérico/ML"
+    elif lines > 200:
+        preset, reason = "scientific", "Código extenso (>200 líneas)"
+    elif lines < 50:
+        preset, reason = "quick", "Código conciso (<50 líneas)"
+    else:
+        preset, reason = "production", "Código general"
+
+    console.print(f"[bold]Recomendación:[/bold] [green]preset '{preset}'[/green]")
+    console.print(f"  Razón: {reason}")
+
+    # read actual preset file for accurate key values
+    preset_path = Path("presets") / f"{preset}.yaml"
+    if preset_path.exists():
+        pdata = yaml.safe_load(preset_path.read_text())
+    else:
+        pdata = cm.templates.get(preset, {})
+    ev = pdata.get("evolution", {})
+    sb = pdata.get("sandbox", {})
+    console.print(f"  Generations: {ev.get('generations', '?')}")
+    console.print(f"  Islands: {ev.get('num_islands', '?')}")
+    console.print(f"  Population: {ev.get('population_size', '?')}")
+    console.print(f"  Timeout: {sb.get('timeout_sec', '?')}s")
+
+    if apply:
+        out = output or f"config.{preset}.yaml"
+        if preset_path.exists():
+            cfg = yaml.safe_load(preset_path.read_text())
+            Path(out).write_text(yaml.dump(cfg, default_flow_style=False, sort_keys=False))
+        else:
+            cm.create_from_template(preset, out)
+        console.print(f"\n[green]✓ Guardado en {out}[/green]")
+
+
+def _detect_code_type_cli(source: str) -> str:
+    ind = {
+        'numpy': 'np.' in source or 'numpy' in source,
+        'pandas': 'pd.' in source or 'pandas' in source,
+        'scipy': 'scipy' in source,
+        'ml': 'sklearn' in source or 'torch' in source or 'tensorflow' in source,
+    }
+    m = [n for n, p in ind.items() if p]
+    return ', '.join(m) if m else 'general'
+
+
+# ============================================================================
+# DASHBOARD (text fallback)
+# ============================================================================
+@cli.command()
+@click.option("--text/--no-text", default=False, help="Ver resumen en texto (sin Streamlit)")
+@click.argument("run_id", required=False)
+@click.pass_context
+def dashboard(ctx, text, run_id):
+    """📊 Monitorear ejecuciones (texto o Streamlit)."""
+    if not text:
+        try:
+            import streamlit  # noqa
+        except ImportError:
+            console.print("[yellow]⚠ Streamlit no instalado.[/yellow]")
+            console.print("  [cyan]pip install streamlit[/cyan] o usa [cyan]--text[/cyan]")
+            sys.exit(0)
+        from pathlib import Path as P
+        dash_file = P(__file__).parent / "dashboard_run.py"
+        if dash_file.exists():
+            import subprocess
+            console.print("[cyan]🚀 Abriendo http://localhost:8501 ...[/cyan]")
+            subprocess.run(["streamlit", "run", str(dash_file)])
+            sys.exit(0)
+        else:
+            console.print("[yellow]streamlit disponible pero dashboard_run.py no encontrado[/yellow]")
+            sys.exit(0)
+
+    # --- text mode ---
+    from json import loads
+    checkpoints_dir = Path("checkpoints")
+    if not checkpoints_dir.exists():
+        console.print("[dim]No hay directorio de checkpoints[/dim]")
+        sys.exit(0)
+    runs = sorted(
+        [d for d in checkpoints_dir.iterdir() if d.is_dir() and d.name.startswith("run_")],
+        key=lambda d: d.stat().st_mtime, reverse=True)[:10]
+    if not runs:
+        console.print("[dim]No hay runs[/dim]")
+        sys.exit(0)
+    from rich.table import Table
+    t = Table(title="Resumen de Ejecuciones")
+    t.add_column("#", style="dim")
+    t.add_column("Run ID", style="cyan")
+    t.add_column("Gen", justify="right")
+    t.add_column("Best", justify="right")
+    t.add_column("Time", justify="right")
+    for i, d in enumerate(runs, 1):
+        mp = d / "run_manifest.json"
+        if mp.exists():
+            m = loads(mp.read_text())
+            t.add_row(str(i), d.name[4:12],
+                      str(m.get("generation_completed", 0)),
+                      f"{m.get('best_score',0):.4f}",
+                      f"{m.get('total_time_sec',0):.1f}")
+        else:
+            t.add_row(str(i), d.name[:8], "?","?","?")
+    from rich.console import Console
+    Console().print(t)
+
+
+# ============================================================================
+# COMPARE
+# ============================================================================
+@cli.command()
+@click.argument("original", type=click.Path(exists=True))
+@click.argument("optimized", type=click.Path(exists=True))
+@click.option("--baseline", type=click.Path(exists=True), default=None)
+@click.pass_context
+def compare(ctx, original, optimized, baseline):
+    """⚖️ Comparar soluciones original vs optimizada."""
+    import difflib
+    from rich.panel import Panel
+    from rich.table import Table
+    o = Path(original).read_text(encoding="utf-8")
+    p = Path(optimized).read_text(encoding="utf-8")
+    console.print(Panel("[bold cyan]⚖️ Solution Comparison[/bold cyan]"))
+    ft = Table(show_header=False, box=None)
+    ft.add_column("File", style="cyan")
+    ft.add_column("Líneas", justify="right")
+    ft.add_row(str(original), str(o.count("\n")))
+    ft.add_row(str(optimized), str(p.count("\n")))
+    if baseline:
+        b = Path(baseline).read_text(encoding="utf-8")
+        ft.add_row(str(baseline), str(b.count("\n")))
+    console.print(ft)
+    diff = list(difflib.unified_diff(o.splitlines(keepends=True), p.splitlines(keepends=True),
+                                     fromfile=str(original), tofile=str(optimized), n=3))
+    additions = sum(1 for l in diff if l.startswith("+") and not l.startswith("+++"))
+    removals = sum(1 for l in diff if l.startswith("-") and not l.startswith("---"))
+    st = Table(title="Stats")
+    st.add_column("Métrica", style="cyan")
+    st.add_column("Valor", justify="right")
+    st.add_row("Líneas agregadas", str(additions))
+    st.add_row("Líneas eliminadas", str(removals))
+    st.add_row("Neto", str(additions - removals))
+    console.print(st)
+
+
+# ============================================================================
+# EXPLAIN-RUN
+# ============================================================================
+@cli.command()
+@click.argument("run_dir", type=click.Path(exists=True))
+@click.option("--full", is_flag=True)
+@click.pass_context
+def explain_run(ctx, run_dir, full):
+    """📖 Explicar decisiones de una corrida completada."""
+    from json import loads
+    rd = Path(run_dir)
+    manifest = loads((rd / "run_manifest.json").read_text()) if (rd/"run_manifest.json").exists() else {}
+    if not manifest:
+        console.print(f"[red]✗ run_manifest.json no encontrado en {run_dir}[/red]")
+        sys.exit(1)
+    from rich.panel import Panel
+    from rich.table import Table
+    console.print(Panel("[bold cyan]📖 Explicando corrida[/bold cyan]"))
+    it = Table(box=None, show_header=False)
+    it.add_column("Key", style="dim")
+    it.add_column("Value")
+    it.add_row("Run ID", manifest.get("run_id","—"))
+    it.add_row("Task", manifest.get("task","—"))
+    it.add_row("Generaciones", str(manifest.get("generation_completed",0)))
+    console.print(it)
+    bs = manifest.get("best_score", 0)
+    console.print(f"\n[cyan]🎯 Best Score:[/cyan] [bold]{bs:.4f}[/bold]")
+    fh = rd / "fitness_history.json"
+    if fh.exists():
+        h = loads(fh.read_text()).get("global_best_history", [])
+        if h:
+            console.print(f"\n[bold]📈 Fitness Evolution:[/bold]")
+            console.print(f"  Generaciones: {len(h)}")
+            console.print(f"  Inicio: {h[0]:.4f}")
+            console.print(f"  Final:  {h[-1]:.4f}")
+            pct = ((h[-1]-h[0])/abs(h[0])*100) if h[0] else 0
+            console.print(f"  Mejora: {pct:.1f}%")
+    if full:
+        bp = rd/"best_solution.py"
+        if bp.exists():
+            from rich.console import Console
+            console.print("\n[bold]Mejor solución:[/bold]")
+            console.print(bp.read_text(encoding="utf-8"))
+
+
+# ============================================================================
+# EXAMPLES + TUTORIAL
+# ============================================================================
+@cli.command(name="examples")
+@click.pass_context
+def examples(ctx):
+    """📁 Listar ejemplos listos para usar."""
+    from rich.table import Table
+    t = Table(title="Ejemplos MutaLambda")
+    t.add_column("Archivo", style="cyan")
+    t.add_column("Tipo")
+    t.add_column("Tests")
+    ex_dir = Path("examples")
+    if not ex_dir.exists():
+        console.print("[dim]No hay directorio examples/[/dim]")
+        sys.exit(0)
+    for py in sorted(ex_dir.glob("*.py")):
+        tests = py.with_name(py.stem + "_tests.json")
+        t.add_row(str(py), _guess_type(py.read_text(encoding="utf-8")[:200]),
+                  "✓" if tests.exists() else "—")
+    console.print(t)
+
+
+def _guess_type(src: str) -> str:
+    if "np." in src or "numpy" in src: return "NumPy"
+    if "scipy" in src: return "Científico"
+    return "General"
+
+
+@cli.command()
+@click.pass_context
+def tutorial(ctx):
+    """🐣 Tutorial interactivo paso a paso."""
+    from rich.panel import Panel
+    console.print(Panel("""
+[bold cyan]🐣 Tutorial MutaLambda[/bold cyan]
+
+Pasos esenciales:
+""", title="Tutorial"))
+    steps = [
+        ("1. Configuración", "Crea config.yaml con wizard:", "  mutalambda init"),
+        ("2. Analizar", "Recomiendo preset para tu código:", "  mutalambda recommend my_script.py"),
+        ("3. Optimizar", "Ejecuta con preset production:", "  mutalambda production my_script.py"),
+        ("4. Monitorear", "Ver resumen en texto:", "  mutalambda dashboard --text"),
+        ("5. Diagnosticar", "Verifica y corrige configuración:", "  mutalambda doctor --fix"),
+        ("6. Explicar", "Entiende resultados de una corrida:", "  mutalambda explain-run checkpoints/run_xxx"),
+    ]
+    for name, desc, cmd in steps:
+        console.print(f"\n[bold]{name}[/bold]")
+        console.print(f"  [dim]{desc}[/dim]")
+        console.print(f"  [cyan]{cmd}[/cyan]")
+    console.print(f"\n[bold yellow]✨ Quick Start:[/bold yellow]")
+    console.print("  [cyan]mutalambda init && mutalambda production examples/target.py[/cyan]")
 
 
 if __name__ == '__main__':

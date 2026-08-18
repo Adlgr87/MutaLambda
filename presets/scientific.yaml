@@ -1,27 +1,31 @@
-# Scientific preset - with SVL and invariant validation
-general:
-  population_size: 8
-  generations: 80
-  checkpoint_interval: 10
-  timeout_sec: 60.0
-
+# Scientific preset - for scientific/HPC code with SVL
+# Activates SVL and invariant validation
 evolution:
-  engine: svl
-  svl_enabled: true
-
-island:
+  generations: 80
   num_islands: 4
-  migration_interval: 20
-
-fitness:
-  objectives: [correctness, latency]
-  weights: [-1.0, -1.0]
-  preserve_invariants: true
-  validate_semantics: true
+  population_size: 8
+  top_k: 3
 
 sandbox:
   timeout_sec: 60.0
-  memory_limit_mb: 2048
+  memory_mb: 2048
 
-mutators:
-  enabled: [simple_math, loop_optimize, algebraic_simplification, common_subexpression]
+migration:
+  interval: 20
+  migrants_per_island: 2
+
+mutation:
+  rate: 0.1
+  crossover_rate: 0.7
+
+checkpoint:
+  enabled: true
+  interval: 10
+  directory: checkpoints
+
+uast:
+  enable_svl: true
+  invariant_validation: true
+
+prompt_evolution:
+  enabled: true

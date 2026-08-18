@@ -1,27 +1,30 @@
-# NumPy preset - optimized for NumPy workloads
-general:
-  population_size: 8
-  generations: 80
-  checkpoint_interval: 10
-  timeout_sec: 60.0
-
+# NumPy preset - optimized for NumPy/numerical workloads
 evolution:
-  engine: nsga2
-  numpy_optimizer: true
-
-island:
+  generations: 80
   num_islands: 4
-  migration_interval: 15
-
-fitness:
-  objectives: [correctness, latency]
-  weights: [-1.0, -1.0]
-  numpy_vectorize: true
+  population_size: 8
+  top_k: 3
 
 sandbox:
   timeout_sec: 60.0
-  memory_limit_mb: 2048
-  python_path: ["."]
+  memory_mb: 2048
 
-mutators:
-  enabled: [numpy_vectorize, numpy_broadcasting, numpy_fusion, loop_optimize]
+migration:
+  interval: 15
+  migrants_per_island: 2
+
+mutation:
+  rate: 0.1
+  crossover_rate: 0.7
+
+checkpoint:
+  enabled: true
+  interval: 10
+  directory: checkpoints
+
+uast:
+  enable_numpy_optimizer: true
+  numpy_vectorize: true
+
+prompt_evolution:
+  enabled: false
