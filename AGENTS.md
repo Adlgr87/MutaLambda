@@ -70,6 +70,11 @@ evolution operators. Target: 80%+ coverage.
   I/O by ~60-95% vs JSON for large populations. Existing JSON checkpoints still
   load (backward compatible). Use `mutalambda migrate-checkpoints --format msgpack`
   to re-save older JSON checkpoints as msgpack.
+- HFC tiering: `_process_migrations()` in `hfc_tiers.py` handles elite
+  deduplication with code-based comparison (`elite.code != ind.code`) to
+  distinguish individuals with same ID but different code. Demoted elites are
+  tracked via `demoted_ids` set to prevent double-demotion when a challenger
+  dominates multiple individuals.
 
 ## Conventions
 - Python 3.10+; use `pathlib.Path` for all filesystem paths.
