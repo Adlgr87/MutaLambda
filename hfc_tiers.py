@@ -162,7 +162,11 @@ class HFCLeagueEngine:
             self._reproduce_laboratory(llm_fn)
             + self._reproduce_factory(llm_fn)
         )
-        self._evaluate(offspring, evaluator)
+
+        # Only evaluate laboratory offspring (score == -inf). Factory clones
+        # inherit parent fitness and skip redundant evaluation.
+        lab_offspring = [ind for ind in offspring if ind.score == float("-inf")]
+        self._evaluate(lab_offspring, evaluator)
 
         next_tier1, next_tier2, next_tier3, migration_stats = self._process_migrations(
             current + offspring

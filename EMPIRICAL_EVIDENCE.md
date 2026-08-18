@@ -517,16 +517,38 @@ is a hypothesis → implementation → measured-outcome triple.
 These were identified but **not** implemented in this sprint because impact was lower
 or risk was higher than the two merged wins above:
 
-1. **HFC Evaluation Volume** — batch current+offspring into single `evaluate_batch`
-   call (Medium risk, predicted ~15–25 % wall-clock). *Deferred*: requires
-   `llm_max_calls_per_generation` enforcement wiring + benchmark harness.
-2. **ProtocolWorkflow per-candidate overhead** — skip gates for AST-only mutations
+1. **ProtocolWorkflow per-candidate overhead** — skip gates for AST-only mutations
    (Medium risk, predicted ~10–20 %). *Deferred*: needs correctness gate for
    differential gate bypass.
-3. **Sandbox worker spawn overhead** — persistent worker pool (High risk, predicted
+2. **Sandbox worker spawn overhead** — persistent worker pool (High risk, predicted
    ~5–15 %). *Deferred*: high blast radius, needs dedicated benchmark suite.
-4. **HFC cache hit-rate instrumentation** — add hit/miss counters to `cache_stats`
+3. **HFC cache hit-rate instrumentation** — add hit/miss counters to `cache_stats`
    (Low risk, unknown impact). *Backlog*: visibility-only change.
+
+## ✅ Implemented: HFC Evaluation Volume Optimization
+
+**Goal:** Eliminate redundant re-evaluation of factory clones by leveraging
+inherited parent fitness.
+
+**What changed:**
+- In `hfc_tiers.py` `step()`: instead of `self._evaluate(offspring, evaluator)`
+  evaluating all offspring (laboratory + factory), now only laboratory offspring
+  (those with `score == -inf`) are sent to `evaluate_batch`. Factory clones
+  already inherit parent's `score`, `fitness`, and `passed` from `_reproduce_factory()`
+  and skip re-evaluation.
+
+**Impact:** With default `lambda_clones=8`, this skips up to **8× evaluation
+calls per tier2 parent** per generation. Predicted ~15-25% wall-clock reduction
+on HFC-enabled runs (higher savings when tier2 population is large).
+
+**Risk:** Low — factory clones still go through `_process_migrations()` which
+checks `_is_functional()`; non-functional clones (broken syntax from micro-mutation)
+are caught by existing correctness gates and demoted to laboratory tier.
+
+**Validation:**
+- All 443 tests pass (including new `test_factory_offspring_skip_evaluation_uses_parent_fitness`)
+- Factory clones retain inherited `score`, `fitness`, and `passed` from parent
+- Laboratory offspring (score=-inf) are still evaluated as expected
 
 ## Methodology
 

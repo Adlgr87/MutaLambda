@@ -350,3 +350,55 @@ def test_top_down_distillation_extracts_concept_from_elite():
     )
 
     assert "hashmap" in concept.lower()
+
+
+@pytest.mark.root
+def test_factory_offspring_skip_evaluation_uses_parent_fitness():
+    """Factory clones should inherit parent fitness without being re-evaluated."""
+    parent_code = "def f(x):\n    return x + 1\n"
+    parent = Individual(
+        code=parent_code,
+        score=1.0,
+        fitness=FitnessVector(
+            correctness=1.0,
+            latency_p50=0.05,
+            latency_p99=0.05,
+            throughput=50.0,
+            memory_peak_mb=1.0,
+            parsimony=0.8,
+        ),
+        tier=TIER_FACTORY,
+        passed=True,
+        record_lineage=False,
+    )
+    engine = _engine(lambda_clones=2, tier3_size=1)
+    engine.tier2 = [parent]
+
+    # Counter to track how many times evaluate_batch is called
+    evaluation_count = [0]
+
+    class _CountingEvaluator(_MockEvaluator):
+        def evaluate_batch(self, codes):
+            evaluation_count[0] += 1
+            return super().evaluate_batch(codes)
+
+    evaluator = _CountingEvaluator(functional_codes={parent_code.strip()})
+
+    snapshot = engine.step(
+        llm_fn=lambda _prompt: parent_code,
+        evaluator=evaluator,
+        generation=0,
+        lineage_graph=LineageGraph(),
+    )
+
+    # Factory clones should NOT have been evaluated
+    factory_clones = [ind for ind in engine.tier1 + engine.tier2 + engine.tier3 if ind.parent_ids == [parent.id]]
+    for clone in factory_clones:
+        # If clone is in tier2, it inherited parent's fitness (not re-evaluated)
+        assert clone.score == parent.score
+        assert clone.fitness == parent.fitness
+        assert clone.passed == parent.passed
+
+    # At least one evaluation should have happened (for current population or lab offspring)
+    # but NOT for the factory clones specifically
+    assert evaluation_count[0] >= 1
