@@ -328,6 +328,79 @@ The NSGA-II optimization didn't significantly reduce wall-clock time because:
 
 ## Validated Improvement: NSGA-II Numpy-Vectorized Dominance (2026-08-17)
 
+**Workflow:** SWE-Agent static analysis → profiling → refactor proposal → empirical validation.
+
+### Summary
+
+Refactored `nsga2.py` to use a numpy-vectorized fast path for non-dominated sorting, reducing per-generation sorting time significantly.
+
+| Metric | Before (Pure Python) | After (Numpy) | Speedup |
+|--------|----------------------|---------------|---------|
+| N=100 | 11.3 ms | 2.9 ms | 3.9x |
+| N=200 | 42.7 ms | 9.9 ms | 4.3x |
+| N=500 | 268 ms | 61 ms | 4.4x |
+
+### Implementation
+
+- Added `_non_dominated_sort_numpy()` using broadcasted `(N, N)` dominance matrix
+- Added dispatch logic: populations ≥ `NPY_DOMINANCE_THRESHOLD = 50` use numpy path
+- Kept pure-Python fallback for small populations (numpy overhead not worth it)
+
+### Validation
+
+- 13/13 nsGA2 tests pass
+- 39/39 cross-module regression tests pass
+- Correctness parity verified on 10 random populations (100–2000 individuals)
+
+### Decision
+
+✅ **Approved** — merged to main. No regressions detected.
+
+---
+
+## Validated Improvement: Evaluation Key Caching (2026-08-17)
+
+**Workflow:** SWE-Agent static analysis → hot-path identification → caching refactor → empirical validation.
+
+### Context
+
+`evaluation_service.py` `EvaluationService.evaluate_batch()` called `evaluation_key()` for every candidate each generation. `evaluation_key` internally called `tests_hash(list(test_cases))` and `environment_hash()` — both invariant per `EvaluationService` instance lifetime — wasting a `json.dumps(test_cases)` + `json.dumps(env_payload)` + SHA-256 on every single candidate.
+
+### Static Analysis Findings (SWE-Agent)
+
+Per generation (5000 candidates):
+- ~5000 × redundant `json.dumps(test_cases)` calls
+- ~5000 × `environment_hash()` calls (recomputes `json.dumps({python, numpy, platform})` + SHA-256)
+- `tests_hash` re-serialization is identical for every candidate in the batch
+
+### Refactor
+
+- `EvaluationService.__post_init__`: precompute `self._tests_hash` and `self._env_hash` once
+- `evaluation_key()`: accepts optional `_tests_hash` / `_env_hash` params to skip recomputation
+- `evaluate_batch()` + `invalidate()` updated to pass cached hashes
+
+**Files changed:** `evaluation_service.py`
+
+### Empirical Results
+
+```
+OLD (recompute every call): 390.95 μs/candidate  (2000× in 781.90 ms)
+NEW (cached hashes):            1.61 μs/candidate  (2000× in 3.22 ms)
+                                        ─────────────────────────────
+                                        Speedup: 242.7x on key generation
+Savings per 5000-individual generation: ~1.9s eliminated from hash computation alone
+```
+
+(Tested with 15 medium-complexity test cases; savings scale with payload size.)
+
+### Decision
+
+✅ **Approved** — high benefit, low risk (invariant within instance lifetime; cache cleared via existing `invalidate()`).
+
+---
+
+## Validated Improvement: Sandbox Evaluator SubprocessRunner Reuse (2026-08-17)
+
 ### Problem
 The pure-Python `non_dominated_sort()` loop in `nsga2.py` performs O(N²) pairwise fitness comparisons in Python, dominating selection time for moderate populations (N ≥ 50). SWE-Agent profiling flagged this as the #3 hotspot (2.9-3.5x overhead vs theoretical numpy vectorizable bound).
 

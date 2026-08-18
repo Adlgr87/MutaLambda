@@ -49,13 +49,21 @@ def _pkg_version(name: str) -> str:
         return "unknown"
 
 
-def evaluation_key(code: str, test_cases: Sequence[dict], *, benchmark_hash: str = "") -> str:
-    """Composite key: code + tests + benchmark + environment."""
+def evaluation_key(code: str, test_cases: Sequence[dict], *,
+                   benchmark_hash: str = "",
+                   _tests_hash: Optional[str] = None,
+                   _env_hash: Optional[str] = None) -> str:
+    """Composite key: code + tests + benchmark + environment.
+
+    Args:
+        _tests_hash: Precomputed tests_hash (caller may cache invariant value).
+        _env_hash: Precomputed environment_hash (caller may cache invariant value).
+    """
     parts = [
         stable_code_hash(code),
-        tests_hash(list(test_cases)),
+        _tests_hash if _tests_hash is not None else tests_hash(list(test_cases)),
         benchmark_hash or "none",
-        environment_hash(),
+        _env_hash if _env_hash is not None else environment_hash(),
     ]
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 
@@ -96,6 +104,12 @@ class EvaluationService:
         self._cache: Dict[str, EvalResult] = {}
         self._cache_lock = threading.Lock()
         self._runner: Optional[CandidateRunner] = None
+        # Cache invariant hashes once — tests_hash + environment_hash do not
+        # change during the life of an EvaluationService instance. Without this,
+        # evaluation_key() recomputes json.dumps(test_cases) + environment_hash
+        # for *every* candidate (O(N) redundant serializations per generation).
+        self._tests_hash = tests_hash(self.test_cases)
+        self._env_hash = environment_hash()
         if os.getenv("MUTALAMBDA_E2E_SERIAL", "0") == "1":
             self.max_workers = 1
         elif self.max_workers is None:
@@ -145,7 +159,12 @@ class EvaluationService:
         self._ensure_tests()
 
         keys = [
-            evaluation_key(code, self.test_cases, benchmark_hash=self.benchmark_hash)
+            evaluation_key(
+                code, self.test_cases,
+                benchmark_hash=self.benchmark_hash,
+                _tests_hash=self._tests_hash,
+                _env_hash=self._env_hash,
+            )
             for code in codes
         ]
         results: List[Optional[EvalResult]] = [None] * len(codes)
@@ -288,7 +307,12 @@ class EvaluationService:
             if code is None:
                 self._cache.clear()
             else:
-                key = evaluation_key(code, self.test_cases, benchmark_hash=self.benchmark_hash)
+                key = evaluation_key(
+                    code, self.test_cases,
+                    benchmark_hash=self.benchmark_hash,
+                    _tests_hash=self._tests_hash,
+                    _env_hash=self._env_hash,
+                )
                 self._cache.pop(key, None)
 
     def cache_stats(self) -> Dict[str, int]:
