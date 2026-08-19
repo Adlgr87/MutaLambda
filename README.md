@@ -2,6 +2,23 @@
 
 **MutaLambda** is an evolutionary code optimization system that combines LLMs with genetic algorithms (NSGA-II) to automatically improve code performance while maintaining correctness. It supports Python, Rust, and C++ via a Universal AST (UAST) layer for cross-language mutation.
 
+## Why MutaLambda? (vs. OpenEvolve-style frameworks)
+
+Open-source AlphaEvolve clones optimize for *discovery*. MutaLambda optimizes for **trustworthy production code**. The difference is safety and verification at every step:
+
+| Guarantee | MutaLambda | Typical AlphaEvolve-style framework |
+|---|---|---|
+| **Correctness as a hard gate** — a faster-but-wrong candidate is discarded, never ranked | ✅ | ❌ scalar reward, correctness is just one score |
+| **Sandboxed evaluation** with hard timeout & memory limits per candidate | ✅ | ⚠️ varies, often executes in-process |
+| **Security mutation filters** (blocks eval/exec/subprocess/OS-call injection) | ✅ | ❌ |
+| **Anti-hallucination algebraic verification** (SymPy) + AST math verifier | ✅ | ❌ |
+| **Scientific-domain invariants** (energy conservation, mass balance, monotonicity) | ✅ | ❌ |
+| **Sequential workflow gates**: build → security → sandbox → tests → perf → decision | ✅ | ❌ |
+| **Multi-objective Pareto fitness** (correctness + latency P50/P99 + memory + parsimony) | ✅ NSGA-II | ⚠️ mostly single-objective |
+| **Multi-language structural mutation** (Python, Rust, C++, Go via UAST) | ✅ | ⚠️ mostly Python-only |
+
+If you need to *explore* algorithm space, OpenEvolve is a fine tool. If you need to ship an optimized function to production **with evidence that it is still correct**, that is what MutaLambda is built for.
+
 ## Architecture
 
 ```
@@ -165,4 +182,10 @@ python -m pytest tests/scientific/ -v
 
 ## License
 
-MIT License
+MutaLambda is licensed under the **Business Source License 1.1** (BUSL-1.1) — see [LICENSE](LICENSE) for details.
+
+- **Free** for personal, academic, and research use, and for internal evaluation (90 days).
+- **Commercial / production use requires a commercial license** — contact the author via [GitHub](https://github.com/Adlgr87/MutaLambda).
+- Each version automatically converts to **Apache 2.0** on its Change Date (2030-08-19).
+
+> Note: versions published before the license change remain under their original MIT terms.

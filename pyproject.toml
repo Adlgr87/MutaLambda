@@ -8,7 +8,7 @@ version = "4.0.0"
 description = "Evolutionary multi-island code optimization framework"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = { text = "BUSL-1.1" }
 authors = [{ name = "Adlgr87" }]
 dependencies = [
   "numpy",

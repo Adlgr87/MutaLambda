@@ -478,7 +478,13 @@ Si encuentras una regresión de rendimiento o problema de correctitud:
 
 ## 📄 Licencia
 
-Este proyecto está licenciado bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para detalles.
+MutaLambda está licenciado bajo la **Business Source License 1.1** (BUSL-1.1) — ver el archivo [LICENSE](LICENSE) para detalles.
+
+- **Gratis** para uso personal, académico y de investigación, y para evaluación interna (90 días).
+- **El uso comercial / en producción requiere una licencia comercial** — contactar al autor vía [GitHub](https://github.com/Adlgr87/MutaLambda).
+- Cada versión se convierte automáticamente a **Apache 2.0** en su Change Date (2030-08-19).
+
+> Nota: las versiones publicadas antes del cambio de licencia conservan sus términos MIT originales.
 
 ---
 

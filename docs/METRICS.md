@@ -578,7 +578,7 @@ python benchmark_migration_before_after.py
 
 ## 📄 Licencia
 
-MIT License — Ver [LICENSE](../LICENSE) para detalles.
+Business Source License 1.1 (BUSL-1.1) — Ver [LICENSE](../LICENSE) para detalles. Uso comercial en producción requiere licencia comercial.
 
 **Última actualización:** 2026-06-29  
 **Mantenedor:** MutaLambda Development Team
