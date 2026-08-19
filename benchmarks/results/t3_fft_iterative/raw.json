@@ -1,0 +1,83 @@
+{
+  "target": "t3_fft_iterative",
+  "tier": 3,
+  "git_sha": "a8b34572163d",
+  "mutalambda_version": "4.0.0",
+  "env": {
+    "python": "3.14.7",
+    "os": "Linux-7.1.8-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "cpu": "12th Gen Intel(R) Core(TM) i7-1265U",
+    "numpy": "2.4.4",
+    "numba": "0.65.1",
+    "mypyc_available": "/home/adlg/.local/bin/mypyc",
+    "hypothesis": "6.165.10",
+    "scipy": "1.17.1"
+  },
+  "baseline": {
+    "median_s": 7e-06,
+    "iqr": 1e-06,
+    "p95": 1.4e-05,
+    "mean_s": 8e-06,
+    "n": 10,
+    "samples": [
+      7.71e-06,
+      6.78e-06,
+      6.49e-06,
+      6.42e-06,
+      1.527e-05,
+      6.57e-06,
+      5.62e-06,
+      5.6e-06,
+      5.85e-06,
+      1.406e-05
+    ]
+  },
+  "optimized": {
+    "median_s": 2.5e-05,
+    "iqr": 1.5e-05,
+    "p95": 2.8e-05,
+    "mean_s": 2.1e-05,
+    "n": 10,
+    "samples": [
+      2.758e-05,
+      2.534e-05,
+      2.569e-05,
+      2.489e-05,
+      1.076e-05,
+      3.967e-05,
+      1.045e-05,
+      1.202e-05,
+      1.074e-05,
+      2.609e-05
+    ]
+  },
+  "speedup": 0.2601,
+  "correctness": {
+    "verified": true,
+    "unit_tests": "passed",
+    "differential_trials": 1000,
+    "divergences": 0,
+    "max_abs_error": 0.0,
+    "layer3": "OK (Hypothesis property tests passed)"
+  },
+  "statistics": {
+    "mann_whitney_u_p": 0.0017062493689195964,
+    "cliffs_delta": -0.84,
+    "p_adj_holm": 0.0017062493689195964,
+    "significant": false,
+    "speedup_significant": false
+  },
+  "mutation_applied": "AST+numpy mutation (no real engine)",
+  "diff": "benchmarks/results/t3_fft_iterative/t3_fft_iterative.diff",
+  "alternatives": {},
+  "alternatives_correct": {},
+  "protocol": {
+    "repeticiones": 10,
+    "warmup": 5,
+    "metrica": "mediana",
+    "dispersion": "IQR + p95",
+    "significancia": "Mann-Whitney U",
+    "efecto": "Cliffs delta",
+    "correccion": "Holm-Bonferroni sobre todos los targets"
+  }
+}

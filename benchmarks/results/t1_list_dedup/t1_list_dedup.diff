@@ -1,0 +1,15 @@
+--- original
++++ optimized
+@@ -1,8 +1,8 @@
+ def dedup(items):
+-    seen = []
++    seeng = []
+     result = []
+     for item in items:
+-        if item not in seen:
+-            seen.append(item)
++        if item not in seeng:
++            seeng.append(item)
+             result.append(item)
+-    return result
++    return result

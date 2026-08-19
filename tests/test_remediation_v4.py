@@ -69,6 +69,7 @@ def test_evaluation_service_cache_hit():
         timeout_sec=5.0,
         max_workers=1,
         cache_enabled=True,
+        runner_mode="subprocess",
     )
     r1 = svc.evaluate_batch([code])[0]
     r2 = svc.evaluate_batch([code])[0]
@@ -81,7 +82,7 @@ def test_evaluation_service_cache_hit():
 
 def test_sandbox_evaluator_lazy_compatible():
     tests = [{"function": "f", "args": [2], "expected": 4, "comparison": "equal"}]
-    ev = SandboxEvaluator(test_cases=tests, timeout_sec=5.0, parallelism=1)
+    ev = SandboxEvaluator(test_cases=tests, timeout_sec=5.0, parallelism=1, runner_mode="subprocess")
     results = ev.evaluate_batch(["def f(x):\n    return x * 2\n"])
     assert results[0].passed
     ev.shutdown()

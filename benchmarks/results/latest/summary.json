@@ -1,0 +1,24 @@
+{
+  "git_sha": "a8b34572163d",
+  "generated_at": "2026-08-19T05:52:52.949882+00:00",
+  "total_targets": 11,
+  "significant_targets": [],
+  "non_significant_targets": [
+    "t1_compute_sum",
+    "t1_count_vowels",
+    "t1_digit_sum",
+    "t1_fibonacci",
+    "t1_list_dedup",
+    "t1_matrix_multiply",
+    "t1_nested_loops",
+    "t1_pascals_triangle",
+    "t1_primes_sieve",
+    "t1_reverse_list",
+    "t1_string_concat"
+  ],
+  "by_tier": {
+    "tier1": 11
+  },
+  "significant_count": 0,
+  "improved_count": 0
+}

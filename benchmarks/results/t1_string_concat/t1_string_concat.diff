@@ -1,0 +1,11 @@
+--- original
++++ optimized
+@@ -1,5 +1,5 @@
+ def join_words(words):
+-    result = ""
++    result = ''
+     for w in words:
+-        result = result + " " + w
+-    return result.lstrip()
++        result = result + ' ' + w
++    return result.lstrip()

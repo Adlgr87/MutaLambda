@@ -135,8 +135,7 @@ stats.print_stats(20)
         """Analyze a single function for optimization potential."""
         lines = full_code.splitlines()
         func_lines = lines[node.lineno - 1:node.end_lineno]
-        func_code = '
-'.join(func_lines)
+        func_code = '\n'.join(func_lines)
 
         # Generate optimization hint
         hint = self._generate_hint(node, func_code)
@@ -274,5 +273,4 @@ stats.print_stats(20)
             report.append(f"   Hint: {hotspot.optimization_hint}")
             report.append("")
 
-        return '
-'.join(report)
+        return "\n".join(report)

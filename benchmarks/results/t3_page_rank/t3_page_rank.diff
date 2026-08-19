@@ -1,0 +1,21 @@
+--- original
++++ optimized
+@@ -1,6 +1,6 @@
++import numpy as np
+ 
+-import numpy as np
+-def pagerank_iterative(adjacency, damping=0.85, max_iter=100, tol=1e-9):
++def pagerank_iterative(adjacency, damping=0.85, max_iter=100, tol=1e-09):
+     n = len(adjacency)
+     rank = np.ones(n) / n
+     out_degree = np.sum(adjacency, axis=1)
+@@ -16,7 +16,7 @@
+                     new_rank[i] += damping * rank[j] / out_degree[j]
+             new_rank[i] += (1.0 - damping) / n
+             new_rank[i] += damping * dangling_sum / n
+-        if np.max(np.abs(new_rank - rank)) < tol:
++        if not np.max(np.abs(new_rank - rank)) < tol:
+             break
+         rank = new_rank
+-    return rank
++    return rank

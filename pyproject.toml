@@ -50,6 +50,12 @@ scientific = [
   "openpyxl",
   "Pillow",
 ]
+bench = [
+  "numba",
+  "scipy",
+  "hypothesis",
+  "mypyc",
+]
 dev = [
   "pytest>=7",
   "hypothesis",
@@ -57,7 +63,7 @@ dev = [
   "mypy",
 ]
 all = [
-  "mutalambda[core,archive,cli,dashboard,scientific,dev]",
+  "mutalambda[core,archive,cli,dashboard,scientific,bench,dev]",
 ]
 
 [project.scripts]

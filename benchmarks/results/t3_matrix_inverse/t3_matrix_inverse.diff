@@ -1,0 +1,26 @@
+--- original
++++ optimized
+@@ -1,16 +1,15 @@
+-
+ def matrix_inverse(mat):
+     n = len(mat)
+-    aug = [row[:] + [1.0 if i == j else 0.0 for j in range(n)] for i, row in enumerate(mat)]
++    aug = [row[:] + [1.0 if i == je else 0.0 for je in range(n)] for i, row in enumerate(mat)]
+     for col in range(n):
+         pivot = aug[col][col]
+         if abs(pivot) < 1e-12:
+-            raise ValueError("singular")
+-        for j in range(2 * n):
+-            aug[col][j] = aug[col][j] / pivot
++            raise ValueError('singular')
++        for je in range(2 * n):
++            aug[col][je] = aug[col][je] / pivot
+         for r in range(n):
+             if r != col:
+                 factor = aug[r][col]
+-                for j in range(2 * n):
+-                    aug[r][j] = aug[r][j] - factor * aug[col][j]
+-    return [[aug[i][n + j] for j in range(n)] for i in range(n)]
++                for je in range(2 * n):
++                    aug[r][je] = aug[r][je] - factor * aug[col][je]
++    return [[aug[i][n + je] for je in range(n)] for i in range(n)]

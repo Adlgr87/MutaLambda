@@ -1,0 +1,103 @@
+{
+  "target": "t2_radix_sort",
+  "tier": 2,
+  "git_sha": "a8b34572163d",
+  "mutalambda_version": "4.0.0",
+  "env": {
+    "python": "3.14.7",
+    "os": "Linux-7.1.8-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "cpu": "12th Gen Intel(R) Core(TM) i7-1265U",
+    "numpy": "2.4.4",
+    "numba": "0.65.1",
+    "mypyc_available": "/home/adlg/.local/bin/mypyc",
+    "hypothesis": "6.165.10",
+    "scipy": "1.17.1"
+  },
+  "baseline": {
+    "median_s": 3.1e-05,
+    "iqr": 1.9e-05,
+    "p95": 5e-05,
+    "mean_s": 3.1e-05,
+    "n": 15,
+    "samples": [
+      1.836e-05,
+      3.2e-05,
+      5.021e-05,
+      4.255e-05,
+      3.129e-05,
+      2.841e-05,
+      2.58e-06,
+      3.407e-05,
+      1.941e-05,
+      4.515e-05,
+      2.834e-05,
+      2.403e-05,
+      5.042e-05,
+      2.205e-05,
+      4.056e-05
+    ]
+  },
+  "optimized": {
+    "median_s": 3.3e-05,
+    "iqr": 1.5e-05,
+    "p95": 4.3e-05,
+    "mean_s": 3.1e-05,
+    "n": 15,
+    "samples": [
+      4.229e-05,
+      3.362e-05,
+      4.815e-05,
+      3.929e-05,
+      2.198e-05,
+      1.561e-05,
+      3.652e-05,
+      3.299e-05,
+      4.259e-05,
+      1.985e-05,
+      3.136e-05,
+      3.554e-05,
+      2.722e-05,
+      2.321e-05,
+      1.365e-05
+    ]
+  },
+  "speedup": 0.9487,
+  "correctness": {
+    "verified": true,
+    "unit_tests": "passed",
+    "differential_trials": 1000,
+    "divergences": 0,
+    "max_abs_error": 0.0,
+    "layer3": "OK (Hypothesis property tests passed)"
+  },
+  "statistics": {
+    "mann_whitney_u_p": 0.9009714934164412,
+    "cliffs_delta": 0.03111111111111111,
+    "p_adj_holm": 1.0,
+    "significant": false,
+    "speedup_significant": false
+  },
+  "mutation_applied": "AST+numpy mutation (no real engine)",
+  "diff": "benchmarks/results/t2_radix_sort/t2_radix_sort.diff",
+  "alternatives": {
+    "numba": {
+      "median_s": null,
+      "iqr": null,
+      "p95": null,
+      "n": 0,
+      "error": "unavailable"
+    }
+  },
+  "alternatives_correct": {
+    "numba": false
+  },
+  "protocol": {
+    "repeticiones": 15,
+    "warmup": 5,
+    "metrica": "mediana",
+    "dispersion": "IQR + p95",
+    "significancia": "Mann-Whitney U",
+    "efecto": "Cliffs delta",
+    "correccion": "Holm-Bonferroni sobre todos los targets"
+  }
+}

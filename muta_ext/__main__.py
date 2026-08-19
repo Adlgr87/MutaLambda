@@ -5,6 +5,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 import yaml
 from rich.console import Console
@@ -33,6 +34,18 @@ def _detect_code_type(source: str) -> str:
     }
     matches = [name for name, present in indicators.items() if present]
     return ', '.join(matches) if matches else 'general'
+
+
+def code_format(source: str, language: str = "python") -> str:
+    """Pretty-print source for console display. Uses black for Python;
+    passes through unchanged for other languages (e.g. diff)."""
+    if language == "python":
+        try:
+            import black
+            return black.format_str(source, mode=black.Mode())
+        except Exception:
+            return source
+    return source
 
 
 def cmd_optimize(args):

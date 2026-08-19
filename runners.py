@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
-from code_hash import stable_code_hash
+from code_hash import stable_code_hash, cache_stats
 from comparison import COMPARATORS, compare_values, register_predicate
 from fitness_vector import FitnessVector
 from models import EvalResult
@@ -39,6 +39,121 @@ logger = logging.getLogger("MutaLambda")
 _LOCAL_RUNNER_WARNED = False
 
 # compare_values / stable_code_hash: see comparison.py and code_hash.py
+
+
+# ── RLIMIT enforcement instrumentation (visibility-only) ────────────────────────
+# Mirrors the _SecurityScanStats pattern: low-overhead counters to track how
+# often RLIMIT hardening is applied and on which platforms it is unsupported.
+
+class _RlimitStats:
+    """Accumulates RLIMIT enforcement statistics."""
+
+    def __init__(self) -> None:
+        self.hits = 0
+        self.enforced = 0
+        self.unsupported = 0
+
+    def record_hit(self) -> None:
+        self.hits += 1
+
+    def record_enforced(self) -> None:
+        self.enforced += 1
+
+    def record_unsupported(self) -> None:
+        self.unsupported += 1
+
+    def as_dict(self) -> Dict[str, int]:
+        return {
+            "rlimit_hits": self.hits,
+            "rlimit_enforced": self.enforced,
+            "rlimit_unsupported": self.unsupported,
+        }
+
+    def reset(self) -> None:
+        self.__init__()
+
+
+_RLIMIT_STATS = _RlimitStats()
+
+
+def get_rlimit_stats() -> Dict[str, int]:
+    """Return live RLIMIT enforcement statistics (visibility-only telemetry)."""
+    return _RLIMIT_STATS.as_dict()
+
+
+def _rlimit_available(limit_name: str) -> bool:
+    """Return True if ``resource.RLIMIT_<limit_name>`` exists on this platform."""
+    return hasattr(resource, f"RLIMIT_{limit_name}")
+
+
+def _child_setrlimits(memory_mb: int, cpu_limit: int, nproc: int, fsize_mb: int) -> None:
+    """Apply hard RLIMIT bounds in the spawned worker process (child side).
+
+    This runs inside the child via ``preexec_fn`` so limits apply to the worker,
+    not the orchestrator.  Each limit is guarded for platforms where
+    ``resource.RLIMIT_*`` is absent (e.g. some BSDs / musl).
+    """
+    if cpu_limit > 0 and _rlimit_available("CPU"):
+        try:
+            resource.setrlimit(resource.RLIMIT_CPU, (cpu_limit, cpu_limit + 5))
+        except (ValueError, OSError):
+            pass
+
+    if memory_mb > 0 and _rlimit_available("AS"):
+        limit_bytes = int(memory_mb * 1024 * 1024)
+        try:
+            soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+            if hard == resource.RLIM_INFINITY or hard < 0 or hard > limit_bytes:
+                hard = limit_bytes
+            resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, hard))
+        except (ValueError, OSError):
+            pass
+
+    if nproc > 0 and _rlimit_available("NPROC"):
+        try:
+            resource.setrlimit(resource.RLIMIT_NPROC, (nproc, nproc))
+        except (ValueError, OSError):
+            pass
+
+    if fsize_mb > 0 and _rlimit_available("FSIZE"):
+        limit_bytes = int(fsize_mb * 1024 * 1024)
+        try:
+            resource.setrlimit(resource.RLIMIT_FSIZE, (limit_bytes, limit_bytes))
+        except (ValueError, OSError):
+            pass
+
+
+def _prepare_rlimit_preexec(
+    memory_mb: int,
+    cpu_limit: int = 2,
+    nproc: int = 128,
+    fsize_mb: int = 1,
+) -> Optional[Any]:
+    """Record RLIMIT telemetry in the orchestrator and return a ``preexec_fn``.
+
+    Stats are recorded *here* (in the parent) because counters mutated in the
+    forked child are not visible to the orchestrator.  The returned callable
+    performs the actual ``setrlimit`` calls inside the child process.
+
+    Returns ``None`` on platforms without ``resource`` (e.g. Windows), where
+    RLIMIT hardening is not applicable.
+    """
+    _RLIMIT_STATS.record_hit()
+    if sys.platform == "win32" or not hasattr(resource, "RLIMIT_CPU"):
+        _RLIMIT_STATS.record_unsupported()
+        return None
+
+    # Reflect platform support in telemetry (actual set happens in child).
+    for name in ("CPU", "AS", "NPROC", "FSIZE"):
+        if _rlimit_available(name):
+            _RLIMIT_STATS.record_enforced()
+        else:
+            _RLIMIT_STATS.record_unsupported()
+
+    def _preexec() -> None:  # runs in child after fork, before exec
+        _child_setrlimits(memory_mb, cpu_limit, nproc, fsize_mb)
+
+    return _preexec
 
 
 def tests_hash(test_cases: List[Dict]) -> str:
@@ -71,7 +186,6 @@ from dataclasses import dataclass
 # capability. ``sys`` and ``json`` are intentionally allowed — candidates
 # (and the generated harness) legitimately use them.
 _FORBIDDEN_IMPORTS = frozenset({
-    "os",
     "subprocess",
     "socket",
     "pathlib",
@@ -120,6 +234,24 @@ _FORBIDDEN_ATTR_CALLS = {
     ("pathlib", "Path"),
 }
 
+# Root module names that have at least one forbidden attribute call.
+# These are tracked for alias resolution even though the import itself may be
+# allowed (e.g. ``import os as _o`` — os is allowed but _o.system is not).
+_MODULES_WITH_FORBIDDEN_ATTRS = frozenset(
+    root for (root, _attr) in _FORBIDDEN_ATTR_CALLS
+)
+
+# Forbidden "from <module> import <name>" combinations — allows ``from os.path
+# import join`` (safe) while blocking ``from os import system`` (dangerous).
+_FORBIDDEN_FROM_IMPORTS = frozenset(
+    (root, attr) for (root, attr) in _FORBIDDEN_ATTR_CALLS
+)
+
+# Root modules that have at least one forbidden from-import combination.
+_FORBIDDEN_FROM_IMPORTS_MODULE = frozenset(
+    root for (root, _attr) in _FORBIDDEN_FROM_IMPORTS
+)
+
 # Names that should never be reachable from candidate code.
 _SENSITIVE_NAMES = frozenset({
     "__builtins__", "__import__", "__globals__", "__locals__",
@@ -138,6 +270,54 @@ class SecurityFinding:
 
     def __str__(self) -> str:
         return self.message
+
+
+# ── Instrumentation: security scan counters (visibility-only) ────────────────
+# Low-risk, visibility-only counters to track scan effectiveness over time.
+# Mirrors the cache_stats() pattern used in code_hash.py.
+
+class _SecurityScanStats:
+    """Accumulates scan statistics (hits, misses, blocked, allowed)."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.blocked = 0
+        self.allowed = 0
+        self.syntax_errors = 0
+        # Per-kind finding counts
+        self._kind_counts: Dict[str, int] = {}
+
+    def record_scan(self, findings: List[SecurityFinding], had_syntax_error: bool) -> None:
+        self.calls += 1
+        if had_syntax_error:
+            self.syntax_errors += 1
+        if findings:
+            self.blocked += 1
+            for f in findings:
+                self._kind_counts[f.kind] = self._kind_counts.get(f.kind, 0) + 1
+        else:
+            self.allowed += 1
+
+    def as_dict(self) -> Dict[str, int]:
+        return {
+            "calls": self.calls,
+            "blocked": self.blocked,
+            "allowed": self.allowed,
+            "syntax_errors": self.syntax_errors,
+            "hit_rate": (self.blocked / self.calls) if self.calls > 0 else 0.0,
+            **{f"findings_{k}": v for k, v in self._kind_counts.items()},
+        }
+
+    def reset(self) -> None:
+        self.__init__()
+
+
+_SECURITY_STATS = _SecurityScanStats()
+
+
+def get_security_stats() -> Dict[str, int]:
+    """Return live security scan statistics (visibility-only telemetry)."""
+    return _SECURITY_STATS.as_dict()
 
 
 class SecurityVisitor(ast.NodeVisitor):
@@ -186,8 +366,9 @@ class SecurityVisitor(ast.NodeVisitor):
             root = alias.name.split(".")[0]
             if root in _FORBIDDEN_IMPORTS:
                 self._add("forbidden_import", f"import:{root}", node)
-            # Track aliases: ``import os as _o`` -> _o bound to os
-            if root in _FORBIDDEN_IMPORTS and alias.asname:
+            # Track ALL aliases for modules that have forbidden attribute calls.
+            # E.g. ``import os as _o`` -> _o bound to os so _o.system(...) is caught.
+            if root in _MODULES_WITH_FORBIDDEN_ATTRS and alias.asname:
                 self._module_aliases[alias.asname] = root
         self.generic_visit(node)
 
@@ -196,6 +377,12 @@ class SecurityVisitor(ast.NodeVisitor):
             root = node.module.split(".")[0]
             if root in _FORBIDDEN_IMPORTS:
                 self._add("forbidden_import", f"import_from:{root}", node)
+            # Check for dangerous names imported from allowed modules.
+            # E.g. ``from os import system`` is blocked, ``from os.path import join`` is not.
+            if root in _FORBIDDEN_FROM_IMPORTS_MODULE:
+                for alias in node.names:
+                    if (root, alias.name) in _FORBIDDEN_FROM_IMPORTS:
+                        self._add("forbidden_import", f"import_from:{root}.{alias.name}", node)
         self.generic_visit(node)
 
     def visit_Assign(self, node: ast.Assign) -> None:
@@ -251,6 +438,9 @@ class SecurityVisitor(ast.NodeVisitor):
         # but also catch bare module calls resolved through aliases.
         if isinstance(node.func, ast.Attribute):
             owner = self._module_root(node.func.value)
+            # Resolve alias: _o.system -> os.system
+            if owner and owner in self._module_aliases:
+                owner = self._module_aliases[owner]
             if owner:
                 key = (owner, node.func.attr)
                 if key in _FORBIDDEN_ATTR_CALLS:
@@ -273,9 +463,11 @@ def scan_findings(code: str) -> List[SecurityFinding]:
     try:
         tree = ast.parse(code)
     except SyntaxError:
+        _SECURITY_STATS.record_scan([], had_syntax_error=True)
         return []
     visitor = SecurityVisitor()
     visitor.visit(tree)
+    _SECURITY_STATS.record_scan(visitor.findings, had_syntax_error=False)
     return visitor.findings
 
 
@@ -295,6 +487,7 @@ def scan_code_security(code: str) -> List[str]:
 
     visitor = SecurityVisitor()
     visitor.visit(tree)
+    _SECURITY_STATS.record_scan(visitor.findings, had_syntax_error=False)
     seen: set[str] = set()
     for f in visitor.findings:
         if f.message not in seen:
@@ -548,19 +741,40 @@ class CandidateRunner(Protocol):
 
 @dataclass
 class SubprocessRunner:
-    """Local development runner (subprocess + memory limit). Not a full sandbox.
+    """Local development runner (subprocess + hard RLIMIT bounds). Not a full sandbox.
+
+    Applies hard ``resource.setrlimit`` bounds inside the **spawned child** via
+    ``preexec_fn`` so the orchestrator process is never affected:
+
+    * ``RLIMIT_CPU``  — hard CPU seconds cap (kills runaway loops).
+    * ``RLIMIT_AS``   — address-space / memory ceiling (``256MB`` default from
+      ``memory_mb``).
+    * ``RLIMIT_NPROC``— max processes/threads for the user (``128``).
+    * ``RLIMIT_FSIZE``— max file size written by the child (``1MB``).
+
+    Each limit is guarded for platforms where ``resource.RLIMIT_*`` is absent
+    (rare on Linux/macOS, more common on some BSDs / musl builds).
 
     .. warning::
-        The subprocess runner is **not** a real sandbox boundary. It relies only
-        on ``RLIMIT_AS`` / timeout limits. For untrusted candidate code, prefer
-        ``runner_mode="container"`` (Docker/Podman with ``--network=none``,
-        read-only rootfs, ``--cap-drop=ALL``).
+        The subprocess runner provides only RLIMIT/timeout isolation and is NOT
+        a real sandbox boundary (no network namespace, no capability dropping).
+        For untrusted candidate code, prefer ``runner_mode="container"``
+        (Docker/Podman with ``--network=none``, read-only rootfs,
+        ``--cap-drop=ALL``).
     """
 
     timeout_sec: float = 10.0
     memory_mb: int = 256
+    cpu_limit: int = 2
+    nproc_limit: int = 128
+    fsize_mb: int = 1
     allow_expression_eval: bool = False
     enforce_ast_scan: bool = True
+
+    @property
+    def mode(self) -> str:
+        """Runner mode — always ``"subprocess"`` for :class:`SubprocessRunner`."""
+        return "subprocess"
 
     def __post_init__(self) -> None:
         global _LOCAL_RUNNER_WARNED
@@ -593,7 +807,14 @@ class SubprocessRunner:
                 f.write(build_wrapper_source(tmp_path, allow_expression_eval=self.allow_expression_eval))
                 wrapper_path = f.name
 
-            preexec_fn = (lambda: _set_memory_limit(self.memory_mb)) if self.memory_mb > 0 else None
+            # Apply hard RLIMIT bounds inside the *child* process. Even when no
+            # container engine is available this gives a bounded execution floor.
+            preexec_fn = _prepare_rlimit_preexec(
+                self.memory_mb,
+                cpu_limit=self.cpu_limit,
+                nproc=self.nproc_limit,
+                fsize_mb=self.fsize_mb,
+            )
             start = time.perf_counter()
             proc = subprocess.run(
                 [sys.executable, wrapper_path],
@@ -637,8 +858,11 @@ class SubprocessRunner:
 class ContainerRunner:
     """Docker/Podman-backed runner with restrictive defaults.
 
-    Requires a local container engine. Falls back is not automatic — callers
-    should choose SubprocessRunner explicitly for local/dev mode.
+    Requires a local container engine (resolved via :meth:`_resolve_engine`).
+    When the engine is ``"auto"`` the first available of (docker, podman) is
+    used.  ``create_runner`` handles the container-less fallback to
+    :class:`SubprocessRunner` before this dataclass is constructed, so callers
+    generally do not need to special-case it.
     """
 
     timeout_sec: float = 10.0
@@ -649,6 +873,11 @@ class ContainerRunner:
     engine: Optional[str] = None  # docker | podman | auto
     allow_expression_eval: bool = False
     enforce_ast_scan: bool = True
+
+    @property
+    def mode(self) -> str:  # type: ignore[override]
+        """Resolved runner mode: ``"container"`` when an engine is available."""
+        return "container"
 
     def _resolve_engine(self) -> str:
         if self.engine and self.engine != "auto":
@@ -749,8 +978,21 @@ class MicroVMRunner:
         )
 
 
+def _container_engine_available() -> Optional[str]:
+    """Return the first available container engine name, or ``None``.
+
+    Checks (``docker``, ``podman``) via :func:`shutil.which` so the default
+    ``create_runner`` mode can fall back gracefully in CI/dev environments
+    without a container runtime.
+    """
+    for name in ("docker", "podman"):
+        if shutil.which(name):
+            return name
+    return None
+
+
 def create_runner(
-    mode: str = "subprocess",
+    mode: str = "container",
     *,
     timeout_sec: float = 10.0,
     memory_mb: int = 256,
@@ -760,8 +1002,46 @@ def create_runner(
     """Factory for candidate runners.
 
     Modes: subprocess | container | microvm
+
+    Default mode is ``"container"`` — the recommended isolation boundary when a
+    container engine (Docker/Podman) is available.  When called in a
+    container-less environment the factory **gracefully falls back** to
+    ``"subprocess"`` with ``enforce_ast_scan=True`` (the AST early-filter is
+    always active in the fallback) and hard RLIMIT bounds applied inside the
+    spawned child (CPU / address-space / nproc / fsize) so non-containerized
+    runs are still bounded.
+
+    This keeps the public API container-by-default without breaking local dev
+    or CI pipelines that lack a container runtime.
     """
-    mode = (mode or "subprocess").lower()
+    mode = (mode or "container").lower()
+    if mode in {"container", "docker", "podman"}:
+        engine = _container_engine_available()
+        if engine is not None or mode in {"docker", "podman"}:
+            # Explicit docker/podman request is honored even if not present —
+            # ContainerRunner._resolve_engine will raise a clear error.
+            return ContainerRunner(
+                timeout_sec=timeout_sec,
+                memory_mb=memory_mb,
+                allow_expression_eval=allow_expression_eval,
+                enforce_ast_scan=enforce_ast_scan,
+                engine=mode if mode in {"docker", "podman"} else "auto",
+            )
+        # Fallback: no container engine present. Use SubprocessRunner with the
+        # AST scan forced on and RLIMIT hardening active in the child.
+        warnings.warn(
+            "Container mode requested but no container engine (docker/podman) is "
+            "available; falling back to SubprocessRunner with enforce_ast_scan=True "
+            "and hard RLIMIT bounds (C3 hardening).",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return SubprocessRunner(
+            timeout_sec=timeout_sec,
+            memory_mb=memory_mb,
+            allow_expression_eval=allow_expression_eval,
+            enforce_ast_scan=True,
+        )
     if mode in {"subprocess", "local", "dev"}:
         return SubprocessRunner(
             timeout_sec=timeout_sec,
@@ -769,14 +1049,12 @@ def create_runner(
             allow_expression_eval=allow_expression_eval,
             enforce_ast_scan=enforce_ast_scan,
         )
-    if mode in {"container", "docker", "podman"}:
-        return ContainerRunner(
-            timeout_sec=timeout_sec,
-            memory_mb=memory_mb,
-            allow_expression_eval=allow_expression_eval,
-            enforce_ast_scan=enforce_ast_scan,
-            engine="auto" if mode == "container" else mode,
-        )
     if mode in {"microvm", "vm"}:
         return MicroVMRunner(timeout_sec=timeout_sec)
     raise ValueError(f"Unknown runner mode: {mode!r}")
+
+
+def report_cache_stats() -> dict:
+    """Return live AST parse cache statistics (hits/misses/hit-rate/time_saved)."""
+    return cache_stats()
+

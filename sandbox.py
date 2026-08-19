@@ -73,7 +73,7 @@ class SandboxEvaluator:
         memory_mb: int = 256,
         parallelism: Optional[int] = None,
         allow_untested: bool = True,
-        runner_mode: str = "subprocess",
+        runner_mode: str = "container",
         allow_expression_eval: bool = False,
         enforce_ast_scan: bool = True,
         cache_enabled: bool = True,

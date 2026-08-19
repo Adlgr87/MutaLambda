@@ -1,0 +1,38 @@
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+23:48:56 [WARNING] MutaLambda: Unknown profile 'ProfileMode.STRICT', defaulting to 'balanced'
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+23:48:57 [WARNING] huggingface_hub.utils._http: Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 2275.31it/s]
+23:49:05 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:05 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:06 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:06 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:06 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:06 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:06 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:07 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:07 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:07 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:09 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:09 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:09 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:09 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:09 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:09 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:10 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:10 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:10 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:10 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+23:49:10 [WARNING] MutaLambda: Unknown profile 'ProfileMode.PERMISSIVE', defaulting to 'balanced'
+MutaLambda Bloque D harness: 2 targets, 10 reps, parallel=1
+
+--- Target: t1_primes_sieve (tier 1) [REAL MutaLambda]
+  speedup=0.7538 correct=True L2div=0
+
+--- Target: t3_page_rank (tier 3) 
+  speedup=6.6294 correct=True L2div=0
+
+=== SUMMARY ===
+Targets: 2 | Significant (p_adj<0.05 & faster): 1
+       t1_primes_sieve            T1 muta_speedup=0.7538 L2div=0 corr=True alts_ok={}
+  SIG  t3_page_rank               T3 muta_speedup=6.6294 L2div=0 corr=True alts_ok={}

@@ -7,10 +7,21 @@
 - Evaluation key caching — invariant `tests_hash` and `environment_hash` precomputed; **242.7× faster** on key generation
 - HFC evaluation volume optimization — factory clones skip re-evaluation, inherit parent fitness (~15-25% predicted)
 
+### Phase 6 Block D — Benchmarks (completed — 2026-08-19)
+- `benchmarks/harness.py` D2–D6 harness: 30 targets, 30-rep median + Mann-Whitney U + Holm-Bonferroni + Cliff's delta.
+- D.5 speedup evidence (`benchmarks/results/D.5_speedup_evidence.md`): headline `t3_page_rank` **6.63×**, `t1_primes_sieve` **1.57×**, all mutants verified (0 L2 divergence, 1000 differential trials).
+- D.6 baseline comparison (`benchmarks/results/D.6_baseline_comparison.md`): real-MutaLambda mutant vs LLM-direct (1-shot) and LLM best-of-5 (ollama `qwen2.5:1.5b`) on `t1_matrix_multiply`, `t1_primes_sieve`, `t3_page_rank`, reusing the harness's own `verify_candidate` (D4 three-layer) + `time_function_code` (30-rep median). Runner: `benchmarks/d6_baseline_runner.py` → `benchmarks/results/D.6_baseline_snapshot.json`. LLM endpoint is wired (`llm_backend.py` ollama backend, `http://localhost:11434`) but the model server was CPU-saturated during the run, so `t3_page_rank` LLM rows are `N/A` (see report).
+
 ### Pending / Future proposals (from SWE-Agent analysis)
 1. ProtocolWorkflow per-candidate overhead — skip gates for AST-only mutations (~10-20% predicted, Medium risk)
 2. Sandbox worker spawn overhead — persistent worker pool (~5-15% predicted, High risk)
-3. HFC cache hit-rate instrumentation — add hit/miss counters (already has `cache_stats()`, low risk, visibility-only)
+
+Note: HFC cache hit-rate instrumentation (item 3) has been completed via `cache_stats()` / `report_cache_stats()`.
+
+### UAST adapters (lazy registry — 2026-08-19)
+- `muta_ext/uast/adapters/__init__.py` is a **lazy registry**: `import muta_ext.uast.adapters` does NOT pull in `tree_sitter_rust`/`cpp`/`go`. Rust/C/C++/Go are loaded on demand via `get_adapter(...)` and module-level `__getattr__`.
+- When the `uast` extra is missing, `get_adapter("rust")` raises `ImportError` (never `NameError`) with the hint `pip install 'mutalambda[uast]'`. `from muta_ext.uast.adapters import RustAdapter` stays backward-compatible.
+- Tests: `tests/test_uast_disabled_bypass.py` (subprocess-isolated, simulates absent bindings) and `tests/test_smoke_imports.py` (Block A4).
 
 ### Run commands
 ```bash
@@ -135,9 +146,26 @@ harness and candidates legitimately use them).
 ## Phase 7 — Security Hardening (completed)
 - `SecurityVisitor` AST-based sandbox scanner blocks all 6 documented escape patterns + extras
 - AST scan enabled by default (`enforce_ast_scan=True`) across all config layers
+- `os` removed from `_FORBIDDEN_IMPORTS`; `os.path.join`, `os.path.exists`, and other safe `os.path` usages are now allowed while `os.system`, `os.popen`, `os.exec*`, `os.spawn*`, `os.fork`, `os.kill` remain blocked via `_FORBIDDEN_ATTR_CALLS` and alias resolution
+- Module aliases resolved: `import os as _o; _o.system(...)` now caught (resolves `_o` → `os` before checking `_FORBIDDEN_ATTR_CALLS`)
+- Dangerous from-imports caught: `from os import system` blocked while `from os.path import join` allowed
 - SubprocessRunner warns once; ContainerRunner recommended for untrusted code
 - Mutation filter consults `SecurityVisitor` to block evasive aliases before execution
 - Cache stats instrumentation: `cache_stats()` / `report_cache_stats()` expose hit-rate telemetry
+- Security scan instrumentation: `get_security_stats()` exposes call/blocked/allowed/syntax_error counts and per-kind finding rates
+
+## Phase 8 — Sandbox Isolation Hardening C3 (completed)
+- `create_runner()` default is now `"container"` (was `"subprocess"`). When no container engine (docker/podman) is on PATH, it gracefully falls back to `SubprocessRunner` with `enforce_ast_scan=True` and emits a `RuntimeWarning` documenting the fallback.
+- `SubprocessRunner` now applies hard `resource.setrlimit` bounds **inside the spawned child** via `preexec_fn`:
+  - `RLIMIT_CPU` (default 2s soft, +5 hard)
+  - `RLIMIT_AS` (256MB default from `memory_mb`)
+  - `RLIMIT_NPROC` (128)
+  - `RLIMIT_FSIZE` (1MB)
+  - Each limit guarded for platforms where `resource.RLIMIT_*` is absent (e.g. Windows/BSD/musl).
+- New fields on `SubprocessRunner`: `cpu_limit`, `nproc_limit`, `fsize_mb`; both `SubprocessRunner` and `ContainerRunner` expose a `mode` property.
+- RLIMIT instrumentation: `get_rlimit_stats()` exposes `rlimit_hits`, `rlimit_enforced`, `rlimit_unsupported` counters (mirrors `get_security_stats()`).
+- `EvaluationService` / `SandboxEvaluator` defaults changed to `runner_mode="container"` (tests that don't need a real engine pass `runner_mode="subprocess"` explicitly). Container remains an optional dependency (no hard docker requirement in core deps).
+- Regression suite: `tests/security/test_rlimit_enforcement.py` (12 tests: default-mode resolution, fallback AST-scan forcing, CPU-burn termination, memory ceiling, stats counters).
 
 ## Dependencies
 - `tree-sitter>=0.21` and language packs moved to `[uast]` optional extra
