@@ -59,7 +59,7 @@ class ASTMutator:
                 ast.parse(result)
                 if result.strip() != code.strip():
                     return result
-            except (SyntaxError, ValueError, AttributeError):
+            except (SyntaxError, ValueError, AttributeError, TypeError, IndexError):
                 continue
 
         return code
@@ -88,7 +88,7 @@ class ASTMutator:
     @staticmethod
     def _wrap_in_if(tree: ast.Module) -> None:
         for node in ast.walk(tree):
-            if hasattr(node, "body") and node.body:
+            if isinstance(getattr(node, "body", None), list) and node.body:
                 idx = random.randrange(len(node.body))
                 original = node.body[idx]
                 node.body[idx] = ast.If(
@@ -166,7 +166,7 @@ class ASTMutator:
     @staticmethod
     def _duplicate_statement(tree: ast.Module) -> None:
         for node in ast.walk(tree):
-            if hasattr(node, "body") and node.body and len(node.body) < 50:
+            if isinstance(getattr(node, "body", None), list) and node.body and len(node.body) < 50:
                 idx = random.randrange(len(node.body))
                 node.body.insert(idx, copy.deepcopy(node.body[idx]))
                 return
@@ -184,7 +184,7 @@ class ASTMutator:
         replacements: List[Tuple[Any, int, ast.AugAssign]] = []
         for parent in ast.walk(tree):
             body = getattr(parent, "body", None)
-            if not body:
+            if not isinstance(body, list) or not body:
                 continue
             for idx, child in enumerate(body):
                 if isinstance(child, ast.AugAssign):
@@ -209,7 +209,7 @@ class ASTMutator:
     @staticmethod
     def _add_trivial_loop(tree: ast.Module) -> None:
         for node in ast.walk(tree):
-            if hasattr(node, "body") and node.body:
+            if isinstance(getattr(node, "body", None), list) and node.body:
                 idx = random.randrange(len(node.body))
                 original = node.body[idx]
                 node.body[idx] = ast.For(
