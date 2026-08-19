@@ -1,0 +1,16 @@
+--- original
++++ optimized
+@@ -1,5 +1,6 @@
++if True:
++    import numpy as np
+ 
+-import numpy as np
+ def euclidean_distances(a, b):
+     n = len(a)
+     m = len(b)
+@@ -11,4 +12,4 @@
+                 diff = a[i][d] - b[j][d]
+                 s = s + diff * diff
+             out[i][j] = s ** 0.5
+-    return out
++    return out

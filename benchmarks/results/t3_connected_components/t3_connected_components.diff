@@ -1,0 +1,25 @@
+--- original
++++ optimized
+@@ -1,13 +1,14 @@
+-
+ def connected_components(n, edges):
+     parent = list(range(n))
++
+     def find(x):
+         while parent[x] != x:
+             parent[x] = parent[parent[x]]
+             x = parent[x]
+         return x
++
+     def union(a, b):
+-        ra, rb = find(a), find(b)
++        ra, rb = (find(a), find(b))
+         if ra != rb:
+             parent[ra] = rb
+     for a, b in edges:
+@@ -16,4 +17,4 @@
+     for i in range(n):
+         root = find(i)
+         comp.setdefault(root, []).append(i)
+-    return [sorted(c) for c in comp.values()]
++    return [sorted(c) for c in comp.values()]

@@ -1,0 +1,48 @@
+MutaLambda Bloque D harness: 11 targets, 10 reps, parallel=1
+
+--- Target: t1_compute_sum (tier 1) 
+  speedup=0.6318 correct=True L2div=0
+
+--- Target: t1_count_vowels (tier 1) 
+  speedup=0.756 correct=True L2div=0
+
+--- Target: t1_digit_sum (tier 1) 
+  speedup=1.143 correct=True L2div=0
+
+--- Target: t1_fibonacci (tier 1) 
+  speedup=1.0821 correct=True L2div=0
+
+--- Target: t1_list_dedup (tier 1) 
+  speedup=0.9836 correct=True L2div=0
+
+--- Target: t1_matrix_multiply (tier 1) 
+  speedup=0.8163 correct=True L2div=0
+
+--- Target: t1_nested_loops (tier 1) 
+  speedup=0.9036 correct=True L2div=0
+
+--- Target: t1_pascals_triangle (tier 1) 
+  speedup=1.092 correct=True L2div=0
+
+--- Target: t1_primes_sieve (tier 1) 
+  speedup=1.5726 correct=True L2div=0
+
+--- Target: t1_reverse_list (tier 1) 
+  speedup=0.7011 correct=True L2div=0
+
+--- Target: t1_string_concat (tier 1) 
+  speedup=0.7211 correct=True L2div=0
+
+=== SUMMARY ===
+Targets: 11 | Significant (p_adj<0.05 & faster): 0
+       t1_compute_sum             T1 muta_speedup=0.6318 L2div=0 corr=True alts_ok={}
+       t1_count_vowels            T1 muta_speedup=0.756 L2div=0 corr=True alts_ok={}
+       t1_digit_sum               T1 muta_speedup=1.143 L2div=0 corr=True alts_ok={}
+       t1_fibonacci               T1 muta_speedup=1.0821 L2div=0 corr=True alts_ok={}
+       t1_list_dedup              T1 muta_speedup=0.9836 L2div=0 corr=True alts_ok={}
+       t1_matrix_multiply         T1 muta_speedup=0.8163 L2div=0 corr=True alts_ok={}
+       t1_nested_loops            T1 muta_speedup=0.9036 L2div=0 corr=True alts_ok={}
+       t1_pascals_triangle        T1 muta_speedup=1.092 L2div=0 corr=True alts_ok={}
+       t1_primes_sieve            T1 muta_speedup=1.5726 L2div=0 corr=True alts_ok={}
+       t1_reverse_list            T1 muta_speedup=0.7011 L2div=0 corr=True alts_ok={}
+       t1_string_concat           T1 muta_speedup=0.7211 L2div=0 corr=True alts_ok={}

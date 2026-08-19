@@ -1,0 +1,83 @@
+{
+  "target": "t1_count_vowels",
+  "tier": 1,
+  "git_sha": "a8b34572163d",
+  "mutalambda_version": "4.0.0",
+  "env": {
+    "python": "3.14.7",
+    "os": "Linux-7.1.8-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "cpu": "12th Gen Intel(R) Core(TM) i7-1265U",
+    "numpy": "2.4.4",
+    "numba": "0.65.1",
+    "mypyc_available": "/home/adlg/.local/bin/mypyc",
+    "hypothesis": "6.165.10",
+    "scipy": "1.17.1"
+  },
+  "baseline": {
+    "median_s": 2e-06,
+    "iqr": 1e-06,
+    "p95": 3e-06,
+    "mean_s": 2e-06,
+    "n": 10,
+    "samples": [
+      1.87e-06,
+      3.4e-06,
+      1.56e-06,
+      1.31e-06,
+      1.72e-06,
+      1.31e-06,
+      1.24e-06,
+      2.02e-06,
+      1.35e-06,
+      3.01e-06
+    ]
+  },
+  "optimized": {
+    "median_s": 2e-06,
+    "iqr": 1e-06,
+    "p95": 3e-06,
+    "mean_s": 2e-06,
+    "n": 10,
+    "samples": [
+      2.5e-06,
+      2.46e-06,
+      2.59e-06,
+      1.81e-06,
+      4e-06,
+      3.02e-06,
+      1.88e-06,
+      1.43e-06,
+      1.4e-06,
+      1.23e-06
+    ]
+  },
+  "speedup": 0.756,
+  "correctness": {
+    "verified": true,
+    "unit_tests": "passed",
+    "differential_trials": 1000,
+    "divergences": 0,
+    "max_abs_error": 0.0,
+    "layer3": "OK (Hypothesis property tests passed)"
+  },
+  "statistics": {
+    "mann_whitney_u_p": 0.3074894566186813,
+    "cliffs_delta": -0.28,
+    "p_adj_holm": 1.0,
+    "significant": false,
+    "speedup_significant": false
+  },
+  "mutation_applied": "AST+numpy mutation (no real engine)",
+  "diff": "benchmarks/results/t1_count_vowels/t1_count_vowels.diff",
+  "alternatives": {},
+  "alternatives_correct": {},
+  "protocol": {
+    "repeticiones": 10,
+    "warmup": 5,
+    "metrica": "mediana",
+    "dispersion": "IQR + p95",
+    "significancia": "Mann-Whitney U",
+    "efecto": "Cliffs delta",
+    "correccion": "Holm-Bonferroni sobre todos los targets"
+  }
+}

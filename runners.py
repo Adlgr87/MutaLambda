@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
-from code_hash import stable_code_hash
+from code_hash import stable_code_hash, cache_stats
 from comparison import COMPARATORS, compare_values, register_predicate
 from fitness_vector import FitnessVector
 from models import EvalResult
@@ -780,3 +780,9 @@ def create_runner(
     if mode in {"microvm", "vm"}:
         return MicroVMRunner(timeout_sec=timeout_sec)
     raise ValueError(f"Unknown runner mode: {mode!r}")
+
+
+def report_cache_stats() -> dict:
+    """Return live AST parse cache statistics (hits/misses/hit-rate/time_saved)."""
+    return cache_stats()
+

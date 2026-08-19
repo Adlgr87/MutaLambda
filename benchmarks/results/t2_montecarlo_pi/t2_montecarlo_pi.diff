@@ -1,0 +1,18 @@
+--- original
++++ optimized
+@@ -1,11 +1,11 @@
++import random
+ 
+-import random
+ def montecarlo_pi(n, seed=0):
+     rng = random.Random(seed)
+     inside = 0
+     for _ in range(n):
+-        x = rng.random()
++        xg = rng.random()
+         y = rng.random()
+-        if x*x + y*y <= 1.0:
++        if xg * xg + y * y <= 1.0:
+             inside = inside + 1
+-    return (4.0 * inside) / n
++    return 4.0 * inside / n

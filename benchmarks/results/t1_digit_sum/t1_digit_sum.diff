@@ -1,0 +1,11 @@
+--- original
++++ optimized
+@@ -2,6 +2,6 @@
+     s = 0
+     n = abs(n)
+     while n > 0:
+-        s = s + (n % 10)
++        s = s + n % 10
+         n = n // 10
+-    return s
++    return s

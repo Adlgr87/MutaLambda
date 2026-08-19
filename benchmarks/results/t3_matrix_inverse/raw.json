@@ -1,0 +1,83 @@
+{
+  "target": "t3_matrix_inverse",
+  "tier": 3,
+  "git_sha": "a8b34572163d",
+  "mutalambda_version": "4.0.0",
+  "env": {
+    "python": "3.14.7",
+    "os": "Linux-7.1.8-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "cpu": "12th Gen Intel(R) Core(TM) i7-1265U",
+    "numpy": "2.4.4",
+    "numba": "0.65.1",
+    "mypyc_available": "/home/adlg/.local/bin/mypyc",
+    "hypothesis": "6.165.10",
+    "scipy": "1.17.1"
+  },
+  "baseline": {
+    "median_s": 2.6e-05,
+    "iqr": 1.3e-05,
+    "p95": 3.3e-05,
+    "mean_s": 2.3e-05,
+    "n": 10,
+    "samples": [
+      3.25e-05,
+      3.358e-05,
+      1.539e-05,
+      1.374e-05,
+      1.28e-05,
+      2.726e-05,
+      2.63e-05,
+      2.569e-05,
+      2.564e-05,
+      1.352e-05
+    ]
+  },
+  "optimized": {
+    "median_s": 2.1e-05,
+    "iqr": 1.2e-05,
+    "p95": 2.3e-05,
+    "mean_s": 1.7e-05,
+    "n": 10,
+    "samples": [
+      1.169e-05,
+      2.351e-05,
+      2.065e-05,
+      2.156e-05,
+      2.037e-05,
+      9.65e-06,
+      9.47e-06,
+      9.9e-06,
+      2.267e-05,
+      2.165e-05
+    ]
+  },
+  "speedup": 1.2514,
+  "correctness": {
+    "verified": true,
+    "unit_tests": "passed",
+    "differential_trials": 1000,
+    "divergences": 0,
+    "max_abs_error": 0.0,
+    "layer3": "OK (Hypothesis property tests passed)"
+  },
+  "statistics": {
+    "mann_whitney_u_p": 0.053902557169387175,
+    "cliffs_delta": 0.52,
+    "p_adj_holm": 0.053902557169387175,
+    "significant": false,
+    "speedup_significant": false
+  },
+  "mutation_applied": "AST+numpy mutation (no real engine)",
+  "diff": "benchmarks/results/t3_matrix_inverse/t3_matrix_inverse.diff",
+  "alternatives": {},
+  "alternatives_correct": {},
+  "protocol": {
+    "repeticiones": 10,
+    "warmup": 5,
+    "metrica": "mediana",
+    "dispersion": "IQR + p95",
+    "significancia": "Mann-Whitney U",
+    "efecto": "Cliffs delta",
+    "correccion": "Holm-Bonferroni sobre todos los targets"
+  }
+}

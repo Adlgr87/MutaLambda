@@ -1,0 +1,14 @@
+--- original
++++ optimized
+@@ -1,7 +1,6 @@
+-
+ def gradient_descent(grad_fn, x0, lr=0.01, n_steps=100):
+-    x = x0
++    xg = x0
+     for _ in range(n_steps):
+-        g = grad_fn(x)
+-        x = x - lr * g
+-    return x
++        g = grad_fn(xg)
++        xg = xg - lr * g
++    return xg

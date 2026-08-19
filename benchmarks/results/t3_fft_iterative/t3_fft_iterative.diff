@@ -1,0 +1,49 @@
+--- original
++++ optimized
+@@ -1,12 +1,12 @@
++import math
+ 
+-import math
+ def fft_iterative(real, imag):
+     n = len(real)
+     if n == 0:
+-        return [], []
++        return ([], [])
+     levels = n.bit_length() - 1
+-    if (1 << levels) != n:
+-        raise ValueError("length must be a power of 2")
++    if 1 << levels != n:
++        raise ValueError('length must be a power of 2')
+     j = 0
+     for i in range(1, n):
+         bit = n >> 1
+@@ -15,23 +15,23 @@
+             bit >>= 1
+         j ^= bit
+         if i < j:
+-            real[i], real[j] = real[j], real[i]
+-            imag[i], imag[j] = imag[j], imag[i]
++            real[i], real[j] = (real[j], real[i])
++            imag[i], imag[j] = (imag[j], imag[i])
+     length = 2
+     while length <= n:
+         ang = -2.0 * math.pi / length
+         wlen_r = math.cos(ang)
+         wlen_i = math.sin(ang)
+         for i in range(0, n, length):
+-            wr, wi = 1.0, 0.0
++            wr, wi = (1.0, 0.0)
+             for k in range(length // 2):
+-                ur, ui = real[i + k], imag[i + k]
++                ur, ui = (real[i + k], imag[i + k])
+                 vr = real[i + k + length // 2] * wr - imag[i + k + length // 2] * wi
+                 vi = real[i + k + length // 2] * wi + imag[i + k + length // 2] * wr
+                 real[i + k] = ur + vr
+                 imag[i + k] = ui + vi
+                 real[i + k + length // 2] = ur - vr
+                 imag[i + k + length // 2] = ui - vi
+-                wr, wi = wr * wlen_r - wi * wlen_i, wr * wlen_i + wi * wlen_r
++                wr, wi = (wr * wlen_r - wi * wlen_i, wr * wlen_i + wi * wlen_r)
+         length = length * 2
+-    return real, imag
++    return (real, imag)

@@ -1,0 +1,145 @@
+{
+  "target": "t2_euclidean_distances",
+  "tier": 2,
+  "git_sha": "a8b34572163d",
+  "mutalambda_version": "4.0.0",
+  "env": {
+    "python": "3.14.7",
+    "os": "Linux-7.1.8-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "cpu": "12th Gen Intel(R) Core(TM) i7-1265U",
+    "numpy": "2.4.4",
+    "numba": "0.65.1",
+    "mypyc_available": "/home/adlg/.local/bin/mypyc",
+    "hypothesis": "6.165.10",
+    "scipy": "1.17.1"
+  },
+  "baseline": {
+    "median_s": 3e-06,
+    "iqr": 1e-06,
+    "p95": 4e-06,
+    "mean_s": 3e-06,
+    "n": 15,
+    "samples": [
+      3.89e-06,
+      3.38e-06,
+      3.58e-06,
+      1.77e-06,
+      2.8e-06,
+      2.68e-06,
+      2.68e-06,
+      3.07e-06,
+      2.21e-06,
+      4.78e-06,
+      2.78e-06,
+      1.62e-06,
+      1.72e-06,
+      2.75e-06,
+      1.72e-06
+    ]
+  },
+  "optimized": {
+    "median_s": 3e-06,
+    "iqr": 1e-06,
+    "p95": 4e-06,
+    "mean_s": 3e-06,
+    "n": 15,
+    "samples": [
+      3e-06,
+      4.42e-06,
+      3.24e-06,
+      2.64e-06,
+      2.65e-06,
+      2.55e-06,
+      1.92e-06,
+      2.59e-06,
+      2.4e-06,
+      2.52e-06,
+      1.59e-06,
+      2.49e-06,
+      4.31e-06,
+      1.54e-06,
+      4.33e-06
+    ]
+  },
+  "speedup": 1.0593,
+  "correctness": {
+    "verified": true,
+    "unit_tests": "passed",
+    "differential_trials": 1000,
+    "divergences": 0,
+    "max_abs_error": 0.0,
+    "layer3": "OK (Hypothesis property tests passed)"
+  },
+  "statistics": {
+    "mann_whitney_u_p": 0.6783024655972324,
+    "cliffs_delta": 0.09333333333333334,
+    "p_adj_holm": 1.0,
+    "significant": false,
+    "speedup_significant": false
+  },
+  "mutation_applied": "AST+numpy mutation (no real engine)",
+  "diff": "benchmarks/results/t2_euclidean_distances/t2_euclidean_distances.diff",
+  "alternatives": {
+    "numba": {
+      "median_s": 4.3e-05,
+      "iqr": 9e-06,
+      "p95": 5.2e-05,
+      "mean_s": 4.2e-05,
+      "n": 15,
+      "samples": [
+        5.785e-05,
+        4.652e-05,
+        4.457e-05,
+        3.544e-05,
+        3.584e-05,
+        4.37e-05,
+        5.157e-05,
+        4.314e-05,
+        3.469e-05,
+        3.502e-05,
+        4.332e-05,
+        4.316e-05,
+        3.471e-05,
+        4.377e-05,
+        3.397e-05
+      ]
+    },
+    "mypyc": {
+      "median_s": 8.1e-05,
+      "iqr": 2.6e-05,
+      "p95": 0.000109,
+      "mean_s": 8.1e-05,
+      "n": 15,
+      "samples": [
+        8.769e-05,
+        6.005e-05,
+        8.648e-05,
+        8.092e-05,
+        8.113e-05,
+        8.07e-05,
+        0.00010896,
+        6.029e-05,
+        6.045e-05,
+        8.104e-05,
+        5.902e-05,
+        8.374e-05,
+        0.00011429,
+        8.846e-05,
+        8.097e-05
+      ]
+    }
+  },
+  "alternatives_correct": {
+    "numba": true,
+    "mypyc": true
+  },
+  "protocol": {
+    "repeticiones": 15,
+    "warmup": 5,
+    "metrica": "mediana",
+    "dispersion": "IQR + p95",
+    "significancia": "Mann-Whitney U",
+    "efecto": "Cliffs delta",
+    "correccion": "Holm-Bonferroni sobre todos los targets"
+  }
+}

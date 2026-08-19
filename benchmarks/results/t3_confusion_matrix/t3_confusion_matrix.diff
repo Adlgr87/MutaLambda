@@ -1,0 +1,14 @@
+--- original
++++ optimized
+@@ -1,9 +1,8 @@
+-
+ def confusion_matrix(y_true, y_pred, labels):
+     n = len(labels)
+     idx = {label: i for i, label in enumerate(labels)}
+     matrix = [[0] * n for _ in range(n)]
+     for t, p in zip(y_true, y_pred):
+-        ti, pi = idx[t], idx[p]
++        ti, pi = (idx[t], idx[p])
+         matrix[ti][pi] = matrix[ti][pi] + 1
+-    return matrix
++    return matrix

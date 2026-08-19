@@ -1,0 +1,39 @@
+name: Benchmark
+
+on:
+  schedule:
+    - cron: "0 3 * * 0"   # weekly, Sundays 03:00 UTC
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - "benchmarks/**"
+      - ".github/workflows/benchmark.yml"
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[core,dev,bench,uast]" 2>/dev/null || pip install -e ".[core,dev,uast]"
+      - name: Run benchmarks
+        run: |
+          python benchmarks/harness.py --all --skip-llm --reps 30 --output results/
+      - name: Check regression
+        run: |
+          python benchmarks/check_regression.py --results results/ --threshold 0.10 || echo "::warning::Regression detected"
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: results/
+          retention-days: 30

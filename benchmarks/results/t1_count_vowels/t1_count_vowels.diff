@@ -1,0 +1,12 @@
+--- original
++++ optimized
+@@ -1,7 +1,7 @@
+ def count_vowels(s):
+     count = 0
+-    vowels = "aeiouAEIOU"
++    vowels = 'aeiouAEIOU'
+     for ch in s:
+         if ch in vowels:
+             count = count + 1
+-    return count
++    return count
