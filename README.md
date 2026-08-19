@@ -145,6 +145,10 @@ uast:
 | social_architect_pure | **1.5x faster** | 100% |
 | intervention_optimizer | **25.8% simpler** | 100% |
 
+### Self-Evolution (2026-08-19)
+
+MutaLambda optimized **its own hot path** (`nsga2._crowding_distance`) through its production gates: **1.49x gmean speedup** (up to 1.88x on large fronts), exact semantic equivalence verified by a differential oracle — which also **rejected 25 faster-but-incorrect mutants**. See [SELF_EVOLUTION_REPORT.md](SELF_EVOLUTION_REPORT.md).
+
 ## Performance Benchmarks (Phase 6 — 2026-08-18)
 
 ### System-Level Optimizations

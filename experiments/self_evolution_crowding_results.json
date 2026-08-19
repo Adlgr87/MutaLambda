@@ -1,0 +1,53 @@
+{
+  "target": "nsga2._crowding_distance",
+  "seed": 42,
+  "baseline_times_ms": {
+    "10": 0.017,
+    "50": 0.072,
+    "200": 0.307,
+    "1000": 1.678
+  },
+  "stats": {
+    "total": 203,
+    "gate_static": 0,
+    "no_compile": 0,
+    "identical": 0,
+    "gate_correctness": 32,
+    "gate_benchmark": 169
+  },
+  "fast_but_wrong_rejected": 25,
+  "accepted": [
+    {
+      "name": "engineered_purepy",
+      "gmean_speedup": 1.227,
+      "ratios": {
+        "10": 1.186,
+        "50": 1.24,
+        "200": 1.237,
+        "1000": 1.246
+      },
+      "times_ms": {
+        "10": 0.015,
+        "50": 0.058,
+        "200": 0.248,
+        "1000": 1.347
+      }
+    },
+    {
+      "name": "engineered_hybrid",
+      "gmean_speedup": 1.488,
+      "ratios": {
+        "10": 1.216,
+        "50": 1.282,
+        "200": 1.672,
+        "1000": 1.879
+      },
+      "times_ms": {
+        "10": 0.014,
+        "50": 0.057,
+        "200": 0.184,
+        "1000": 0.893
+      }
+    }
+  ]
+}

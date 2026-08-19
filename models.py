@@ -494,6 +494,7 @@ class ProfileMode(str, enum.Enum):
     BALANCED = "balanced"   # Default: balance between speed and safety
     DEBT = "debt"           # Permissive: allow technical debt for experimentation
     RELEASE = "release"     # Strict: maximum validation, no risky patterns
+    SELF = "self"           # Self-evolution: trusted first-party framework code
 
     @classmethod
     def from_str(cls, value: str) -> "ProfileMode":

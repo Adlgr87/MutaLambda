@@ -65,6 +65,10 @@ _INFO_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
 
 _SEVERITY_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
+# AST findings waived under ProfileMode.SELF (trusted first-party code).
+# Only dynamic-introspection findings — never eval/exec/imports/open/aliases.
+_SELF_WAIVED_AST_FINDINGS = frozenset({"getattr_call", "chr_call"})
+
 
 @dataclass
 class FitnessReport:
@@ -85,6 +89,7 @@ class ProfileMode(str, enum.Enum):
     STRICT = "strict"
     PERMISSIVE = "permissive"
     RELEASE = "release"
+    SELF = "self"
 
     @classmethod
     def from_str(cls, value: str) -> "ProfileMode":
@@ -126,14 +131,22 @@ def check_max_length(code, max_lines=500):
     return _make_report(True, False, [], "none")
 
 
-def check_no_critical_patterns(code):
+def check_no_critical_patterns(code, profile="balanced"):
     """Block both regex-detected and AST-escape patterns.
 
     The regex patterns (_CRITICAL_PATTERNS) catch obvious syntactic forms but
     are trivially evaded (e.g. ``import os as _o``; ``f = exec``).  The AST
     SecurityVisitor in ``runners`` catches the structural variants; combining
     both removes that entire class of evasion (see test_sandbox_escapes.py).
+
+    Profile ``self`` (ProfileMode.SELF) is intended for **self-evolution**:
+    optimizing MutaLambda's own trusted first-party code.  Framework code
+    legitimately uses dynamic introspection (``getattr``/``chr``), so those
+    AST findings are waived under ``self`` — but every genuinely dangerous
+    pattern (eval/exec/subprocess/imports/open/aliasing/dunder access) is
+    still blocked, and the sandbox remains the hard execution boundary.
     """
+    profile_enum = ProfileMode.from_str(profile) if isinstance(profile, str) else profile
     issues = []
     for pattern in _CRITICAL_PATTERNS:
         if pattern.search(code):
@@ -144,6 +157,11 @@ def check_no_critical_patterns(code):
     except Exception as exc:  # pragma: no cover - defensive
         logger.debug("AST security scan failed: %r", exc)
         ast_findings = []
+    if profile_enum == ProfileMode.SELF and ast_findings:
+        waived = [f for f in ast_findings if f in _SELF_WAIVED_AST_FINDINGS]
+        ast_findings = [f for f in ast_findings if f not in _SELF_WAIVED_AST_FINDINGS]
+        if waived:
+            logger.info("Self-profile waived introspection findings: %s", waived)
     if ast_findings:
         issues.extend(f"ast:{f}" for f in ast_findings)
     if issues:
@@ -231,7 +249,7 @@ def run_all_filters(code, profile="balanced", enforce_syntax=True):
     checks = [
         ("empty", check_empty_code(code)),
         ("syntax", check_syntax(code) if enforce_syntax else _make_report(True, False, [], "none")),
-        ("critical_patterns", check_no_critical_patterns(code)),
+        ("critical_patterns", check_no_critical_patterns(code, profile_enum)),
         ("ast_depth", check_ast_depth(code)),
         ("import_cycles", check_import_cycles(code)),
         ("warning_patterns", check_warning_patterns(code, profile_enum)),

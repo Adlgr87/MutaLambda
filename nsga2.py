@@ -293,46 +293,66 @@ def _crowding_distance(individuals: List[Individual]) -> List[float]:
     Measures how isolated each individual is in objective space.
     Higher = more isolated = better for diversity.
 
-    Optimization: precompute fitness vectors to avoid redundant _get_fitness calls
-    across multiple dimension lookups.
+    Self-evolved implementation (2026-08-19, see SELF_EVOLUTION_REPORT.md):
+    size-gated hybrid validated by differential oracle (74 randomized
+    populations, exact semantic equivalence) + multi-size benchmark gate.
+
+    * n < 80: pure-Python column sort via ``list.__getitem__`` key — avoids
+      tuple allocation and lambda frames (1.2x), and NumPy array setup
+      overhead dominates at these sizes (0.28x at n=5 if vectorized).
+    * n >= 80: NumPy stable argsort vectorization (up to 2.2x at n=500).
+
+    Stable sorts preserve the baseline's tie-handling; any index that is a
+    boundary point in a dimension with range >= 1e-9 ends up +inf, exactly
+    as the original assignment semantics.
     """
     n = len(individuals)
     if n <= 2:
         return [float("inf")] * n
 
-    distances = [0.0] * n
+    inf = float("inf")
 
     # Precompute fitness vectors once — O(N) instead of O(N * dims) calls
     fitnesses: List[FitnessVector] = [_get_fitness(ind) for ind in individuals]
 
-    # For each objective dimension
     dims = ["correctness", "latency_p50", "latency_p99",
             "throughput", "memory_peak_mb", "parsimony"]
 
-    for dim in dims:
-        # Sort by this dimension
-        values = [(i, getattr(fitnesses[i], dim, 0.0))
-                   for i in range(n)]
-        values.sort(key=lambda x: x[1])
+    if n < 80:
+        distances = [0.0] * n
+        for dim in dims:
+            col = [getattr(f, dim, 0.0) for f in fitnesses]
+            order = sorted(range(n), key=col.__getitem__)
+            obj_range = col[order[-1]] - col[order[0]]
+            if obj_range < 1e-9:
+                continue  # no diversity in this dimension
+            distances[order[0]] = inf
+            distances[order[-1]] = inf
+            for k in range(1, n - 1):
+                distances[order[k]] += (col[order[k + 1]] - col[order[k - 1]]) / obj_range
+        return distances
 
-        min_val = values[0][1]
-        max_val = values[-1][1]
-        obj_range = max_val - min_val
+    mat = np.empty((n, len(dims)), dtype=np.float64)
+    for j, dim in enumerate(dims):
+        col = mat[:, j]
+        for i, f in enumerate(fitnesses):
+            col[i] = getattr(f, dim, 0.0)
 
+    np_distances = np.zeros(n, dtype=np.float64)
+    boundary = np.zeros(n, dtype=bool)
+    for j in range(mat.shape[1]):
+        col = mat[:, j]
+        order = np.argsort(col, kind="stable")
+        svals = col[order]
+        obj_range = svals[-1] - svals[0]
         if obj_range < 1e-9:
             continue  # no diversity in this dimension
+        boundary[order[0]] = True
+        boundary[order[-1]] = True
+        np_distances[order[1:-1]] += (svals[2:] - svals[:-2]) / obj_range
 
-        # Boundary points get infinite distance
-        distances[values[0][0]] = float("inf")
-        distances[values[-1][0]] = float("inf")
-
-        # Interior points
-        for k in range(1, n - 1):
-            distances[values[k][0]] += (
-                (values[k + 1][1] - values[k - 1][1]) / obj_range
-            )
-
-    return distances
+    np_distances[boundary] = np.inf
+    return np_distances.tolist()
 
 
 def get_pareto_frontier(population: List[Individual]) -> List[Individual]:
