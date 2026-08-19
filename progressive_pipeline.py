@@ -45,21 +45,18 @@ class PipelineResult:
         lines.append(f"Duration: {self.duration_sec:.2f}s")
 
         if self.fitness:
-            lines.append(f"
-Fitness:")
+            lines.append(f"\nFitness:")
             lines.append(f"  Correctness: {self.fitness.correctness:.1%}")
             lines.append(f"  Latency P50: {self.fitness.latency_p50:.2f}ms")
             lines.append(f"  Memory Peak: {self.fitness.memory_peak_mb:.2f}MB")
 
         if self.report.get("hotspots"):
-            lines.append(f"
-Hotspots found: {len(self.report['hotspots'])}")
+            lines.append(f"\nHotspots found: {len(self.report['hotspots'])}")
             for hs in self.report["hotspots"][:3]:
                 lines.append(f"  • {hs.get('name', '?')} [{hs.get('severity', '?')}]")
 
         if self.report.get("tests_generated"):
-            lines.append(f"
-Tests generated: {self.report['tests_generated']}")
+            lines.append(f"\nTests generated: {self.report['tests_generated']}")
 
         if self.report.get("variants_evaluated"):
             lines.append(f"Variants evaluated: {self.report['variants_evaluated']}")
@@ -262,10 +259,7 @@ Requirements:
 Return ONLY the optimized Python code, no explanations."""
 
         if tests:
-            prompt += f"
-
-Existing tests to satisfy:
-"
+            prompt += "\n\nExisting tests to satisfy:\n"
             for test in tests[:3]:
                 prompt += f"\n{test.test_code}"
 

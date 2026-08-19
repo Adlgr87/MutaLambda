@@ -88,7 +88,7 @@ class EvaluationService:
     timeout_sec: float = 10.0
     memory_mb: int = 256
     max_workers: Optional[int] = None
-    runner_mode: str = "subprocess"
+    runner_mode: str = "container"
     allow_untested: bool = True
     allow_expression_eval: bool = False
     enforce_ast_scan: bool = True

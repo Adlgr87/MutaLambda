@@ -6,6 +6,14 @@ patterns and that the subprocess runner refuses to execute them.
 
 These patterns come directly from the remediation plan and must ALL be
 blocked — a single miss indicates a sandbox regression.
+
+Additionally, this suite reproduces the pre-hardening claim from PLAN_MUTALAMBDA2 §C
+that *"5 of 6 trivial evasions pass the regex filter"*.  The regex patterns
+in ``mutation_filters._CRITICAL_PATTERNS`` are structurally weak: they match
+literal token sequences only and are trivially bypassed by aliasing, getattr
+indirection, or chr-concatenation.  The AST ``SecurityVisitor`` is what closes
+that gap, so the tests below assert both the regex-only failure **and** the
+AST-only success — together proving the combined filter is hardened.
 """
 from __future__ import annotations
 
@@ -19,10 +27,88 @@ from runners import (
     scan_code_security,
     scan_findings,
 )
-from mutation_filters import check_no_critical_patterns
+from mutation_filters import _CRITICAL_PATTERNS, check_no_critical_patterns
 
 
-# ── The six documented evasion vectors ────────────────────────────────────────
+# ── The six trivial regex-evadable payloads (PLAN_MUTALAMBDA2 §C) ─────────────
+
+# Each payload is a canonical sandbox-escape trick that a *regex-only* filter
+# fails to catch.  The AST SecurityVisitor catches every one of them.
+REGEX_EVASION_PAYLOADS = [
+    pytest.param(
+        'getattr(__builtins__, chr(101)+chr(120)+chr(101)+chr(99))("whoami")',
+        id="chr_concat_getattr",
+    ),
+    pytest.param(
+        'import os as _o; _o.system("whoami")',
+        id="import_os_as_alias",
+    ),
+    pytest.param(
+        'getattr(__builtins__, chr(101)+chr(118)+chr(97)+chr(108))(compile("1+1", "<s>", "eval"))',
+        id="eval_compile",
+    ),
+    pytest.param(
+        'getattr(getattr(__builtins__, "e"), "xec")("id")',
+        id="nested_getattr_builtins",
+    ),
+    pytest.param(
+        '__builtins__.__dict__["__import__"]("subprocess").Popen(["ls"])',
+        id="subprocess_dynamic_getattr",
+    ),
+    pytest.param(
+        'import base64; f = base64.b64decode("aW1wb3J0IG9z").decode(); '
+        'getattr(getattr(__builtins__, "e"), "xec")(f)',
+        id="exec_via_base64_decode",
+    ),
+]
+
+
+# ── Reproduction: regex-only filter is trivially evaded ────────────────────────
+
+@pytest.mark.parametrize("code", REGEX_EVASION_PAYLOADS)
+def test_regex_filter_allows_evasion(code):
+    """*Reproduces* PLAN_MUTALAMBDA2 §C: the bare regex ``_CRITICAL_PATTERNS``
+    fail to block the documented evasion class.
+
+    This test **asserts the vulnerability** — i.e., it expects the regex to
+    miss.  If a future change hardens the regex, this test will flip to red,
+    signalling Block C2 should remove it (the AST visitor is the real gate).
+    """
+    blocked = any(p.search(code) for p in _CRITICAL_PATTERNS)
+    assert not blocked, (
+        f"regex filter unexpectedly blocked payload: {code!r}"
+    )
+
+
+def test_regex_filter_5_of_6_evasible():
+    """Aggregate claim from PLAN_MUTALAMBDA2 §C — at least 5 of 6 payloads must
+    slip past the regex patterns alone."""
+    bypassed = sum(
+        1 for code in [p.values[0] for p in REGEX_EVASION_PAYLOADS]
+        if not any(pat.search(code) for pat in _CRITICAL_PATTERNS)
+    )
+    assert bypassed >= 5, f"expected >=5 regex-pass-throughs, got {bypassed}"
+
+
+# ── The AST SecurityVisitor defeats all six evasions ──────────────────────────
+
+@pytest.mark.parametrize("code", REGEX_EVASION_PAYLOADS)
+def test_ast_visitor_blocks_evasion(code):
+    """The ``SecurityVisitor`` in ``runners`` must catch every regex-evadable
+    payload and surface at least one finding."""
+    findings = scan_code_security(code)
+    assert findings, f"AST visitor missed evasion: {code!r} -> {findings}"
+
+
+@pytest.mark.parametrize("code", REGEX_EVASION_PAYLOADS)
+def test_combined_filter_blocks_evasion(code):
+    """The combined ``check_no_critical_patterns`` (regex + AST) must block
+    every documented escape payload."""
+    report = check_no_critical_patterns(code)
+    assert report.blocked, f"combined filter allowed: {code!r}"
+
+
+# ── The six documented evasion vectors (original plan) ───────────────────────
 
 ESCAPE_PATTERNS = [
     pytest.param(

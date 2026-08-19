@@ -1,0 +1,72 @@
+name: MutaLambda PR Comment
+
+on:
+  pull_request:
+    paths:
+      - "targets/**"
+      - "benchmarks/**"
+      - "muta_ext/**"
+      - "runners.py"
+      - "evolution_engine.py"
+
+jobs:
+  mutate:
+    name: MutaLambda benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[core,dev,bench]"
+      - name: Run MutaLambda comment action (fast subset)
+        id: mutualambda
+        uses: Adlgr87/MutaLambda/.github/actions/mutalambda-comment@main
+        with:
+          targets: t1_matrix_multiply,t1_primes_sieve,t3_page_rank
+          reps: 5
+      - name: Upload comment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutualambda-pr-comment
+          path: mutalambda-comment.md
+          retention-days: 1
+
+  comment:
+    name: Post PR comment
+    needs: mutate
+    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: mutualambda-pr-comment
+          path: .
+      - name: Post / update idempotent comment
+        id: post-comment
+        uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMENT_FILE: mutalambda-comment.md
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync(process.env.COMMENT_FILE, 'utf8');
+            const marker = '<!-- mutalambda-pr-bot -->';
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pr = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listIssueComments({ owner, repo, issue_number: pr });
+            const existing = comments.find(c => c.body && c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateIssueComment({ owner, repo, comment_id: existing.id, body });
+              console.log('Updated existing MutaLambda PR comment');
+            } else {
+              await github.rest.issues.createIssueComment({ owner, repo, issue_number: pr, body });
+              console.log('Created new MutaLambda PR comment');
+            }
+

@@ -58,7 +58,7 @@ PROJECT_NAME = "MutaLambda"
 # ─── Re-exported modules/classes for backward-compatible imports ─────────────
 from archive import SolutionArchive
 from evolution_engine import ASTMutator, CodeRegion, CoreEvolutionEngine
-from mutation_filters import run_all_filters, ProfileMode
+from mutation_filters import run_all_filters, ProfileMode, _filter_mutant
 from island import Island
 from llm_backend import LLMBackend, _resolve_llm_backend
 from migration import MigrationBus

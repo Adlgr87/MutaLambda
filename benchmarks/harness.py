@@ -831,7 +831,8 @@ def _run_bench_target(target_name, use_real, skip_llm):
 def main():
     global REPS, ALT_DIFF_TRIALS, SKIP_COMPILERS
     parser = argparse.ArgumentParser(description="MutaLambda Bloque D benchmark harness")
-    parser.add_argument("--targets", nargs="*", default=[], help="specific target module names")
+    parser.add_argument("--targets", nargs="*", default=[],
+                        help="specific target module names (comma- or space-separated, e.g. --targets t1_a,t1_b")
     parser.add_argument("--all", action="store_true", help="run all targets")
     parser.add_argument("--real-muta", type=int, default=0,
                         help="number of targets to run REAL MutaLambda engine on")
@@ -850,7 +851,11 @@ def main():
     if args.all:
         selected = targets
     elif args.targets:
-        sel = set(args.targets)
+        # Accept both `--targets t1_a t1_b` and `--targets t1_a,t1_b` forms.
+        wanted = []
+        for t in args.targets:
+            wanted.extend([x for x in t.split(",") if x.strip()])
+        sel = set(wanted)
         selected = [t for t in targets if t[0] in sel]
     else:
         selected = targets[:5]
