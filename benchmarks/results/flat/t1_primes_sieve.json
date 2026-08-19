@@ -129,5 +129,6 @@
     "significancia": "Mann-Whitney U",
     "efecto": "Cliffs delta",
     "correccion": "Holm-Bonferroni sobre todos los targets"
-  }
+  },
+  "correct": true
 }

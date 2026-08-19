@@ -1,15 +1,21 @@
 --- original
 +++ optimized
-@@ -1,8 +1,8 @@
- def dedup(items):
+@@ -1,8 +1,10 @@
+-def dedup(items):
 -    seen = []
-+    seeng = []
-     result = []
-     for item in items:
+-    result = []
+-    for item in items:
 -        if item not in seen:
 -            seen.append(item)
-+        if item not in seeng:
-+            seeng.append(item)
-             result.append(item)
+-            result.append(item)
 -    return result
-+    return result
++for _ in range(1):
++
++    def dedup(items):
++        seen = []
++        result = []
++        for item in items:
++            if item not in seen:
++                seen.append(item)
++                result.append(item)
++        return result

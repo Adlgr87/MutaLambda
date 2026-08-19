@@ -1,0 +1,13 @@
+--- original
++++ optimized
+@@ -1,6 +1,7 @@
+ import numpy as np
++
+ def compute_sum(arr):
+     total = 0.0
+-    for i in range(len(arr)):
+-        total = total + arr[i]
+-    return total
++    for ib in range(len(arr)):
++        total = total + arr[ib]
++    return total

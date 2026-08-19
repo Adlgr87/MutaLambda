@@ -246,7 +246,10 @@ class Island:
                 error_map[ind.id] = "\n".join(res.stderr.splitlines()[:3])
 
         new_pop: List[Individual] = list(elites)
-        while len(new_pop) < self.config.population_size:
+        # Phase 1: generate all offspring mutated codes first so they can be
+        # evaluated in a single batch (WF#17 batch volume optimization).
+        child_specs: List[Dict[str, Any]] = []
+        while len(new_pop) + len(child_specs) < self.config.population_size:
             if use_nsga2 and len(elites) >= 2 and self.rng.random() < 0.7:
                 parents = nsga2_tournament_select(elites, 1, rng=self.rng)
                 parent = parents[0] if parents else self.rng.choice(elites)
@@ -283,17 +286,38 @@ class Island:
                     parent.code, parent.score, error_info
                 )
 
-            child = self._build_child_candidate(
-                parent=parent,
-                child_parents=child_parents,
-                mutated_code=mutated_code,
-                strategy=strategy,
-                candidate_index=len(new_pop),
+            child_specs.append(
+                {
+                    "parent": parent,
+                    "child_parents": child_parents,
+                    "mutated_code": mutated_code,
+                    "strategy": strategy,
+                    "candidate_index": len(new_pop) + len(child_specs),
+                }
             )
+
+        # Phase 2: build offspring children. With the workflow enabled, offspring
+        # first-attempt codes are evaluated in a single batched evaluate_batch
+        # call (WF#17) rather than one single-item call per candidate. Pre-eval
+        # gates still run first so unsafe code is never sandboxed.
+        if child_specs and self._workflow_enabled:
+            children = self._build_children_batched(child_specs)
+        else:
+            children = [
+                self._build_child_candidate(**{
+                    "parent": s["parent"],
+                    "child_parents": s["child_parents"],
+                    "mutated_code": s["mutated_code"],
+                    "strategy": s["strategy"],
+                    "candidate_index": s["candidate_index"],
+                })
+                for s in child_specs
+            ]
+        for child, spec in zip(children, child_specs):
             # Bandit arm label (do not clobber workflow creation_reason like mutation_retry).
-            setattr(child, "operator", strategy)
-            if child_parents:
-                setattr(child, "parent_score", float(parent.score))
+            setattr(child, "operator", spec["strategy"])
+            if spec["child_parents"]:
+                setattr(child, "parent_score", float(spec["parent"].score))
             new_pop.append(child)
 
         self.population = new_pop
@@ -463,6 +487,29 @@ class Island:
         )
         self.population[worst_idx] = migrant
 
+    def _workflow_stage_split(self, is_ast_only: bool):
+        """Build the staged workflow, split into pre-eval and post-eval halves.
+
+        Pre-eval gates (generate, build, security, api) run before evaluation so
+        unsafe code is rejected before reaching the sandbox. The evaluate_candidate
+        stage is the first post-eval stage; it reuses a batch-provided result when
+        available.
+        """
+        pre_eval_stages = [ProtocolStage("generate_candidate", self._stage_generate_candidate)]
+        if not is_ast_only:
+            pre_eval_stages.append(ProtocolStage("build_gate", self._stage_build_gate))
+        if not is_ast_only and self._workflow_enforce_security:
+            pre_eval_stages.append(ProtocolStage("security_gate", self._stage_security_gate))
+        pre_eval_stages.append(ProtocolStage("api_gate", self._stage_api_gate))
+        post_eval_stages = [
+            ProtocolStage("evaluate_candidate", self._stage_evaluate_candidate),
+            ProtocolStage("tests_gate", self._stage_tests_gate),
+            ProtocolStage("differential_gate", self._stage_differential_gate),
+            ProtocolStage("performance_gate", self._stage_performance_gate),
+            ProtocolStage("decision_gate", self._stage_decision_gate),
+        ]
+        return pre_eval_stages, post_eval_stages
+
     def _build_child_candidate(
         self,
         *,
@@ -472,6 +519,14 @@ class Island:
         strategy: str,
         candidate_index: int,
     ) -> Individual:
+        """Build a single child through the gated workflow (per-child path).
+
+        Used for the non-workflow fast path and as the fallback resolver when
+        batching is not applicable (e.g. a single child or workflow disabled).
+        When the workflow is enabled, this delegates to `_build_children_batched`
+        (which still applies the two-phase pre-eval → batched-eval → post-eval
+        ordering for a single child).
+        """
         if not self._workflow_enabled:
             child = Individual(code=mutated_code, tier="laboratory", record_lineage=True)
             if self.migration_bus is not None and getattr(self.migration_bus, "lineage_graph", None) is not None:
@@ -479,97 +534,214 @@ class Island:
             child.creation_reason = strategy
             return child
 
-        trace = ProtocolTrace(
-            run_id=self._protocol_run_id,
-            subject_id=(
-                f"island-{self.id}-gen-{self.generation}-candidate-{candidate_index}"
-            ),
-            metadata={
-                "island_id": self.id,
-                "generation": self.generation,
-                "parent_ids": [p.id for p in child_parents],
-                "strategy": strategy,
-            },
-        )
-        base_code = parent.code
-        attempts = self._workflow_max_retries + 1
-        candidate_code = mutated_code
+        return self._build_children_batched(
+            [
+                {
+                    "parent": parent,
+                    "child_parents": child_parents,
+                    "mutated_code": mutated_code,
+                    "strategy": strategy,
+                    "candidate_index": candidate_index,
+                }
+            ]
+        )[0]
 
-        # AST-only mutations produce syntactically valid code by construction
-        # (ASTMutator operates on a parsed tree), so we can elide the
-        # build_gate (parse/compile) and security_gate (AST security scan)
-        # stages — skipping ~2 redundant checks per candidate.
-        is_ast_only = strategy == "ast"
+    def _build_children_batched(self, child_specs: List[Dict[str, Any]]) -> List[Individual]:
+        """Build offspring children with batched first-attempt evaluation.
 
-        for attempt in range(1, attempts + 1):
-            trace.attempts = attempt
-            attempt_strategy = strategy if attempt == 1 else f"{strategy}_retry"
-            context: Dict[str, Any] = {
-                "attempt": attempt,
-                "strategy": attempt_strategy,
-                "parent": parent,
-                "candidate_code": candidate_code,
-                "candidate_result": None,
-            }
-            stages = [ProtocolStage("generate_candidate", self._stage_generate_candidate)]
-            # build_gate (syntax check) is redundant for AST-only mutations;
-            # for other strategies we still need it to catch LLM syntax errors.
-            if not is_ast_only:
-                stages.append(ProtocolStage("build_gate", self._stage_build_gate))
-            # security_gate: always enforced for LLM-generated code,
-            # skipped for AST-only mutations (operator is trusted, tree-shaped).
-            if not is_ast_only and self._workflow_enforce_security:
-                stages.append(ProtocolStage("security_gate", self._stage_security_gate))
-            stages.extend([
-                ProtocolStage("api_gate", self._stage_api_gate),
-                ProtocolStage("evaluate_candidate", self._stage_evaluate_candidate),
-                ProtocolStage("tests_gate", self._stage_tests_gate),
-                ProtocolStage("differential_gate", self._stage_differential_gate),
-                ProtocolStage("performance_gate", self._stage_performance_gate),
-                ProtocolStage("decision_gate", self._stage_decision_gate),
-            ])
-            workflow = ProtocolWorkflow(stages)
-            if workflow.execute(context, trace):
-                result = context["candidate_result"]
-                child = Individual(
-                    code=context["candidate_code"],
-                    tier="laboratory",
-                    record_lineage=True,
-                )
-                child.score = result.score
-                child.fitness = result.fitness
-                child.passed = bool(
-                    result.passed
-                    and result.fitness.correctness >= self._workflow_correctness_threshold
-                )
-                child.creation_reason = attempt_strategy
-                if self.migration_bus is not None and getattr(self.migration_bus, "lineage_graph", None) is not None:
-                    child.parent_ids = [p.id for p in child_parents]
-                child.workflow_trace = trace.to_dict()
-                self._emit_protocol_trace(trace)
-                return child
+        Optimization (WF#17): instead of evaluating each offspring individually
+        inside its own workflow, this two-phase driver first runs the *pre-eval*
+        gates (build, security, api) for every child so unsafe code is rejected
+        before the sandbox, then evaluates all first-attempt codes in a single
+        ``evaluate_batch`` call, and finally runs the post-eval gates using the
+        batched results. Retry attempts that regenerate code are evaluated
+        individually (rare path). Gate ordering and the per-child trace/retry
+        semantics are preserved.
+        """
+        max_rounds = self._workflow_max_retries + 1
+        # Cache stage lists per strategy to avoid rebuilding them each round.
+        pre_wf_cache: Dict[str, List[ProtocolStage]] = {}
+        post_wf_cache: Dict[str, List[ProtocolStage]] = {}
 
-            candidate_code = ASTMutator.apply_random_mutation(base_code)
-            logger.debug(
-                "[run=%s] island=%d gen=%d candidate retry=%d decision=%s",
-                self._protocol_run_id,
-                self.id,
-                self.generation,
-                attempt,
-                trace.decision,
+        def _stages(strategy: str):
+            if strategy not in pre_wf_cache:
+                pre, post = self._workflow_stage_split(strategy == "ast")
+                pre_wf_cache[strategy] = pre
+                post_wf_cache[strategy] = post
+            return pre_wf_cache[strategy], post_wf_cache[strategy]
+
+        children: List[Individual] = [None] * len(child_specs)  # type: ignore[list-item]
+        # Per-child state carried across retry rounds.
+        states: List[Dict[str, Any]] = []
+        for idx, spec in enumerate(child_specs):
+            trace = ProtocolTrace(
+                run_id=self._protocol_run_id,
+                subject_id=(
+                    f"island-{self.id}-gen-{self.generation}-candidate-{spec['candidate_index']}"
+                ),
+                metadata={
+                    "island_id": self.id,
+                    "generation": self.generation,
+                    "parent_ids": [p.id for p in spec["child_parents"]],
+                    "strategy": spec["strategy"],
+                },
+            )
+            states.append(
+                {
+                    "idx": idx,
+                    "spec": spec,
+                    "trace": trace,
+                    "candidate_code": spec["mutated_code"],
+                    "round": 0,
+                    "eval_result": None,
+                    "done": False,
+                }
             )
 
-        trace.decision = "reject"
-        self._emit_protocol_trace(trace)
-        child = Individual(code=base_code, tier=parent.tier, record_lineage=True)
+        for round_i in range(max_rounds):
+            if all(s["done"] for s in states):
+                break
+
+            # Phase A: pre-eval gates (generate, build, security, api) for every
+            # not-yet-finalized child. Unsafe code fails here and is never
+            # sandboxed.
+            ready_codes: List[str] = []
+            ready_state: Dict[str, Dict[str, Any]] = {}
+            for s in states:
+                if s["done"]:
+                    continue
+                s["round"] = round_i
+                attempt = round_i + 1
+                s["trace"].attempts = attempt
+                attempt_strategy = (
+                    s["spec"]["strategy"]
+                    if attempt == 1
+                    else f"{s['spec']['strategy']}_retry"
+                )
+                context: Dict[str, Any] = {
+                    "attempt": attempt,
+                    "strategy": attempt_strategy,
+                    "parent": s["spec"]["parent"],
+                    "candidate_code": s["candidate_code"],
+                    "candidate_result": s["eval_result"],
+                    "round": round_i,
+                }
+                pre_stages, _ = _stages(s["spec"]["strategy"])
+                pre_workflow = ProtocolWorkflow(pre_stages)
+                ok = pre_workflow.execute(context, s["trace"])
+                if not ok:
+                    if s["trace"].decision == "reject":
+                        # Hard FAIL during pre-eval gates -> finalize as rejected
+                        # (do NOT evaluate).
+                        self._finalize_rejected(s, children)
+                        continue
+                    # RETRYABLE_FAIL -> regenerate code for the next round; the
+                    # new code will re-run pre-eval gates before evaluation.
+                    s["candidate_code"] = ASTMutator.apply_random_mutation(
+                        s["spec"]["parent"].code
+                    )
+                    s["eval_result"] = None
+                    continue
+                # Pre-eval gates passed -> candidate is ready to be evaluated.
+                code = s["candidate_code"]
+                ready_codes.append(code)
+                ready_state[code] = s
+
+            # Phase B: batch-evaluate all ready first-attempt codes at once.
+            eval_results: Dict[str, EvalResult] = {}
+            if ready_codes:
+                batch = self.evaluator.evaluate_batch(ready_codes)
+                for code, res in zip(ready_codes, batch):
+                    eval_results[code] = res
+
+            # Phase C: post-eval gates (evaluate, tests, differential, perf,
+            # decision) using the batched results. The evaluate stage reuses the
+            # batched result via the context; retry-generated codes (not in this
+            # batch) fall back to individual evaluation.
+            for code, s in list(ready_state.items()):
+                attempt = s["round"] + 1
+                attempt_strategy = (
+                    s["spec"]["strategy"]
+                    if attempt == 1
+                    else f"{s['spec']['strategy']}_retry"
+                )
+                result = eval_results.get(code)
+                if result is None:
+                    # Retry/regenerated code not covered by this round's batch;
+                    # evaluate individually. (The evaluator's internal cache
+                    # still deduplicates identical codes.)
+                    result = self.evaluator.evaluate_batch([code])[0]
+                s["eval_result"] = result
+                context = {
+                    "attempt": attempt,
+                    "strategy": attempt_strategy,
+                    "parent": s["spec"]["parent"],
+                    "candidate_code": code,
+                    "candidate_result": result,
+                    "round": s["round"],
+                }
+                _, post_stages = _stages(s["spec"]["strategy"])
+                post_workflow = ProtocolWorkflow(post_stages)
+                ok = post_workflow.execute(context, s["trace"])
+                if ok:
+                    self._finalize_promoted(s, result, children, attempt_strategy)
+                else:
+                    if s["trace"].decision == "reject":
+                        self._finalize_rejected(s, children)
+                    # RETRYABLE_FAIL post-eval -> regenerate for next round.
+                    s["candidate_code"] = ASTMutator.apply_random_mutation(
+                        s["spec"]["parent"].code
+                    )
+                    s["eval_result"] = None
+
+        # Out of rounds: finalize remaining children as rejected.
+        for s in states:
+            if not s["done"] and children[s["idx"]] is None:
+                self._finalize_rejected(s, children)
+        return children
+
+    def _finalize_promoted(
+        self,
+        state: Dict[str, Any],
+        result: EvalResult,
+        children: List[Individual],
+        creation_reason: str,
+    ) -> None:
+        spec = state["spec"]
+        child = Individual(
+            code=state["candidate_code"],
+            tier="laboratory",
+            record_lineage=True,
+        )
+        child.score = result.score
+        child.fitness = result.fitness
+        child.passed = bool(
+            result.passed
+            and result.fitness.correctness >= self._workflow_correctness_threshold
+        )
+        child.creation_reason = creation_reason
+        if self.migration_bus is not None and getattr(self.migration_bus, "lineage_graph", None) is not None:
+            child.parent_ids = [p.id for p in spec["child_parents"]]
+        child.workflow_trace = state["trace"].to_dict()
+        self._emit_protocol_trace(state["trace"])
+        children[state["idx"]] = child
+        state["done"] = True
+
+    def _finalize_rejected(self, state: Dict[str, Any], children: List[Individual]) -> None:
+        state["trace"].decision = "reject"
+        self._emit_protocol_trace(state["trace"])
+        spec = state["spec"]
+        parent = spec["parent"]
+        child = Individual(code=parent.code, tier=parent.tier, record_lineage=True)
         child.score = parent.score
         child.fitness = copy.deepcopy(parent.fitness)
         child.passed = parent.passed
-        child.creation_reason = f"{strategy}_rejected"
+        child.creation_reason = f"{spec['strategy']}_rejected"
         if self.migration_bus is not None and getattr(self.migration_bus, "lineage_graph", None) is not None:
-            child.parent_ids = [p.id for p in child_parents]
-        child.workflow_trace = trace.to_dict()
-        return child
+            child.parent_ids = [p.id for p in spec["child_parents"]]
+        child.workflow_trace = state["trace"].to_dict()
+        children[state["idx"]] = child
+        state["done"] = True
 
     def _stage_generate_candidate(self, context: Dict[str, Any]):
         code = context["candidate_code"]
@@ -679,7 +851,15 @@ class Island:
         code = context["candidate_code"]
         attempt = context["attempt"]
         stage_start = time.perf_counter()
-        result = self.evaluator.evaluate_batch([code])[0]
+        # Reuse a result injected by the driver (from a batched evaluate_batch
+        # across all offspring first attempts) when available. Otherwise evaluate
+        # this single code in isolation — e.g. retry attempts that regenerated
+        # code outside the initial batch.
+        injected = context.get("candidate_result")
+        if injected is not None:
+            result = injected
+        else:
+            result = self.evaluator.evaluate_batch([code])[0]
         context["candidate_result"] = result
         return make_stage_result(
             "evaluate_candidate",

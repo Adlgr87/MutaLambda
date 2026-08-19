@@ -68,6 +68,23 @@ def evaluation_key(code: str, test_cases: Sequence[dict], *,
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 
 
+def _worker_init():
+    """Pre-import heavy modules in each pool worker process once.
+
+    ProcessPoolExecutor spawns fresh interpreter processes, which on the first
+    task re-import all the modules referenced by the worker. By importing them
+    here (run once per worker via ``initializer=``) we avoid per-task
+    re-import / re-deserialization overhead for the common hot path.
+    """
+    import ast
+    import sys
+    import traceback
+
+    from models import EvalResult
+    from fitness_vector import FitnessVector
+    from runners import SubprocessRunner, compare_values, stable_code_hash
+
+
 def _pool_worker(args):
     """Top-level worker for ProcessPoolExecutor (must be picklable)."""
     code, test_cases, timeout_sec, memory_mb, allow_expression_eval, enforce_ast_scan = args
@@ -104,6 +121,8 @@ class EvaluationService:
         self._cache: Dict[str, EvalResult] = {}
         self._cache_lock = threading.Lock()
         self._runner: Optional[CandidateRunner] = None
+        self._hits = 0
+        self._misses = 0
         # Cache invariant hashes once — tests_hash + environment_hash do not
         # change during the life of an EvaluationService instance. Without this,
         # evaluation_key() recomputes json.dumps(test_cases) + environment_hash
@@ -144,7 +163,10 @@ class EvaluationService:
         with self._pool_lock:
             if self._pool is None:
                 workers = max(1, int(self.max_workers or 1))
-                self._pool = ProcessPoolExecutor(max_workers=workers)
+                self._pool = ProcessPoolExecutor(
+                    max_workers=workers,
+                    initializer=_worker_init,
+                )
                 logger.debug("EvaluationService pool started with %d workers", workers)
             return self._pool
 
@@ -176,8 +198,10 @@ class EvaluationService:
                     cached = self._cache.get(key)
                     if cached is not None:
                         results[i] = cached
+                        self._hits += 1
                     else:
                         pending_idx.append(i)
+                        self._misses += 1
         else:
             pending_idx = list(range(len(codes)))
 
@@ -306,6 +330,8 @@ class EvaluationService:
         with self._cache_lock:
             if code is None:
                 self._cache.clear()
+                self._hits = 0
+                self._misses = 0
             else:
                 key = evaluation_key(
                     code, self.test_cases,
@@ -315,9 +341,16 @@ class EvaluationService:
                 )
                 self._cache.pop(key, None)
 
-    def cache_stats(self) -> Dict[str, int]:
+    def cache_stats(self) -> Dict[str, float]:
         with self._cache_lock:
-            return {"size": len(self._cache)}
+            total = self._hits + self._misses
+            hit_rate = self._hits / total if total > 0 else 0.0
+            return {
+                "size": len(self._cache),
+                "hits": self._hits,
+                "misses": self._misses,
+                "hit_rate": hit_rate,
+            }
 
     def shutdown(self, wait: bool = True) -> None:
         with self._pool_lock:

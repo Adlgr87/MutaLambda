@@ -6,7 +6,7 @@
 - NSGA-II numpy-vectorized dominance matrix — **3.7-4.3× speedup** for N≥50
 - Evaluation key caching — invariant `tests_hash` and `environment_hash` precomputed; **242.7× faster** on key generation
 - HFC evaluation volume optimization — factory clones skip re-evaluation, inherit parent fitness (~15-25% predicted)
-
+- HFC offspring batch evaluation (WF#17) — `island.py` two-phase driver runs pre-eval gates (build/security/api) for all offspring first, then a single `evaluate_batch` for all first-attempt codes; retries fall back to individual evaluation. Preserves security-gate ordering (unsafe code never sandboxed).
 ### Phase 6 Block D — Benchmarks (completed — 2026-08-19)
 - `benchmarks/harness.py` D2–D6 harness: 30 targets, 30-rep median + Mann-Whitney U + Holm-Bonferroni + Cliff's delta.
 - D.5 speedup evidence (`benchmarks/results/D.5_speedup_evidence.md`): headline `t3_page_rank` **6.63×**, `t1_primes_sieve` **1.57×**, all mutants verified (0 L2 divergence, 1000 differential trials).
