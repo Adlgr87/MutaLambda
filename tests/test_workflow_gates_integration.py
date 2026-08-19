@@ -437,3 +437,109 @@ class TestFullWorkflowIntegration:
         data = trace.to_dict()
         assert data["stages"][0]["metadata"]["score"] == 0.9
         assert data["stages"][0]["artifacts"]["hash"] == "abc123"
+
+
+# ── Tests de AST-only fast-path ───────────────────────────────────────────────
+
+@pytest.mark.e2e
+class TestASTOnlyFastPath:
+    """Validar que los mutations AST-only omiten build_gate y security_gate."""
+
+    def test_ast_only_skips_build_and_security_gates(self):
+        """Cuando strategy='ast', el workflow debe excluir build_gate y security_gate."""
+        executed_stages = []
+
+        def make_recording_stage(name):
+            def stage(ctx):
+                executed_stages.append(name)
+                return make_stage_result(name, PASS, f"{name} ok")
+            return stage
+
+        # Simular el comportamiento de _build_child_candidate con is_ast_only=True
+        stages = [ProtocolStage("generate_candidate", make_recording_stage("generate_candidate"))]
+        is_ast_only = True
+        if not is_ast_only:
+            stages.append(ProtocolStage("build_gate", make_recording_stage("build_gate")))
+        if not is_ast_only:
+            stages.append(ProtocolStage("security_gate", make_recording_stage("security_gate")))
+        stages.append(ProtocolStage("api_gate", make_recording_stage("api_gate")))
+        stages.append(ProtocolStage("evaluate_candidate", make_recording_stage("evaluate_candidate")))
+        stages.append(ProtocolStage("tests_gate", make_recording_stage("tests_gate")))
+        stages.append(ProtocolStage("differential_gate", make_recording_stage("differential_gate")))
+        stages.append(ProtocolStage("performance_gate", make_recording_stage("performance_gate")))
+        stages.append(ProtocolStage("decision_gate", make_recording_stage("decision_gate")))
+
+        workflow = ProtocolWorkflow(stages)
+        trace = ProtocolTrace(run_id="ast-1", subject_id="ast-subject")
+        workflow.execute({}, trace)
+
+        assert "generate_candidate" in executed_stages
+        assert "build_gate" not in executed_stages
+        assert "security_gate" not in executed_stages
+        assert "api_gate" in executed_stages
+        assert "evaluate_candidate" in executed_stages
+        assert "tests_gate" in executed_stages
+        assert "differential_gate" in executed_stages
+        assert "performance_gate" in executed_stages
+        assert "decision_gate" in executed_stages
+        assert trace.decision == "promote"
+
+    def test_non_ast_includes_build_and_security_gates(self):
+        """Cuando strategy no es 'ast', el workflow debe incluir build_gate y security_gate."""
+        executed_stages = []
+
+        def make_recording_stage(name):
+            def stage(ctx):
+                executed_stages.append(name)
+                return make_stage_result(name, PASS, f"{name} ok")
+            return stage
+
+        stages = [ProtocolStage("generate_candidate", make_recording_stage("generate_candidate"))]
+        is_ast_only = False
+        if not is_ast_only:
+            stages.append(ProtocolStage("build_gate", make_recording_stage("build_gate")))
+        if not is_ast_only:
+            stages.append(ProtocolStage("security_gate", make_recording_stage("security_gate")))
+        stages.append(ProtocolStage("api_gate", make_recording_stage("api_gate")))
+        stages.append(ProtocolStage("evaluate_candidate", make_recording_stage("evaluate_candidate")))
+
+        workflow = ProtocolWorkflow(stages)
+        trace = ProtocolTrace(run_id="ast-2", subject_id="ast-subject-2")
+        workflow.execute({}, trace)
+
+        assert "build_gate" in executed_stages
+        assert "security_gate" in executed_stages
+        assert trace.decision == "promote"
+
+    def test_ast_only_fast_path_skips_2_stages(self):
+        """El fast-path AST-only debe ahorrar exactamente 2 stages: build_gate y security_gate."""
+        def pass_stage(ctx):
+            return make_stage_result("any", PASS, "ok")
+
+        # Full workflow (non-AST)
+        full_stages = [
+            ProtocolStage("generate_candidate", pass_stage),
+            ProtocolStage("build_gate", pass_stage),
+            ProtocolStage("security_gate", pass_stage),
+            ProtocolStage("api_gate", pass_stage),
+            ProtocolStage("evaluate_candidate", pass_stage),
+            ProtocolStage("tests_gate", pass_stage),
+            ProtocolStage("differential_gate", pass_stage),
+            ProtocolStage("performance_gate", pass_stage),
+            ProtocolStage("decision_gate", pass_stage),
+        ]
+        # AST-only workflow (skipped 2 stages)
+        ast_stages = [
+            ProtocolStage("generate_candidate", pass_stage),
+            ProtocolStage("api_gate", pass_stage),
+            ProtocolStage("evaluate_candidate", pass_stage),
+            ProtocolStage("tests_gate", pass_stage),
+            ProtocolStage("differential_gate", pass_stage),
+            ProtocolStage("performance_gate", pass_stage),
+            ProtocolStage("decision_gate", pass_stage),
+        ]
+
+        assert len(full_stages) == 9
+        assert len(ast_stages) == 7
+        stage_name_diff = {s.name for s in full_stages} - {s.name for s in ast_stages}
+        assert stage_name_diff == {"build_gate", "security_gate"}

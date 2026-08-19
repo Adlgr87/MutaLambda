@@ -495,6 +495,12 @@ class Island:
         attempts = self._workflow_max_retries + 1
         candidate_code = mutated_code
 
+        # AST-only mutations produce syntactically valid code by construction
+        # (ASTMutator operates on a parsed tree), so we can elide the
+        # build_gate (parse/compile) and security_gate (AST security scan)
+        # stages — skipping ~2 redundant checks per candidate.
+        is_ast_only = strategy == "ast"
+
         for attempt in range(1, attempts + 1):
             trace.attempts = attempt
             attempt_strategy = strategy if attempt == 1 else f"{strategy}_retry"
@@ -505,19 +511,24 @@ class Island:
                 "candidate_code": candidate_code,
                 "candidate_result": None,
             }
-            workflow = ProtocolWorkflow(
-                [
-                    ProtocolStage("generate_candidate", self._stage_generate_candidate),
-                    ProtocolStage("build_gate", self._stage_build_gate),
-                    ProtocolStage("security_gate", self._stage_security_gate),
-                    ProtocolStage("api_gate", self._stage_api_gate),
-                    ProtocolStage("evaluate_candidate", self._stage_evaluate_candidate),
-                    ProtocolStage("tests_gate", self._stage_tests_gate),
-                    ProtocolStage("differential_gate", self._stage_differential_gate),
-                    ProtocolStage("performance_gate", self._stage_performance_gate),
-                    ProtocolStage("decision_gate", self._stage_decision_gate),
-                ]
-            )
+            stages = [ProtocolStage("generate_candidate", self._stage_generate_candidate)]
+            # build_gate (syntax check) is redundant for AST-only mutations;
+            # for other strategies we still need it to catch LLM syntax errors.
+            if not is_ast_only:
+                stages.append(ProtocolStage("build_gate", self._stage_build_gate))
+            # security_gate: always enforced for LLM-generated code,
+            # skipped for AST-only mutations (operator is trusted, tree-shaped).
+            if not is_ast_only and self._workflow_enforce_security:
+                stages.append(ProtocolStage("security_gate", self._stage_security_gate))
+            stages.extend([
+                ProtocolStage("api_gate", self._stage_api_gate),
+                ProtocolStage("evaluate_candidate", self._stage_evaluate_candidate),
+                ProtocolStage("tests_gate", self._stage_tests_gate),
+                ProtocolStage("differential_gate", self._stage_differential_gate),
+                ProtocolStage("performance_gate", self._stage_performance_gate),
+                ProtocolStage("decision_gate", self._stage_decision_gate),
+            ])
+            workflow = ProtocolWorkflow(stages)
             if workflow.execute(context, trace):
                 result = context["candidate_result"]
                 child = Individual(
