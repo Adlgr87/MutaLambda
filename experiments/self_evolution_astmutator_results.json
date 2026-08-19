@@ -1,0 +1,37 @@
+{
+  "target": "ASTMutator.apply_random_mutation",
+  "seed": 42,
+  "baseline_times_ms": {
+    "constants.py": 1.288,
+    "fitness_vector.py": 8.969,
+    "nsga2.py": 15.811,
+    "muta_lambda.py": 80.854
+  },
+  "stats": {
+    "total": 102,
+    "gate_static": 1,
+    "no_compile": 0,
+    "identical": 0,
+    "gate_correctness": 17,
+    "gate_benchmark": 83
+  },
+  "fast_but_wrong_rejected": 3,
+  "accepted": [
+    {
+      "name": "engineered_reparse",
+      "gmean_speedup": 1.756,
+      "ratios": {
+        "constants.py": 1.834,
+        "fitness_vector.py": 1.741,
+        "nsga2.py": 1.725,
+        "muta_lambda.py": 1.725
+      },
+      "times_ms": {
+        "constants.py": 0.702,
+        "fitness_vector.py": 5.152,
+        "nsga2.py": 9.168,
+        "muta_lambda.py": 46.873
+      }
+    }
+  ]
+}

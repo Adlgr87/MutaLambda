@@ -30,9 +30,18 @@ class ASTMutator:
 
     @classmethod
     def apply_random_mutation(cls, code: str) -> str:
-        """Aplica una mutación aleatoria; devuelve código original si falla."""
+        """Aplica una mutación aleatoria; devuelve código original si falla.
+
+        Self-evolved (2026-08-19, see SELF_EVOLUTION_REPORT.md ch. 2):
+        re-parses the source per attempt instead of ``copy.deepcopy`` of the
+        cached tree. Profiling showed deepcopy was 60% of mutation time and
+        4.4-6.6x slower than a fresh ``ast.parse`` at every measured file
+        size; parsing also guarantees the pristine-tree invariant deepcopy
+        existed to protect. Validated: seeded differential oracle (identical
+        outputs across 7-file corpus x 30 seeds) + 1.76x gmean benchmark.
+        """
         try:
-            tree = cached_parse(code)
+            cached_parse(code)  # early syntax validation (keeps cache warm)
         except SyntaxError:
             return code
 
@@ -52,7 +61,7 @@ class ASTMutator:
         random.shuffle(mutations)
         for mut_fn in mutations[:5]:
             try:
-                new_tree = copy.deepcopy(tree)
+                new_tree = ast.parse(code)
                 mut_fn(new_tree)
                 ast.fix_missing_locations(new_tree)
                 result = ast.unparse(new_tree)

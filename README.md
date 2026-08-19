@@ -147,7 +147,14 @@ uast:
 
 ### Self-Evolution (2026-08-19)
 
-MutaLambda optimized **its own hot path** (`nsga2._crowding_distance`) through its production gates: **1.49x gmean speedup** (up to 1.88x on large fronts), exact semantic equivalence verified by a differential oracle — which also **rejected 25 faster-but-incorrect mutants**. See [SELF_EVOLUTION_REPORT.md](SELF_EVOLUTION_REPORT.md).
+MutaLambda optimized **its own code** through its production gates, twice:
+
+| Target | Function-level | End-to-end | Verified by |
+|---|---|---|---|
+| `nsga2._crowding_distance` | **1.49x** gmean (1.88x large fronts) | +5–9% NSGA-II cycle | differential oracle, 74 populations |
+| `ASTMutator.apply_random_mutation` | **1.76x** gmean | **1.48x** mutation loop | seeded oracle, 7 files × 30 seeds |
+
+Across both experiments the gates rejected **28 faster-but-incorrect candidates** and the security scanner blocked a pickle-based variant by design. Full record — including every defeat and measurement artifact — in [SELF_EVOLUTION_REPORT.md](SELF_EVOLUTION_REPORT.md).
 
 ## Performance Benchmarks (Phase 6 — 2026-08-18)
 
