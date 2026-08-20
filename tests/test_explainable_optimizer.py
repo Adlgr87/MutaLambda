@@ -8,7 +8,7 @@ import json
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from muta_ext.explainable_optimizer import (
+from mutalambda.muta_ext.explainable_optimizer import (
     ExplainableOptimizer,
     ExplanationGenerator,
     OptimizationType,

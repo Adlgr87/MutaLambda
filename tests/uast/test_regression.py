@@ -8,7 +8,7 @@ class TestUASTRegression:
 
     def test_uast_disabled_bypass(self):
         """When use_uast=False, workflow should bypass UAST parsing."""
-        from muta_ext.uast.workflow import UASTWorkflow
+        from mutalambda.muta_ext.uast.workflow import UASTWorkflow
         
         workflow = UASTWorkflow(use_uast=False)
         # Placeholder: current impl returns original source
@@ -17,14 +17,14 @@ class TestUASTRegression:
 
     def test_uast_config_default_false(self):
         """UAST should be disabled by default for safe adoption."""
-        from muta_config import MutaLambdaConfig
+        from mutalambda.muta_config import MutaLambdaConfig
         
         config = MutaLambdaConfig()
         assert config.uast.use_uast is False
 
     def test_uast_supported_languages_default(self):
         """Default supported languages should be python and rust."""
-        from muta_config import MutaLambdaConfig
+        from mutalambda.muta_config import MutaLambdaConfig
         
         config = MutaLambdaConfig()
         assert "python" in config.uast.supported_languages

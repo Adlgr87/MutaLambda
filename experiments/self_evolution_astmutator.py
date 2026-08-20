@@ -36,12 +36,12 @@ import textwrap
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 logging.disable(logging.WARNING)
 
-from evolution_engine import ASTMutator  # noqa: E402
-import mutation_filters as mf  # noqa: E402
+from mutalambda.evolution_engine import ASTMutator  # noqa: E402
+import mutalambda.mutation_filters as mf  # noqa: E402
 
 BASELINE_FN = ASTMutator.apply_random_mutation
 BASELINE_SRC = inspect.getsource(BASELINE_FN)
@@ -149,7 +149,7 @@ BROKEN = "def broken(:\n    return ???\n"
 
 
 def corpus():
-    root = Path(__file__).resolve().parent.parent
+    root = Path(__file__).resolve().parent.parent / "src" / "mutalambda"
     return [
         ("tiny", TINY),
         ("lambda_heavy", LAMBDA_HEAVY),
@@ -171,7 +171,7 @@ def compile_candidate(src: str):
     import ast as _ast
     import copy as _copy
     import pickle as _pickle
-    from code_hash import cached_parse as _cached_parse
+    from mutalambda.code_hash import cached_parse as _cached_parse
 
     src = textwrap.dedent(src)
     # tolera mutantes que conservan el decorador
@@ -221,7 +221,7 @@ def gate_correctness(fn, seeds=range(30)):
 
 
 def bench(fn, repeats=5, seeds=range(8)):
-    root = Path(__file__).resolve().parent.parent
+    root = Path(__file__).resolve().parent.parent / "src" / "mutalambda"
     results = {}
     for fname in BENCH_FILES:
         code = (root / fname).read_text()

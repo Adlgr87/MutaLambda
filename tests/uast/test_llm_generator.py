@@ -1,6 +1,6 @@
 import pytest
 
-from muta_ext.uast.mutators.llm_generator import (
+from mutalambda.muta_ext.uast.mutators.llm_generator import (
     MutatorSafetyError,
     build_system_prompt,
     generate_mutator_code,

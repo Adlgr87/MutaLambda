@@ -4,14 +4,14 @@ Tests for Part B: Compression, Cache, Numerical Health, Tipping, Report, Stepper
 
 import pytest
 import random
-from muta_ext.lineage.compression import LineageCompressor
-from muta_ext.evaluation.cache import CanonicalCache
-from muta_ext.evaluation.numerical_health import (
+from mutalambda.muta_ext.lineage.compression import LineageCompressor
+from mutalambda.muta_ext.evaluation.cache import CanonicalCache
+from mutalambda.muta_ext.evaluation.numerical_health import (
     evaluate_numerical_health, NumericalHealth,
 )
-from muta_ext.diagnostics.tipping import detect_tipping, mad, TippingEvent
-from muta_ext.diagnostics.evolution_report import EvolutionReport
-from muta_ext.mutation.stepper_protocol import (
+from mutalambda.muta_ext.diagnostics.tipping import detect_tipping, mad, TippingEvent
+from mutalambda.muta_ext.diagnostics.evolution_report import EvolutionReport
+from mutalambda.muta_ext.mutation.stepper_protocol import (
     MutationComposer, MutationResult, ASTStepper, CrossBranchStepper,
 )
 

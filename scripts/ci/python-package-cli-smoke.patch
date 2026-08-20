@@ -1,0 +1,13 @@
+# Cambio pendiente para .github/workflows/python-package.yml
+# (el bot no tiene permiso `workflows`; aplicar manualmente desde GitHub web o con push local)
+#
+# El paso "CLI smoke" debe usar la CLI instalada tras la migración a src/ layout:
+#
+#     - name: CLI smoke
+#       run: |
+#         mutalambda --help
+#         mutalambda config create --output /tmp/ml-test.yaml --template basic
+#         mutalambda config validate --path /tmp/ml-test.yaml
+#         mutalambda doctor || true
+#
+# (antes: python cli.py --help / config create / config validate / doctor)

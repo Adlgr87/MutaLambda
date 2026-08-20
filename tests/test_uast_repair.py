@@ -5,15 +5,15 @@ import random
 
 import pytest
 
-from muta_ext.uast.core_uast import (
+from mutalambda.muta_ext.uast.core_uast import (
     CoreUAST, Function, If, For, While, BinaryOp, UnaryOp,
     LiteralNode, Identifier, TryExcept, ExceptClause, StructDef,
     TypeAnnotation, MatchArm, Match, Reference, Opaque, Assign, FieldDef
 )
-from muta_ext.uast.workflow import UASTWorkflow
-from muta_ext.uast.adapters.python_adapter import PythonAdapter
-from muta_ext.uast.emitters.python_emitter import PythonEmitter
-from muta_ext.uast.mutators.base_mutator import (
+from mutalambda.muta_ext.uast.workflow import UASTWorkflow
+from mutalambda.muta_ext.uast.adapters.python_adapter import PythonAdapter
+from mutalambda.muta_ext.uast.emitters.python_emitter import PythonEmitter
+from mutalambda.muta_ext.uast.mutators.base_mutator import (
     SwapConditionMutator, NegateConditionMutator, LoopBoundMutator,
     ReorderStatementsMutator, InlineVariableMutator
 )

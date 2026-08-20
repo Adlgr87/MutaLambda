@@ -4,7 +4,7 @@ Runs with pytest (fixes CI exit-code-5 issue).
 """
 
 import pytest
-from fitness_vector import FitnessVector
+from mutalambda.fitness_vector import FitnessVector
 
 
 @pytest.mark.root

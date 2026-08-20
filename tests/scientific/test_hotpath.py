@@ -1,7 +1,7 @@
 """Tests para hot-path detection (HP-01 a HP-07)."""
 import pytest
-from muta_ext.scientific.hotpath import profile_code, profile_workload
-from muta_ext.scientific.hotpath_types import ProfileConfig
+from mutalambda.muta_ext.scientific.hotpath import profile_code, profile_workload
+from mutalambda.muta_ext.scientific.hotpath_types import ProfileConfig
 
 
 def workload_slow():

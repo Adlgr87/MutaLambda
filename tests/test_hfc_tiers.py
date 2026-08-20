@@ -1,15 +1,15 @@
 import ast
 
-from fitness_vector import FitnessVector
+from mutalambda.fitness_vector import FitnessVector
 import pytest
-from hfc_tiers import (
+from mutalambda.hfc_tiers import (
     HFCLeagueEngine,
     HFCTierConfig,
     TIER_ELITE,
     TIER_FACTORY,
     TIER_LABORATORY,
 )
-from models import EvalResult, Individual, LineageGraph
+from mutalambda.models import EvalResult, Individual, LineageGraph
 
 
 @pytest.mark.root

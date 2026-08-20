@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 import pytest
 
-from component_evolution import (
+from mutalambda.component_evolution import (
     CouplingLevel,
     InterfaceSpec,
     Component,

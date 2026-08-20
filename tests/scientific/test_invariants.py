@@ -1,6 +1,6 @@
 """Tests para ScientificInvariant checks (HP-01 a HP-07)."""
 import math
-from muta_ext.scientific.invariants import (
+from mutalambda.muta_ext.scientific.invariants import (
     check_energy_non_negative,
     check_mass_conservation,
     check_bounds_physical,

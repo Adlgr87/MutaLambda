@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for CoreUAST data structures and serialization."""
 import pytest
-from muta_ext.uast.core_uast import (
+from mutalambda.muta_ext.uast.core_uast import (
     CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
     Assign, If, For, While, Return, Function, Opaque, Break
 )

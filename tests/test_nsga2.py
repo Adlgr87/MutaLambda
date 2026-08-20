@@ -3,9 +3,9 @@ Tests for NSGA-II multi-objective selection.
 """
 
 import pytest
-from fitness_vector import FitnessVector
-from muta_lambda import Individual
-from nsga2 import (
+from mutalambda.fitness_vector import FitnessVector
+from mutalambda.muta_lambda import Individual
+from mutalambda.nsga2 import (
     non_dominated_sort,
     nsga2_select,
     nsga2_tournament_select,

@@ -51,9 +51,9 @@ class ProfileResult:
 
 def profile_nsga2(iterations: int = 1000) -> ProfileResult:
     """Profile NSGA-II operations - hot path crítico."""
-    from nsga2 import non_dominated_sort, _get_fitness
-    from models import Individual
-    from fitness_vector import FitnessVector
+    from mutalambda.nsga2 import non_dominated_sort, _get_fitness
+    from mutalambda.models import Individual
+    from mutalambda.fitness_vector import FitnessVector
     
     # Setup population with FitnessVectors
     population = []
@@ -120,7 +120,7 @@ def profile_nsga2(iterations: int = 1000) -> ProfileResult:
 
 def profile_sandbox(iterations: int = 500) -> ProfileResult:
     """Profile sandbox operations - subprocess overhead."""
-    from sandbox import SandboxEvaluator
+    from mutalambda.sandbox import SandboxEvaluator
     
     # Test code
     test_code = "def add(a, b):\n    return a + b\n"
@@ -169,9 +169,9 @@ def profile_sandbox(iterations: int = 500) -> ProfileResult:
 
 def profile_checkpoint_manager(iterations: int = 100) -> ProfileResult:
     """Profile checkpoint serialization."""
-    from checkpoint_manager import save_full_checkpoint
-    from models import Individual
-    from fitness_vector import FitnessVector
+    from mutalambda.checkpoint_manager import save_full_checkpoint
+    from mutalambda.models import Individual
+    from mutalambda.fitness_vector import FitnessVector
     import tempfile
     
     # Create minimal population
@@ -227,7 +227,7 @@ def profile_checkpoint_manager(iterations: int = 100) -> ProfileResult:
 
 def profile_evolution_engine(iterations: int = 200) -> ProfileResult:
     """Profile evolution engine key operations."""
-    from evolution_engine import ASTMutator
+    from mutalambda.evolution_engine import ASTMutator
     import ast
     
     test_code = """

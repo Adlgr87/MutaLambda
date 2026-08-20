@@ -9,7 +9,7 @@ import json
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from muta_ext.project_optimizer import ProjectAnalyzer, CrossFileHotspot, InliningOpportunity, RedundancyPattern
+from mutalambda.muta_ext.project_optimizer import ProjectAnalyzer, CrossFileHotspot, InliningOpportunity, RedundancyPattern
 
 
 class TestProjectAnalyzer:
@@ -84,7 +84,7 @@ func DoSomething() {
             analyzer.file_analyses = {}
             
             # Manually add analyses
-            from muta_ext.project_optimizer import FileAnalysis
+            from mutalambda.muta_ext.project_optimizer import FileAnalysis
             analyzer.file_analyses[str(file1)] = FileAnalysis(
                 path=str(file1),
                 functions=[{"name": "callB", "params": [], "body_length": 5}],

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from massive_adapter import MassiveTargetAdapter
-from operator_bandit import OperatorBandit, compute_operator_reward
-from muta_ext.mutation.stepper_protocol import ASTStepper, MutationComposer
+from mutalambda.massive_adapter import MassiveTargetAdapter
+from mutalambda.operator_bandit import OperatorBandit, compute_operator_reward
+from mutalambda.muta_ext.mutation.stepper_protocol import ASTStepper, MutationComposer
 
 ROOT = Path(__file__).resolve().parents[1]
 EX = ROOT / "examples" / "massive"

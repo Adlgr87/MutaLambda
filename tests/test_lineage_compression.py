@@ -1,8 +1,8 @@
 import ast
 
-import muta_lambda
-from muta_lambda import LineageGraph, LineageNode, MutaLambdaAgent, EvolveConfig, Individual
-from muta_ext.lineage.compression import LineageCompressor
+import mutalambda.muta_lambda as muta_lambda
+from mutalambda.muta_lambda import LineageGraph, LineageNode, MutaLambdaAgent, EvolveConfig, Individual
+from mutalambda.muta_ext.lineage.compression import LineageCompressor
 
 
 def _parseable(code: str) -> str:

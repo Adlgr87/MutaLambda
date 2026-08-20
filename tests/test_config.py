@@ -10,13 +10,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from config_loader import (
+from mutalambda.config_loader import (
     validate_config,
     apply_defaults,
     load_yaml,
     _get_nested,
 )
-from muta_lambda import EvolveConfig
+from mutalambda.muta_lambda import EvolveConfig
 
 
 @pytest.mark.root
@@ -234,7 +234,7 @@ class TestCheckpointBasic:
     """Basic checkpoint structure (without agent instantiation)."""
 
     def test_serialise_deserialise(self):
-        from checkpoint_manager import CheckpointData, _serialise_checkpoint
+        from mutalambda.checkpoint_manager import CheckpointData, _serialise_checkpoint
 
         cp = CheckpointData(
             generation=5,

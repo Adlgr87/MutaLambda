@@ -18,7 +18,7 @@
 
 ---
 
-MutaLambda is an evolutionary code optimization system: it combines **LLM-generated candidates** with **multi-objective genetic search (NSGA-II)** to make your code faster — and refuses to ship anything it cannot *prove* is still correct. It optimizes Python natively and Rust, C++, and Go through a Universal AST layer.
+MutaLambda is an evolutionary code optimization system: it combines **LLM-generated candidates** with **multi-objective genetic search (NSGA-II)** to make your code faster — and refuses to ship anything it cannot *prove* is still correct. **Python is the production target**; Rust, C++, and Go are supported experimentally through a Universal AST layer (see [language support](#language-support)).
 
 ```
 your code ─▶ Discovery ─▶ Test Synthesis ─▶ Fast Mode ─▶ Deep Evolution ─▶ Patch
@@ -63,7 +63,7 @@ Open-source AlphaEvolve-style frameworks optimize for *discovery*. MutaLambda op
 | **Scientific-domain invariants** (energy conservation, mass balance, monotonicity) | ✅ | ❌ |
 | **Sequential workflow gates**: build → security → sandbox → tests → perf → decision | ✅ | ❌ |
 | **Multi-objective Pareto fitness** (correctness, latency P50/P99, throughput, memory, parsimony) | ✅ NSGA-II | ⚠️ mostly single-objective |
-| **Multi-language structural mutation** (Python, Rust, C++, Go via UAST) | ✅ | ⚠️ mostly Python-only |
+| **Multi-language structural mutation** (Rust, C++, Go via UAST — experimental) | ⚠️ conservative subset | ⚠️ mostly Python-only |
 | **Proven on itself**, gates included, defeats documented | ✅ | ❌ |
 
 If you need to *explore* algorithm space, those tools are fine. If you need to ship an optimized function to production **with evidence that it is still correct**, that is what MutaLambda is built for.
@@ -73,7 +73,7 @@ If you need to *explore* algorithm space, those tools are fine. If you need to s
 ```bash
 git clone https://github.com/Adlgr87/MutaLambda.git
 cd MutaLambda
-pip install -r requirements.txt
+pip install -e .            # installs the `mutalambda` CLI (src/ layout)
 
 # Optimize a script (local LLM via Ollama — no API key needed)
 python muta_lambda.py --optimize my_script.py
@@ -87,8 +87,9 @@ python muta_lambda.py --optimize my_script.py --mode deep
 # Resume an interrupted run from checkpoint
 python muta_lambda.py --resume checkpoints/run_xxx
 
-# Advanced diagnostics: P99, throughput, parsimony
-python muta_lambda.py --optimize my_script.py --advanced-diagnostics
+# Interactive CLI (config templates, checkpoints, doctor)
+mutalambda --help
+mutalambda doctor
 ```
 
 LLM backends are pluggable: **Ollama** (local, free), **OpenAI**, **Anthropic**, **OpenRouter**, **Mistral** — switch via `config.yaml`, no code changes.
@@ -108,7 +109,7 @@ llm:
   backend: ollama
   model: codestral
 uast:
-  enabled: false        # enable for Rust / C++ / Go targets
+  enabled: false        # enable for Rust / C++ / Go targets (experimental)
   languages: [python, rust, cpp, go]
 ```
 
@@ -126,7 +127,7 @@ uast:
 
 - **Correctness is binary, not weighted.** Candidates that fail the oracle exit the pipeline. This single design decision eliminates the classic evolutionary failure mode — reward hacking via subtly wrong code.
 - **Honest benchmarking is enforced**, not aspirational: median-of-repeats, multiple input sizes, and a **no-regression rule** (a candidate that wins on large inputs but regresses on small ones is rejected — this caught one of our own candidates).
-- **Defense in depth**: regex + AST structural security scan (catches `import os as _o`, `f = exec` aliasing, `getattr(__builtins__, ...)` escapes) → subprocess sandbox with rlimits → workflow gates. A dedicated `self` profile allows introspection patterns in trusted first-party code while still blocking every execution primitive.
+- **Defense in depth — with honest boundaries**: regex + AST structural security scan (catches `import os as _o`, `f = exec` aliasing, `getattr(__builtins__, ...)` escapes) → subprocess sandbox with rlimits → workflow gates. The static filters are a *quality gate, not a security boundary*; the subprocess contains accidents (infinite loops, memory bombs), not determined attackers. **For untrusted or multi-tenant input, wrap the evaluation loop in container-level isolation** — the exact threat model, guarantees, and hardened Docker recipe are in [SECURITY.md](SECURITY.md).
 - **Anti-hallucination layer** for numeric code: SymPy algebraic equivalence, AST math verification, and optional domain invariants (energy conservation, mass balance, monotonicity) for scientific computing.
 - **Interpretability safeguards** (3 layers) and full lineage tracking: every surviving individual can explain where it came from.
 
@@ -135,36 +136,52 @@ uast:
 | Component | What it does |
 |---|---|
 | **HFC tiers** | Hierarchical Fitness Climbing: Lab (100) → Factory (50) → Elite (10) speciation keeps exploration alive without polluting the elite pool |
-| **Universal AST (UAST)** | tree-sitter adapters + emitters + structural mutators for Python, Rust, C++, Go — one mutation engine, four languages |
+| **Universal AST (UAST)** | tree-sitter adapters + emitters + structural mutators for Rust, C++, Go (experimental — conservative subset, see Language support) |
 | **Prompt evolution** | The LLM system prompts themselves evolve (meta-evolution) |
 | **Semantic archive** | FAISS-backed RAG cache — past solutions are retrieved, not re-discovered |
 | **Checkpointing** | MsgPack snapshots (4× faster, 99% smaller than JSON); interrupt and resume any run |
 | **Operator bandit** | Multi-armed bandit reallocates budget toward mutation operators that are actually working |
 | **Tooling** | Interactive CLI (Click/Rich), Streamlit dashboard, LSP server, CI integration |
 
+## Language support
+
+| Language | Maturity | What that means |
+|---|---|---|
+| **Python** | ✅ **Production** | Full pipeline: profiling, LLM candidates, AST mutation, sandbox, oracles, benchmarks. This is what the validation results above were produced with. |
+| Rust | 🧪 Experimental | Structural mutations on a conservative subset via UAST (tree-sitter). Ownership/borrow semantics, macros, traits, lifetimes are treated as *opaque* — never mutated. |
+| C++ | 🧪 Experimental | Same conservative approach; templates and memory management constructs are opaque. |
+| Go | 🧪 Experimental | Adapter + emitter with basic mutations. |
+
+We deliberately do **not** attempt to abstract ownership or memory semantics into a generic AST — candidates touching constructs the UAST cannot reason about are left untouched rather than risked. The full per-language support matrix is in [muta_ext/uast/LIMITATIONS.md](src/mutalambda/muta_ext/uast/LIMITATIONS.md).
+
 ## Project structure
 
 ```
-muta_lambda.py            Orchestrator + CLI entrypoint
-progressive_pipeline.py   5-phase workflow
-evolution_engine.py       AST mutation operators + LLM generation
-island.py / migration.py  Island evolution + inter-island topologies
-nsga2.py                  Multi-objective Pareto selection  ← self-optimized 1.49×
-fitness_vector.py         6-objective fitness vector
-mutation_filters.py       Security & quality gates (incl. `self` profile)
-sandbox.py / runners.py   Hard-limited candidate execution + AST security scan
-hfc_tiers.py              Hierarchical Fitness Climbing
-archive.py                FAISS semantic cache
-llm_backend.py            Ollama / OpenAI / Anthropic / OpenRouter / Mistral
-muta_ext/uast/            Universal AST: adapters, emitters, mutators (4 languages)
-experiments/              Reproducible self-evolution experiments + results JSON
-tests/                    483 tests
+muta_lambda.py                 Compatibility shim (python muta_lambda.py still works)
+src/mutalambda/                The package (standard src/ layout, pip-installable)
+├── muta_lambda.py             Orchestrator
+├── progressive_pipeline.py    5-phase workflow
+├── evolution_engine.py        AST mutation operators + LLM generation
+├── island.py / migration.py   Island evolution + inter-island topologies
+├── nsga2.py                   Multi-objective Pareto selection  ← self-optimized 1.49×
+├── fitness_vector.py          6-objective fitness vector
+├── mutation_filters.py        Security & quality gates (incl. `self` profile)
+├── sandbox.py / runners.py    Hard-limited candidate execution + AST security scan
+├── hfc_tiers.py               Hierarchical Fitness Climbing
+├── archive.py                 FAISS semantic cache
+├── llm_backend.py             Ollama / OpenAI / Anthropic / OpenRouter / Mistral
+├── cli_app.py + cli/          Console CLI (`mutalambda` command)
+└── muta_ext/uast/             Universal AST: adapters, emitters, mutators
+experiments/                   Reproducible self-evolution experiments + results JSON
+tests/                         483 tests
+SECURITY.md                    Threat model & isolation guidance
 ```
 
 ## Documentation
 
 - [CLI reference](docs/CLI.md) · [Fitness metrics](docs/FITNESS_METRICS.md) · [Metrics guide](docs/METRICS.md)
 - [Scientific optimization mode](docs/SCIENTIFIC_OPTIMIZATION_MODE.md) · [Test execution protocol](docs/TEST_EXECUTION_PROTOCOL.md)
+- [Security model & threat boundaries](SECURITY.md)
 - [Self-evolution report — victories & defeats ledger](SELF_EVOLUTION_REPORT.md)
 - [Empirical evidence](EMPIRICAL_EVIDENCE.md) · [Multi-language report](MULTILANGUAGE_REPORT.md)
 - [Contributing](CONTRIBUTING.md)

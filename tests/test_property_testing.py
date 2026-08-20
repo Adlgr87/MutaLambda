@@ -2,7 +2,7 @@
 
 import pytest
 
-from property_testing import HAS_Z3, verify_invariant_z3
+from mutalambda.property_testing import HAS_Z3, verify_invariant_z3
 
 
 pytestmark = pytest.mark.skipif(not HAS_Z3, reason="z3-solver is not installed")

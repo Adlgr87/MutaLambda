@@ -1,7 +1,7 @@
 import pytest
 import json
 import time
-from workflow_protocol import (
+from mutalambda.workflow_protocol import (
     PASS,
     FAIL,
     RETRYABLE_FAIL,

@@ -7,10 +7,11 @@ raising ``TypeError: 'Name' object is not iterable``.
 """
 
 import random
+from pathlib import Path
 
 import pytest
 
-from evolution_engine import ASTMutator
+from mutalambda.evolution_engine import ASTMutator
 
 
 LAMBDA_HEAVY_CODE = '''
@@ -39,8 +40,8 @@ class TestMutatorRobustness:
 
     def test_mutate_own_nsga2_source_never_crashes(self):
         """Self-application: mutating MutaLambda's own nsga2.py must not crash."""
-        with open("nsga2.py", "r", encoding="utf-8") as fh:
-            src = fh.read()
+        import mutalambda.nsga2 as _n
+        src = Path(_n.__file__).read_text(encoding="utf-8")
         for seed in range(25):
             random.seed(seed)
             result = ASTMutator.apply_random_mutation(src)

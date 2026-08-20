@@ -3,12 +3,12 @@ import sys
 from pathlib import Path
 from typing import Dict, Any
 
-_project_root = Path(__file__).resolve().parent.parent.parent
+_project_root = Path(__file__).resolve().parent.parent.parent / "src"
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 import pytest
-from muta_ext.scientific.invariants import BASE_INVARIANTS
+from mutalambda.muta_ext.scientific.invariants import BASE_INVARIANTS
 
 
 @pytest.fixture

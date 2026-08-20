@@ -11,7 +11,7 @@ from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from muta_ext.ci_integration import (
+from mutalambda.muta_ext.ci_integration import (
     PerformanceBaseline,
     RegressionDetector,
     PRAnalyzer,
@@ -194,7 +194,7 @@ class TestRegressionDetector:
 class TestPRAnalyzer:
     """Test PR analysis functionality."""
 
-    @patch('muta_ext.ci_integration.subprocess.run')
+    @patch('mutalambda.muta_ext.ci_integration.subprocess.run')
     def test_analyze_pr_no_regressions(self, mock_subprocess):
         """Test PR analysis with no regressions."""
         mock_subprocess.return_value = MagicMock(

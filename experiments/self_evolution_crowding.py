@@ -36,17 +36,17 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 logging.disable(logging.WARNING)  # silencia el spam de filtros durante el run
 
 import numpy as np  # noqa: E402
 
-import nsga2  # noqa: E402
-import mutation_filters as mf  # noqa: E402
-from evolution_engine import ASTMutator  # noqa: E402
-from fitness_vector import FitnessVector  # noqa: E402
-from models import Individual  # noqa: E402
+import mutalambda.nsga2 as nsga2  # noqa: E402
+import mutalambda.mutation_filters as mf  # noqa: E402
+from mutalambda.evolution_engine import ASTMutator  # noqa: E402
+from mutalambda.fitness_vector import FitnessVector  # noqa: E402
+from mutalambda.models import Individual  # noqa: E402
 
 BASELINE_FN = nsga2._crowding_distance
 BASELINE_SRC = inspect.getsource(BASELINE_FN)

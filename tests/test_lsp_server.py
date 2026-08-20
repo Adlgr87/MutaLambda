@@ -8,7 +8,7 @@ import json
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from lsp.server import (
+from mutalambda.lsp.server import (
     MutaLambdaLSPServer,
     LSPMessage,
     Diagnostic,

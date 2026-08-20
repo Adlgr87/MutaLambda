@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from fitness_vector import FitnessVector
-from models import Individual
+from mutalambda.fitness_vector import FitnessVector
+from mutalambda.models import Individual
 
 
 def make_individual(

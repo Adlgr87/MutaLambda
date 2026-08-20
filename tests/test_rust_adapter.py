@@ -5,10 +5,10 @@ import shutil
 
 import pytest
 
-from muta_ext.uast.core_uast import CoreUAST, Function, If, For, While, BinaryOp, LiteralNode, Identifier
-from muta_ext.uast.adapters.rust_adapter import RustAdapter
-from muta_ext.uast.emitters.rust_emitter import RustEmitter
-from muta_ext.uast.handlers.rust_handler import RustHandler
+from mutalambda.muta_ext.uast.core_uast import CoreUAST, Function, If, For, While, BinaryOp, LiteralNode, Identifier
+from mutalambda.muta_ext.uast.adapters.rust_adapter import RustAdapter
+from mutalambda.muta_ext.uast.emitters.rust_emitter import RustEmitter
+from mutalambda.muta_ext.uast.handlers.rust_handler import RustHandler
 
 
 class TestRustParse:
@@ -74,7 +74,7 @@ class TestRustHandler:
 
     def test_rust_handler_inherits_base(self):
         """RustHandler should inherit from BaseLanguageHandler."""
-        from muta_ext.uast.handlers.base_handler import BaseLanguageHandler
+        from mutalambda.muta_ext.uast.handlers.base_handler import BaseLanguageHandler
         
         handler = RustHandler()
         assert isinstance(handler, BaseLanguageHandler)

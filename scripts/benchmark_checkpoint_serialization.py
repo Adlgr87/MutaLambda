@@ -15,8 +15,8 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models import Individual
-from fitness_vector import FitnessVector
+from mutalambda.models import Individual
+from mutalambda.fitness_vector import FitnessVector
 
 
 def create_large_population(n: int) -> list:

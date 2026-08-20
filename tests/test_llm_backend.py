@@ -2,7 +2,7 @@ import pytest
 
 import requests
 
-from llm_backend import LLMBackend, LLMBackendError, _resolve_llm_backend
+from mutalambda.llm_backend import LLMBackend, LLMBackendError, _resolve_llm_backend
 
 
 class FakeResponse:

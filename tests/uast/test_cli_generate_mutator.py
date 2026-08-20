@@ -1,5 +1,5 @@
-from cli.main import MutaLambdaCLI
-from muta_ext.uast.mutators.llm_generator import GeneratedMutatorResult
+from mutalambda.cli.main import MutaLambdaCLI
+from mutalambda.muta_ext.uast.mutators.llm_generator import GeneratedMutatorResult
 
 
 def test_generate_mutator_dry_run_does_not_write(monkeypatch, tmp_path):
@@ -18,7 +18,7 @@ def test_generate_mutator_dry_run_does_not_write(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(cli, "_generated_mutator_dir", lambda: tmp_path / "generated")
     monkeypatch.setattr(
-        "muta_ext.uast.mutators.llm_generator.generate_mutator",
+        "mutalambda.muta_ext.uast.mutators.llm_generator.generate_mutator",
         lambda **_: GeneratedMutatorResult(
             code="def mutate(node, **kwargs):\n    return node\n",
             provider="openai",
@@ -50,7 +50,7 @@ def test_generate_mutator_writes_file_when_enabled(monkeypatch, tmp_path):
     out_dir = tmp_path / "generated"
     monkeypatch.setattr(cli, "_generated_mutator_dir", lambda: out_dir)
     monkeypatch.setattr(
-        "muta_ext.uast.mutators.llm_generator.generate_mutator",
+        "mutalambda.muta_ext.uast.mutators.llm_generator.generate_mutator",
         lambda **_: GeneratedMutatorResult(
             code="def mutate(node, **kwargs):\n    return node\n",
             provider="openai",

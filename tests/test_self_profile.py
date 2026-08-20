@@ -7,8 +7,10 @@ legitimately.  Everything genuinely dangerous must remain blocked under SELF.
 
 import pytest
 
-import mutation_filters as mf
-from mutation_filters import ProfileMode
+from pathlib import Path
+
+import mutalambda.mutation_filters as mf
+from mutalambda.mutation_filters import ProfileMode
 
 
 GETATTR_CODE = '''
@@ -40,8 +42,8 @@ class TestSelfProfile:
 
     def test_own_nsga2_source_passes_under_self(self):
         """MutaLambda must be able to gate its own hot-path module."""
-        with open("nsga2.py", "r", encoding="utf-8") as fh:
-            src = fh.read()
+        import mutalambda.nsga2 as _n
+        src = Path(_n.__file__).read_text(encoding="utf-8")
         assert mf.check_no_critical_patterns(src).blocked  # balanced: blocked
         assert mf.check_no_critical_patterns(src, profile="self").passed
 
@@ -54,7 +56,7 @@ class TestSelfProfile:
 
     def test_self_profile_enum_roundtrip(self):
         assert ProfileMode.from_str("self") is ProfileMode.SELF
-        from models import ProfileMode as ModelsProfileMode
+        from mutalambda.models import ProfileMode as ModelsProfileMode
         assert ModelsProfileMode.from_str("self") == ProfileMode.SELF
 
     def test_run_all_filters_self_profile(self):

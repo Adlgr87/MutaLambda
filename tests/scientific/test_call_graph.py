@@ -1,5 +1,5 @@
 """Tests para call-graph extraction (CG-01 a CG-08)."""
-from muta_ext.uast.call_graph import (
+from mutalambda.muta_ext.uast.call_graph import (
     extract_call_graph_from_source,
     extract_call_graph_multi_file,
 )

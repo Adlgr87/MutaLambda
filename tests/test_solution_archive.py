@@ -37,8 +37,8 @@ with patch.dict("sys.modules", {
     "sentence_transformers": MagicMock(SentenceTransformer=_mock_st),
     "faiss": _mock_faiss,
 }):
-    import muta_lambda
-    from muta_lambda import SolutionArchive
+    import mutalambda.muta_lambda as muta_lambda
+    from mutalambda.muta_lambda import SolutionArchive
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
@@ -92,7 +92,7 @@ def archive():
 
 def _add_solution(arch: SolutionArchive, code: str):
     """Helper: add a solution to the archive."""
-    from muta_lambda import ArchivedSolution
+    from mutalambda.muta_lambda import ArchivedSolution
     emb = arch._encode_normalized([code])[0]
     arch.solutions.append(
         ArchivedSolution(code=code, metrics={}, embedding=emb)

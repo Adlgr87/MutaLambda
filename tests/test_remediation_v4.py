@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from evaluation_service import EvaluationService, evaluation_key
-from models import Individual, LineageGraph, stable_code_hash
-from muta_lambda import EvolveConfig, GenerationResult, MutaLambdaAgent
-from runners import SubprocessRunner, compare_values, scan_code_security
-from sandbox import SandboxEvaluator
+from mutalambda.evaluation_service import EvaluationService, evaluation_key
+from mutalambda.models import Individual, LineageGraph, stable_code_hash
+from mutalambda.muta_lambda import EvolveConfig, GenerationResult, MutaLambdaAgent
+from mutalambda.runners import SubprocessRunner, compare_values, scan_code_security
+from mutalambda.sandbox import SandboxEvaluator
 
 
 ROOT = Path(__file__).resolve().parents[1]

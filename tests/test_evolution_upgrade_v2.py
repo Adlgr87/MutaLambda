@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from checkpoint_manager import CheckpointData, _serialise_checkpoint
-from fitness_vector import FitnessVector
-from models import Individual, LineageGraph
-from muta_ext.advanced_selection import AdvancedSelectionConfig, AdvancedSelectionEngine
-from muta_ext.dialectic_engine import DialecticConfig, DialecticEngine
-from muta_ext.pattern_memory import PatternMemory
-from muta_ext.spatial_topology import SpatialConfig, SpatialTopology
-from muta_ext.thc_engine import HorizontalTransferEngine, THCConfig
+from mutalambda.checkpoint_manager import CheckpointData, _serialise_checkpoint
+from mutalambda.fitness_vector import FitnessVector
+from mutalambda.models import Individual, LineageGraph
+from mutalambda.muta_ext.advanced_selection import AdvancedSelectionConfig, AdvancedSelectionEngine
+from mutalambda.muta_ext.dialectic_engine import DialecticConfig, DialecticEngine
+from mutalambda.muta_ext.pattern_memory import PatternMemory
+from mutalambda.muta_ext.spatial_topology import SpatialConfig, SpatialTopology
+from mutalambda.muta_ext.thc_engine import HorizontalTransferEngine, THCConfig
 
 
 class MockEvaluator:

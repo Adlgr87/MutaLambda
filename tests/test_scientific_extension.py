@@ -1,8 +1,8 @@
 import pytest
 
-from muta_ext.config.scientific_extension import EvolutionaryExtensionConfig
-from muta_ext.evaluation.numerical_health import evaluate_numerical_health
-from muta_ext.diagnostics.tipping import detect_tipping
+from mutalambda.muta_ext.config.scientific_extension import EvolutionaryExtensionConfig
+from mutalambda.muta_ext.evaluation.numerical_health import evaluate_numerical_health
+from mutalambda.muta_ext.diagnostics.tipping import detect_tipping
 
 
 @pytest.mark.scientific

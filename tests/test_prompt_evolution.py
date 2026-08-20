@@ -8,14 +8,14 @@ import random
 import pytest
 
 # Import directly (prompt_evolution imports muta_lambda internally)
-from muta_lambda import PromptGenome
-from prompt_evolution import RichPromptEvolver
+from mutalambda.muta_lambda import PromptGenome
+from mutalambda.prompt_evolution import RichPromptEvolver
 
 
 class DummyEvaluator:
     def evaluate_batch(self, codes):
-        from fitness_vector import FitnessVector
-        from models import EvalResult
+        from mutalambda.fitness_vector import FitnessVector
+        from mutalambda.models import EvalResult
 
         return [
             EvalResult(

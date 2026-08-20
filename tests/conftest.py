@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from fitness_vector import FitnessVector
+from mutalambda.fitness_vector import FitnessVector
 from tests.helpers import make_individual
 
 

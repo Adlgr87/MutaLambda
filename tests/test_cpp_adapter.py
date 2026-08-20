@@ -2,10 +2,10 @@
 """Tests for C++ adapter in Phase 3."""
 import pytest
 
-from muta_ext.uast.core_uast import CoreUAST, Function, If, Identifier
-from muta_ext.uast.adapters.cpp_adapter import CppAdapter
-from muta_ext.uast.emitters.cpp_emitter import CppEmitter
-from muta_ext.uast.handlers.cpp_handler import CppHandler
+from mutalambda.muta_ext.uast.core_uast import CoreUAST, Function, If, Identifier
+from mutalambda.muta_ext.uast.adapters.cpp_adapter import CppAdapter
+from mutalambda.muta_ext.uast.emitters.cpp_emitter import CppEmitter
+from mutalambda.muta_ext.uast.handlers.cpp_handler import CppHandler
 
 
 class TestCppParse:
@@ -68,7 +68,7 @@ class TestCppHandler:
 
     def test_cpp_handler_inherits_base(self):
         """CppHandler should inherit from BaseLanguageHandler."""
-        from muta_ext.uast.handlers.base_handler import BaseLanguageHandler
+        from mutalambda.muta_ext.uast.handlers.base_handler import BaseLanguageHandler
         
         handler = CppHandler()
         assert isinstance(handler, BaseLanguageHandler)

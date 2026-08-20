@@ -1,5 +1,5 @@
 """Tests para mutación inter-procedural (IP-*)."""
-from muta_ext.uast.call_graph import extract_call_graph_from_source
+from mutalambda.muta_ext.uast.call_graph import extract_call_graph_from_source
 
 
 def select_functions(hot_names, call_graph, prob=0.25, max_f=3):

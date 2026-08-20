@@ -7,10 +7,10 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from muta_ext.uast.adapters.go_adapter import GoAdapter
-from muta_ext.uast.emitters.go_emitter import GoEmitter
-from muta_ext.uast.handlers.go_handler import GoHandler
-from muta_ext.uast.core_uast import CoreUAST, Function, Identifier, Return, LiteralNode, StructDef, FieldDef, TypeAnnotation
+from mutalambda.muta_ext.uast.adapters.go_adapter import GoAdapter
+from mutalambda.muta_ext.uast.emitters.go_emitter import GoEmitter
+from mutalambda.muta_ext.uast.handlers.go_handler import GoHandler
+from mutalambda.muta_ext.uast.core_uast import CoreUAST, Function, Identifier, Return, LiteralNode, StructDef, FieldDef, TypeAnnotation
 
 
 class TestGoAdapter:
@@ -204,7 +204,7 @@ func hello() string {
     def test_emit(self):
         """Test emit method."""
         handler = GoHandler()
-        from muta_ext.uast.core_uast import CoreUAST
+        from mutalambda.muta_ext.uast.core_uast import CoreUAST
         uast = CoreUAST(body=[], language="go")
         result = handler.emit(uast)
         assert isinstance(result, str)

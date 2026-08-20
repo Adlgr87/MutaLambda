@@ -4,7 +4,7 @@ Tests for Convergent Evolution Boost (cross-island consensus).
 
 import pytest
 from unittest.mock import MagicMock
-from muta_lambda import (
+from mutalambda.muta_lambda import (
     Individual,
     Island,
     IslandConfig,

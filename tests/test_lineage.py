@@ -3,7 +3,7 @@ Tests for Fase 7: LineageGraph (Retroceso Temporal Multiversal).
 """
 
 import pytest
-from muta_lambda import (
+from mutalambda.muta_lambda import (
     Individual,
     LineageGraph,
     LineageNode,

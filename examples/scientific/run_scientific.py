@@ -5,10 +5,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from muta_ext.scientific.hotpath import profile_workload
-from muta_ext.scientific.hotpath_types import ProfileConfig
-from muta_ext.scientific.invariants import BASE_INVARIANTS, evaluate_invariants
-from muta_ext.uast.call_graph import extract_call_graph_from_source
+from mutalambda.muta_ext.scientific.hotpath import profile_workload
+from mutalambda.muta_ext.scientific.hotpath_types import ProfileConfig
+from mutalambda.muta_ext.scientific.invariants import BASE_INVARIANTS, evaluate_invariants
+from mutalambda.muta_ext.uast.call_graph import extract_call_graph_from_source
 from examples.scientific.massive_kernel import run_simulation
 
 

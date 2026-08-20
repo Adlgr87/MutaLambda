@@ -16,8 +16,8 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models import Individual
-from fitness_vector import FitnessVector
+from mutalambda.models import Individual
+from mutalambda.fitness_vector import FitnessVector
 
 
 def create_test_population(n: int) -> List[Individual]:
@@ -45,7 +45,7 @@ def create_test_population(n: int) -> List[Individual]:
 def benchmark_sort(population: List[Individual], runs: int = 5) -> Tuple[float, float, float]:
     """Benchmark non_dominated_sort. Returns (mean, stdev, median)."""
     # Warm up
-    from nsga2 import non_dominated_sort
+    from mutalambda.nsga2 import non_dominated_sort
     non_dominated_sort(population[:10])
     
     times = []

@@ -1,14 +1,14 @@
 """Tests para Scientific Validation Layer."""
 import pytest
-from muta_ext.scientific.validation import (
+from mutalambda.muta_ext.scientific.validation import (
     evaluate_invariants,
     run_scientific_validation_stage,
     ScientificValidationResult,
 )
-from muta_ext.scientific.invariants import ScientificInvariant, BASE_INVARIANTS
+from mutalambda.muta_ext.scientific.invariants import ScientificInvariant, BASE_INVARIANTS
 
 try:
-    from workflow_protocol import PASS, FAIL
+    from mutalambda.workflow_protocol import PASS, FAIL
 except ImportError:
     PASS = "PASS"
     FAIL = "FAIL"

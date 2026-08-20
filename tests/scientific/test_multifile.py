@@ -1,5 +1,5 @@
 """Tests multi-file (MF-*)."""
-from muta_ext.uast.call_graph import extract_call_graph_multi_file, extract_call_graph_from_source
+from mutalambda.muta_ext.uast.call_graph import extract_call_graph_multi_file, extract_call_graph_from_source
 import pytest
 
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from runners import (
+from mutalambda.runners import (
     ContainerRunner,
     SecurityFinding,
     SecurityVisitor,
@@ -19,7 +19,7 @@ from runners import (
     scan_code_security,
     scan_findings,
 )
-from mutation_filters import check_no_critical_patterns
+from mutalambda.mutation_filters import check_no_critical_patterns
 
 
 # ── The six documented evasion vectors ────────────────────────────────────────

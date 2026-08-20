@@ -29,13 +29,11 @@ import sys
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
-    import muta_lambda as core
+    import mutalambda.muta_lambda as core
 except ImportError:  # pragma: no cover
     if _REPO_ROOT not in sys.path:
         sys.path.insert(0, _REPO_ROOT)
-    import muta_lambda as core
-
-
+    import mutalambda.muta_lambda as core
 def _extract_first_function_name(code: str) -> str:
     import ast
 

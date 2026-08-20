@@ -9,8 +9,8 @@ class TestRoundtrip:
 
     def test_parse_emit_simple(self):
         """Test basic parse and emit of simple Python code."""
-        from muta_ext.uast.adapters.python_adapter import parse_to_uast
-        from muta_ext.uast.emitters.python_emitter import emit_from_uast
+        from mutalambda.muta_ext.uast.adapters.python_adapter import parse_to_uast
+        from mutalambda.muta_ext.uast.emitters.python_emitter import emit_from_uast
         
         source = "x = 1 + 2"
         uast = parse_to_uast(source)
@@ -25,8 +25,8 @@ class TestRoundtrip:
 
     def test_parse_emit_function(self):
         """Test parse and emit of function definition."""
-        from muta_ext.uast.adapters.python_adapter import parse_to_uast
-        from muta_ext.uast.emitters.python_emitter import emit_from_uast
+        from mutalambda.muta_ext.uast.adapters.python_adapter import parse_to_uast
+        from mutalambda.muta_ext.uast.emitters.python_emitter import emit_from_uast
         
         source = '''
 def add(a, b):
@@ -41,8 +41,8 @@ def add(a, b):
 
     def test_validator_detects_opaque(self):
         """Test that validator detects opaque/unrecognized nodes."""
-        from muta_ext.uast.validators import UASTValidator
-        from muta_ext.uast.core_uast import CoreUAST, Opaque
+        from mutalambda.muta_ext.uast.validators import UASTValidator
+        from mutalambda.muta_ext.uast.core_uast import CoreUAST, Opaque
         
         uast = CoreUAST(
             body=[Opaque(original_text="some_unknown_syntax", lang="python")],
