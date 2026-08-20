@@ -1,202 +1,188 @@
-# MutaLambda 2.0
+# MutaLambda
 
-**MutaLambda** is an evolutionary code optimization system that combines LLMs with genetic algorithms (NSGA-II) to automatically improve code performance while maintaining correctness. It supports Python, Rust, and C++ via a Universal AST (UAST) layer for cross-language mutation.
+<div align="center">
 
-## Why MutaLambda? (vs. OpenEvolve-style frameworks)
+**Evolutionary code optimization you can actually trust.**
 
-Open-source AlphaEvolve clones optimize for *discovery*. MutaLambda optimizes for **trustworthy production code**. The difference is safety and verification at every step:
+*LLMs propose. Genetic algorithms explore. Hard correctness gates decide.*
+
+[![Tests](https://img.shields.io/badge/tests-483%20passing-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-4.0.0-blue)]()
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
+[![License](https://img.shields.io/badge/license-BUSL--1.1-orange)](LICENSE)
+[![Self-Optimized](https://img.shields.io/badge/self--optimized-1.49x%20%7C%201.76x-purple)](SELF_EVOLUTION_REPORT.md)
+
+**English** | **[Español](README_ES.md)**
+
+</div>
+
+---
+
+MutaLambda is an evolutionary code optimization system: it combines **LLM-generated candidates** with **multi-objective genetic search (NSGA-II)** to make your code faster — and refuses to ship anything it cannot *prove* is still correct. It optimizes Python natively and Rust, C++, and Go through a Universal AST layer.
+
+```
+your code ─▶ Discovery ─▶ Test Synthesis ─▶ Fast Mode ─▶ Deep Evolution ─▶ Patch
+             profiling +   auto-generated    5 LLM        NSGA-II across     git-style diff
+             hotspots      property tests    variants     parallel islands   + metrics report
+
+every single candidate must survive the gauntlet:
+  build ▶ security scan ▶ sandbox (hard limits) ▶ correctness oracle ▶ honest benchmark
+  ...only then does it compete for Pareto selection. A fast-but-wrong candidate is
+  never "penalized" — it is discarded. Correctness is a gate, not a score.
+```
+
+## Proof, not promises
+
+We turned MutaLambda on **its own source code**, through its own production gates. Everything below is reproducible from [`experiments/`](experiments/):
+
+| Self-optimized target | Function-level | End-to-end | Verified by |
+|---|---|---|---|
+| `nsga2._crowding_distance` | **1.49×** gmean (1.88× on large fronts) | +5–9% full NSGA-II cycle | differential oracle, 74 randomized populations, exact equivalence |
+| `ASTMutator.apply_random_mutation` | **1.76×** gmean | **1.48×** mutation loop | seeded oracle: byte-identical outputs, 7-file corpus × 30 seeds |
+
+Three things happened along the way that tell you more than the speedups do:
+
+1. **The gates rejected 28 candidates that were *faster but incorrect*.** A fitness function that merely scores correctness would have shipped them.
+2. **The benchmark gate caught a 2× "win" that was secretly a 3.6× loss** on small inputs — the common case. The merged optimization is a size-gated hybrid because the *data* said so.
+3. **The security scanner blocked one of our own engineered candidates** (a pickle-based copy path — a deserialization primitive). The gates outrank the optimizer. As they should.
+
+Applied to external code ([MASSIVE](README_ES.md) multi-agent simulation framework): **3.6× / 2.3× / 1.5×** speedups and one 25.8% code reduction, at 100% correctness (ε < 1e-10, 1,000 runs per module, p < 0.001).
+
+Every experiment we run — including the failures, reverted "optimizations", and measurement artifacts we caught — is on the record: [**SELF_EVOLUTION_REPORT.md**](SELF_EVOLUTION_REPORT.md) (victories & defeats ledger) and [**EMPIRICAL_EVIDENCE.md**](EMPIRICAL_EVIDENCE.md). In this field, an optimizer that documents its defeats is the one you can believe about its wins.
+
+## Why not just use an AlphaEvolve clone?
+
+Open-source AlphaEvolve-style frameworks optimize for *discovery*. MutaLambda optimizes for **trustworthy production code**. The difference is verification at every step:
 
 | Guarantee | MutaLambda | Typical AlphaEvolve-style framework |
 |---|---|---|
-| **Correctness as a hard gate** — a faster-but-wrong candidate is discarded, never ranked | ✅ | ❌ scalar reward, correctness is just one score |
-| **Sandboxed evaluation** with hard timeout & memory limits per candidate | ✅ | ⚠️ varies, often executes in-process |
-| **Security mutation filters** (blocks eval/exec/subprocess/OS-call injection) | ✅ | ❌ |
-| **Anti-hallucination algebraic verification** (SymPy) + AST math verifier | ✅ | ❌ |
+| **Correctness as a hard gate** — faster-but-wrong is discarded, never ranked | ✅ | ❌ scalar reward; correctness is just one score |
+| **Sandboxed evaluation** with hard timeout & memory limits per candidate | ✅ | ⚠️ varies, often in-process |
+| **Security mutation filters** (blocks eval/exec/subprocess/aliasing/deserialization) | ✅ | ❌ |
+| **Anti-hallucination algebraic verification** (SymPy + AST math verifier) | ✅ | ❌ |
 | **Scientific-domain invariants** (energy conservation, mass balance, monotonicity) | ✅ | ❌ |
 | **Sequential workflow gates**: build → security → sandbox → tests → perf → decision | ✅ | ❌ |
-| **Multi-objective Pareto fitness** (correctness + latency P50/P99 + memory + parsimony) | ✅ NSGA-II | ⚠️ mostly single-objective |
+| **Multi-objective Pareto fitness** (correctness, latency P50/P99, throughput, memory, parsimony) | ✅ NSGA-II | ⚠️ mostly single-objective |
 | **Multi-language structural mutation** (Python, Rust, C++, Go via UAST) | ✅ | ⚠️ mostly Python-only |
+| **Proven on itself**, gates included, defeats documented | ✅ | ❌ |
 
-If you need to *explore* algorithm space, OpenEvolve is a fine tool. If you need to ship an optimized function to production **with evidence that it is still correct**, that is what MutaLambda is built for.
+If you need to *explore* algorithm space, those tools are fine. If you need to ship an optimized function to production **with evidence that it is still correct**, that is what MutaLambda is built for.
 
-## Architecture
-
-```
-MutaLambda/
-├── muta_lambda.py            # Main orchestrator + CLI entrypoint
-├── progressive_pipeline.py   # 5-phase workflow orchestration
-├── evolution_engine.py       # AST mutation operators & CoreEvolutionEngine
-├── island.py                 # Island evolution unit (NSGA-II)
-├── fitness_vector.py         # 3-objective Pareto fitness
-├── mutation_filters.py       # Security/correctness gates
-├── component_evolution.py    # Coupling/cohesion analysis
-├── hfc_tiers.py              # Hierarchical Fitness Climbing (Tier 1/2/3)
-├── config_loader.py          # YAML → Pydantic config loader
-├── checkpoint_manager.py     # JSON-based evolution state persistence
-├── sandbox.py                # Secure candidate evaluation
-├── archive.py                # FAISS semantic cache (RAG)
-└── muta_ext/uast/            # Universal AST (multi-language)
-    ├── adapters/             # Source → UAST parsers (Python, Rust, C++)
-    ├── emitters/             # UAST → source code generators
-    └── mutators/             # Structural mutation operators
-```
-
-## Key Features
-
-### Core Pipeline
-- **Progressive Pipeline**: 5-phase workflow — Discovery → Test Synthesis → Fast Mode → Deep Evolution → Patch
-- **3-Objective Fitness**: Correctness (hard gate) + Latency P50 + Memory Peak (Pareto optimization)
-- **HFC (Hierarchical Fitness Climbing)**: 3-tier system — Tier1 lab (100), Tier2 factory (50), Tier3 elite (10)
-
-### Genetic Evolution
-- **NSGA-II**: Multi-island evolution with ring/mesh/random topology
-- **Component Evolution**: Coupling/cohesion metrics, interface-level crossover and mutation
-- **Prompt Evolution**: Meta-evolution of LLM system prompts
-
-### Safety & Correctness
-- **Mutation Filters**: Regex-based blocking of eval/exec/subprocess/OS calls
-- **Anti-Hallucination**: SymPy-based algebraic verification
-- **Scientific Mode**: Domain invariants (energy conservation, mass balance, monotonicity)
-
-### Performance Optimization
-- **NumPy Optimizer**: Vectorization, einsum, broadcasting mutations
-- **ParallelFor Mutator**: Detects reduction patterns in loops and transforms to map/reduce
-- **Semantic Caching**: FAISS-based RAG retrieval of past solutions
-
-### Language Support (via UAST)
-| Language | Adapter | Emitter | Status |
-|----------|---------|---------|--------|
-| Python | ✅ | ✅ | Primary |
-| Rust | ✅ | ✅ | Supported |
-| C++ | ✅ | ✅ | Supported |
-
-## Installation
+## Quickstart
 
 ```bash
 git clone https://github.com/Adlgr87/MutaLambda.git
 cd MutaLambda
 pip install -r requirements.txt
-```
 
-## Usage
-
-```bash
-# Basic optimization
+# Optimize a script (local LLM via Ollama — no API key needed)
 python muta_lambda.py --optimize my_script.py
 
-# Force fast mode only
+# Fast mode only: 5 LLM variants, parallel sandbox evaluation
 python muta_lambda.py --optimize my_script.py --mode fast
 
-# Deep evolution with NSGA-II
+# Deep evolution: NSGA-II across parallel islands
 python muta_lambda.py --optimize my_script.py --mode deep
 
-# With HFC enabled
-python muta_lambda.py --optimize my_script.py --hfc-enabled
-
-# Resume from checkpoint
+# Resume an interrupted run from checkpoint
 python muta_lambda.py --resume checkpoints/run_xxx
 
-# Advanced diagnostics (P99, throughput, parsimony)
+# Advanced diagnostics: P99, throughput, parsimony
 python muta_lambda.py --optimize my_script.py --advanced-diagnostics
 ```
 
-## Configuration
-
-Configuration is managed via `config.yaml` with Pydantic validation:
+LLM backends are pluggable: **Ollama** (local, free), **OpenAI**, **Anthropic**, **OpenRouter**, **Mistral** — switch via `config.yaml`, no code changes.
 
 ```yaml
 evolution:
-  islands: 4
+  islands: 4            # parallel islands, ring/mesh/fully-connected migration
   generations: 100
   topology: ring
-  
 population:
   size: 50
   elite: 10
-  migration_interval: 10
-
 sandbox:
-  timeout: 30
+  timeout: 30           # hard per-candidate limits
   workers: 4
-  
 llm:
   backend: ollama
   model: codestral
-  
 uast:
-  enabled: false
-  languages: [python, rust, cpp]
+  enabled: false        # enable for Rust / C++ / Go targets
+  languages: [python, rust, cpp, go]
 ```
 
-## Pipeline Stages
+## How it works
 
-1. **Discovery & Hotspots** — profiling + top-3 function extraction
-2. **Test Synthesis** — auto-generate Hypothesis strategies
-3. **Fast Mode** — LLM generates 5 optimized variants, parallel sandbox eval
-4. **Deep Evolution** — NSGA-II with island-based parallel evolution
-5. **Patch & Report** — git-style diff + comparative metrics
+### The five-phase pipeline
 
-## Validation Results
+1. **Discovery** — profiles your code, extracts the top hotspot functions.
+2. **Test Synthesis** — auto-generates property-based tests (Hypothesis) to serve as the correctness oracle when your own suite is thin.
+3. **Fast Mode** — the LLM proposes 5 optimized variants; parallel sandbox evaluation; often enough for a quick win.
+4. **Deep Evolution** — NSGA-II multi-objective search across parallel islands with migration, semantic deduplication (FAISS), and adaptive operator selection (multi-armed bandit).
+5. **Patch & Report** — git-style diff plus comparative metrics. You review; nothing is applied silently.
 
-| Target | Improvement | Correctness |
-|--------|-------------|-------------|
-| utility_logic | **3.6x faster** | 100% |
-| energy_engine_pure | **2.3x faster** | 100% |
-| social_architect_pure | **1.5x faster** | 100% |
-| intervention_optimizer | **25.8% simpler** | 100% |
+### The trust architecture (the part that's hard to copy)
 
-### Self-Evolution (2026-08-19)
+- **Correctness is binary, not weighted.** Candidates that fail the oracle exit the pipeline. This single design decision eliminates the classic evolutionary failure mode — reward hacking via subtly wrong code.
+- **Honest benchmarking is enforced**, not aspirational: median-of-repeats, multiple input sizes, and a **no-regression rule** (a candidate that wins on large inputs but regresses on small ones is rejected — this caught one of our own candidates).
+- **Defense in depth**: regex + AST structural security scan (catches `import os as _o`, `f = exec` aliasing, `getattr(__builtins__, ...)` escapes) → subprocess sandbox with rlimits → workflow gates. A dedicated `self` profile allows introspection patterns in trusted first-party code while still blocking every execution primitive.
+- **Anti-hallucination layer** for numeric code: SymPy algebraic equivalence, AST math verification, and optional domain invariants (energy conservation, mass balance, monotonicity) for scientific computing.
+- **Interpretability safeguards** (3 layers) and full lineage tracking: every surviving individual can explain where it came from.
 
-MutaLambda optimized **its own code** through its production gates, twice:
+### Advanced machinery
 
-| Target | Function-level | End-to-end | Verified by |
-|---|---|---|---|
-| `nsga2._crowding_distance` | **1.49x** gmean (1.88x large fronts) | +5–9% NSGA-II cycle | differential oracle, 74 populations |
-| `ASTMutator.apply_random_mutation` | **1.76x** gmean | **1.48x** mutation loop | seeded oracle, 7 files × 30 seeds |
+| Component | What it does |
+|---|---|
+| **HFC tiers** | Hierarchical Fitness Climbing: Lab (100) → Factory (50) → Elite (10) speciation keeps exploration alive without polluting the elite pool |
+| **Universal AST (UAST)** | tree-sitter adapters + emitters + structural mutators for Python, Rust, C++, Go — one mutation engine, four languages |
+| **Prompt evolution** | The LLM system prompts themselves evolve (meta-evolution) |
+| **Semantic archive** | FAISS-backed RAG cache — past solutions are retrieved, not re-discovered |
+| **Checkpointing** | MsgPack snapshots (4× faster, 99% smaller than JSON); interrupt and resume any run |
+| **Operator bandit** | Multi-armed bandit reallocates budget toward mutation operators that are actually working |
+| **Tooling** | Interactive CLI (Click/Rich), Streamlit dashboard, LSP server, CI integration |
 
-Across both experiments the gates rejected **28 faster-but-incorrect candidates** and the security scanner blocked a pickle-based variant by design. Full record — including every defeat and measurement artifact — in [SELF_EVOLUTION_REPORT.md](SELF_EVOLUTION_REPORT.md).
+## Project structure
 
-## Performance Benchmarks (Phase 6 — 2026-08-18)
-
-### System-Level Optimizations
-
-| Optimization | Micro-benchmark | Impact (end-to-end) | Notes |
-|------------|----------------|---------------------|-------|
-| AST Parse Cache | ~650-1057× on cache hit (0.0377 μs/op vs 39.85 μs/op) | Depends on hit-rate | `lru_cache(maxsize=1024)` on `ast.parse`. Gains appear when population re-evaluates repeated code |
-| MsgPack Checkpoints | 4.0× serialization speedup | Notable with frequent checkpoints | 480-individual checkpoint: 766.9 KB / 2.983 ms → 5.4 KB / 0.745 ms (99.3% smaller) |
-| NSGA-II Vectorized Dominance | 3.7-4.3× with N≥50 | Real for large populations | Replaces O(N²) Python loop with NumPy vectorization |
-
-> **End-to-end (5 gen × 2 islands × 4 pop): ~1.0× — within measurement noise.**  
-> On small workloads, LLM latency dominates. These optimizations matter at scale: large populations, many generations, frequent checkpointing.
-
-**Cache hit-rate instrumentation:**
-```python
->>> from runners import report_cache_stats
->>> report_cache_stats()  # called after each run
-{'hits': 14382, 'misses': 56, 'hit_rate': 0.9961, 'time_saved_ms': 1035.5}
+```
+muta_lambda.py            Orchestrator + CLI entrypoint
+progressive_pipeline.py   5-phase workflow
+evolution_engine.py       AST mutation operators + LLM generation
+island.py / migration.py  Island evolution + inter-island topologies
+nsga2.py                  Multi-objective Pareto selection  ← self-optimized 1.49×
+fitness_vector.py         6-objective fitness vector
+mutation_filters.py       Security & quality gates (incl. `self` profile)
+sandbox.py / runners.py   Hard-limited candidate execution + AST security scan
+hfc_tiers.py              Hierarchical Fitness Climbing
+archive.py                FAISS semantic cache
+llm_backend.py            Ollama / OpenAI / Anthropic / OpenRouter / Mistral
+muta_ext/uast/            Universal AST: adapters, emitters, mutators (4 languages)
+experiments/              Reproducible self-evolution experiments + results JSON
+tests/                    483 tests
 ```
 
-### Test Suite Status
-- **443 tests passing** (CI-generated count; 1 deselected: pre-existing flaky `test_hfc_tiers`)
-- All optimizations validated against existing test suite
+## Documentation
+
+- [CLI reference](docs/CLI.md) · [Fitness metrics](docs/FITNESS_METRICS.md) · [Metrics guide](docs/METRICS.md)
+- [Scientific optimization mode](docs/SCIENTIFIC_OPTIMIZATION_MODE.md) · [Test execution protocol](docs/TEST_EXECUTION_PROTOCOL.md)
+- [Self-evolution report — victories & defeats ledger](SELF_EVOLUTION_REPORT.md)
+- [Empirical evidence](EMPIRICAL_EVIDENCE.md) · [Multi-language report](MULTILANGUAGE_REPORT.md)
+- [Contributing](CONTRIBUTING.md)
 
 ## Testing
 
 ```bash
-# Run all tests
-python -m pytest tests/ -v
-
-# Run specific module tests
-python -m pytest tests/test_component_evolution.py -v
-python -m pytest tests/scientific/ -v
+python -m pytest tests/ -v          # full suite (483 tests)
+python -m pytest tests/scientific/  # scientific-mode invariants
+python -m pytest -m uast            # multi-language layer
 ```
 
 ## License
 
-MutaLambda is licensed under the **Business Source License 1.1** (BUSL-1.1) — see [LICENSE](LICENSE) for details.
+MutaLambda is licensed under the **Business Source License 1.1** (BUSL-1.1) — see [LICENSE](LICENSE).
 
 - **Free** for personal, academic, and research use, and for internal evaluation (90 days).
 - **Commercial / production use requires a commercial license** — contact the author via [GitHub](https://github.com/Adlgr87/MutaLambda).
 - Each version automatically converts to **Apache 2.0** on its Change Date (2030-08-19).
 
-> Note: versions published before the license change remain under their original MIT terms.
+> Versions published before the license change remain under their original MIT terms.
