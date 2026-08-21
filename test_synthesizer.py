@@ -182,8 +182,7 @@ class TestSynthesizer:
         lines.append(f'    ')
         lines.append(f'    # TODO: Add domain-specific properties')
 
-        return '
-'.join(lines)
+        return '\n'.join(lines)
 
     def find_existing_tests(self, repo_path: str, func_name: str) -> List[str]:
         """Search for existing tests in repository."""
