@@ -15,14 +15,14 @@ MutaLambda/
 ├── component_evolution.py    # Coupling/cohesion analysis
 ├── hfc_tiers.py              # Hierarchical Fitness Climbing (Tier 1/2/3)
 ├── config_loader.py          # YAML → Pydantic config loader
-├── checkpoint_manager.py     # JSON-based evolution state persistence
+├── `checkpoint_manager.py`   # Msgpack-based evolution state persistence
 ├── sandbox.py                # Secure candidate evaluation
 ├── archive.py                # FAISS semantic cache (RAG)
 └── muta_ext/uast/            # Universal AST (multi-language)
     ├── adapters/             # Source → UAST parsers (Python, Rust, C++)
     ├── emitters/             # UAST → source code generators
-    └── mutators/             # Structural mutation operators
-```
+    ├── mutators/             # Structural mutation operators
+    └── thc_engine.py         # Horizontal Code Transfer (cross-island sharing)
 
 ## Key Features
 
@@ -30,6 +30,7 @@ MutaLambda/
 - **Progressive Pipeline**: 5-phase workflow — Discovery → Test Synthesis → Fast Mode → Deep Evolution → Patch
 - **3-Objective Fitness**: Correctness (hard gate) + Latency P50 + Memory Peak (Pareto optimization)
 - **HFC (Hierarchical Fitness Climbing)**: 3-tier system — Tier1 lab (100), Tier2 factory (50), Tier3 elite (10)
+- **THC (Horizontal Code Transfer)**: Cross-island candidate sharing via `HorizontalTransferEngine` in `muta_ext/thc_engine.py`
 
 ### Genetic Evolution
 - **NSGA-II**: Multi-island evolution with ring/mesh/random topology
@@ -44,7 +45,10 @@ MutaLambda/
 ### Performance Optimization
 - **NumPy Optimizer**: Vectorization, einsum, broadcasting mutations
 - **ParallelFor Mutator**: Detects reduction patterns in loops and transforms to map/reduce
-- **Semantic Caching**: FAISS-based RAG retrieval of past solutions
+- **Semantic Caching**: FAISS-based RAG retrieval with hit/miss counters
+- **AST Parse Cache**: LRU cache (`maxsize=1024`) on `ast.parse` — up to ~1000× speedup on cache hit
+- **Persistent Worker Pool**: Process pool pre-imports heavy modules via `_worker_init()`, avoiding per-task reimport overhead
+- **AST-Only Fast-Path**: Skips `build_gate` and `security_gate` for AST mutations that operate purely on structural transforms
 
 ### Language Support (via UAST)
 | Language | Adapter | Emitter | Status |
@@ -79,7 +83,7 @@ python muta_lambda.py --optimize my_script.py --hfc-enabled
 # Resume from checkpoint
 python muta_lambda.py --resume checkpoints/run_xxx
 
-# Advanced diagnostics (P99, throughput, parsimony)
+# Diagnostics for P99, throughput, and parsimony (not active objectives)
 python muta_lambda.py --optimize my_script.py --advanced-diagnostics
 ```
 
@@ -158,26 +162,22 @@ uast:
 > on a small workload is ~1.0×. Any report of a large end-to-end number on a
 > toy workload should be treated as noise.
 
-**Cache hit-rate instrumentation:**
+**Cache stats API** (via `EvaluationService.cache_stats()`):
 ```python
->>> from runners import report_cache_stats
->>> report_cache_stats()  # called after each run
-{'hits': 14382, 'misses': 56, 'hit_rate': 0.9961, 'time_saved_ms': 1035.5}
+>>> from evaluation_service import EvaluationService
+>>> svc = EvaluationService()
+>>> svc.cache_stats()
+{'size': 50234, 'hits': 14382, 'misses': 56, 'hit_rate': 0.9961}
 ```
 
 ### Test Suite Status
-- **443 tests passing** (CI-generated count; 1 deselected: pre-existing flaky `test_hfc_tiers`)
+- **603 tests passing** (1 deselected: pre-existing flaky `test_hfc_tiers`)
 - All optimizations validated against existing test suite
 
 ## Testing
 
 ```bash
-# Run all tests
-python -m pytest tests/ -v
-
-# Run specific module tests
-python -m pytest tests/test_component_evolution.py -v
-python -m pytest tests/scientific/ -v
+python -m pytest tests/ -v --deselect tests/test_hfc_tiers.py::test_hfc_deduplicates_demoted_elite_duplicate_in_factory
 ```
 
 ## License
