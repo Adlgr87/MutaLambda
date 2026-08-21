@@ -1,11 +1,22 @@
 """
-NumPy Optimizer — AST mutations specific to NumPy optimization.
+NumPy Optimizer — real AST transformations for NumPy code.
 
-Provides targeted transformations for NumPy code:
-- Loop vectorization
-- Einsum optimization
-- Broadcasting optimization
-- Memory layout optimization
+Unlike the previous heuristic detector (which emitted ``# MUTALAMBDA_VECTORIZE``
+comments and deferred the actual work to an LLM), this module now performs the
+transformations directly on the AST:
+
+- ``NumPyVectorizer`` converts element-wise accumulation loops into vectorized
+  ``np.arange`` expressions.
+- ``NumPyEinsumOptimizer`` enables optimal contraction paths on existing
+  ``np.einsum`` calls.
+- ``NumPyBroadcastOptimizer`` rewrites canonical nested loops into NumPy
+  broadcasting (outer products / pairwise operations).
+- ``NumPyMemoryLayoutOptimizer`` pins an explicit contiguous ``order='C'`` on
+  array constructors.
+
+Every transform is a *syntactic* rewrite; semantic correctness is always
+verified afterwards by the evolution engine's test suite (or the pipeline's
+regression tests) — never assumed.
 """
 
 from __future__ import annotations
@@ -13,77 +24,326 @@ from __future__ import annotations
 import ast
 import copy
 import random
-from typing import List, Optional, Tuple
+from typing import List, Optional
+
+
+# ── Shared helpers ─────────────────────────────────────────────────────────
+
+def _has_numpy_import(tree: ast.Module) -> bool:
+    """True if the module already imports numpy (any common form)."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "numpy" or alias.name.startswith("numpy."):
+                    return True
+        elif isinstance(node, ast.ImportFrom):
+            if node.module and node.module.startswith("numpy"):
+                return True
+    return False
+
+
+def _ensure_numpy_import(tree: ast.Module) -> ast.Module:
+    """Prepend ``import numpy as np`` if numpy is not already imported."""
+    if _has_numpy_import(tree):
+        return tree
+
+    import_node = ast.Import(names=[ast.alias(name="numpy", asname="np")])
+    ast.fix_missing_locations(import_node)
+
+    # Keep module docstring (if any) at the very top.
+    insert_at = 0
+    if (
+        tree.body
+        and isinstance(tree.body[0], ast.Expr)
+        and isinstance(tree.body[0].value, ast.Constant)
+        and isinstance(tree.body[0].value.value, str)
+    ):
+        insert_at = 1
+
+    tree.body.insert(insert_at, import_node)
+    ast.fix_missing_locations(tree)
+    return tree
+
+
+def _range_bound(node: ast.AST) -> Optional[ast.AST]:
+    """Return the bound expression of ``range(bound)`` or None."""
+    if not isinstance(node, ast.Call):
+        return None
+    if not (isinstance(node.func, ast.Name) and node.func.id == "range"):
+        return None
+    if len(node.args) != 1:
+        return None
+    return node.args[0]
+
+
+def _is_simple_name(node: ast.AST) -> bool:
+    return isinstance(node, ast.Name)
+
+
+# ── Element-wise loop vectorization ────────────────────────────────────────
+
+class _LoopVarSubstituter(ast.NodeTransformer):
+    """Replace every *load* of ``var`` with ``np.arange(bound)``."""
+
+    def __init__(self, var: str, bound: ast.AST):
+        self.var = var
+        self.bound = bound
+
+    def visit_Name(self, node: ast.Name) -> ast.AST:
+        if node.id == self.var and isinstance(node.ctx, ast.Load):
+            arange = ast.Call(
+                func=ast.Attribute(
+                    value=ast.Name(id="np", ctx=ast.Load()),
+                    attr="arange",
+                    ctx=ast.Load(),
+                ),
+                args=[self.bound],
+                keywords=[],
+            )
+            ast.copy_location(arange, node)
+            return arange
+        return node
 
 
 class NumPyVectorizer(ast.NodeTransformer):
-    """Transform Python loops into NumPy vectorized operations."""
+    """Transform ``for i in range(n): result[i] = expr(i)`` into a vectorized
+    ``result = <expr with np.arange(n)>`` assignment."""
 
     def __init__(self):
-        self.changes_made = []
+        self.changes_made: List[str] = []
+        self.needs_numpy = False
 
     def visit_For(self, node: ast.For) -> ast.AST:
-        """Convert simple accumulation loops to NumPy operations."""
+        transformed = self._try_vectorize(node)
+        if transformed is not None:
+            self.changes_made.append("loop_to_vectorized")
+            self.needs_numpy = True
+            return transformed
         self.generic_visit(node)
-
-        # Pattern: for i in range(n): result[i] = expr(i)
-        if (len(node.body) == 1 and 
-            isinstance(node.body[0], ast.Assign) and
-            isinstance(node.body[0].targets[0], ast.Subscript)):
-
-            # Check if it's a simple range loop
-            if (isinstance(node.iter, ast.Call) and
-                isinstance(node.iter.func, ast.Name) and
-                node.iter.func.id == 'range'):
-
-                self.changes_made.append("loop_to_vectorized")
-                # Mark for LLM-based transformation
-                return ast.Comment(f"# MUTALAMBDA_VECTORIZE: {ast.unparse(node)}") 
-
         return node
 
+    def _try_vectorize(self, node: ast.For) -> Optional[ast.AST]:
+        # Body must be a single assignment to a subscript.
+        if len(node.body) != 1:
+            return None
+        stmt = node.body[0]
+        if not isinstance(stmt, ast.Assign) or len(stmt.targets) != 1:
+            return None
+        target = stmt.targets[0]
+        if not isinstance(target, ast.Subscript):
+            return None
+        if not isinstance(target.value, ast.Name):
+            return None
+
+        # Loop iterable must be range(bound).
+        bound = _range_bound(node.iter)
+        if bound is None:
+            return None
+
+        # Loop variable must be a simple name.
+        if not isinstance(node.target, ast.Name):
+            return None
+        loop_var = node.target.id
+
+        # Index must be exactly the loop variable.
+        idx = target.slice
+        if not (isinstance(idx, ast.Name) and idx.id == loop_var):
+            return None
+
+        arr_name = target.value.id
+        try:
+            new_expr = _LoopVarSubstituter(loop_var, bound).visit(stmt.value)
+        except Exception:
+            return None
+        if new_expr is None or not isinstance(new_expr, ast.AST):
+            return None
+
+        assign = ast.Assign(
+            targets=[ast.Name(id=arr_name, ctx=ast.Store())],
+            value=new_expr,
+        )
+        ast.copy_location(assign, stmt)
+        return assign
+
+
+# ── Einsum optimization ────────────────────────────────────────────────────
 
 class NumPyEinsumOptimizer(ast.NodeTransformer):
-    """Optimize matrix operations using einsum."""
+    """Add ``optimize=True`` to existing ``np.einsum`` calls.
+
+    This lets NumPy use an optimal contraction path (a real speed-up for
+    multi-operand contractions) without changing the computation.
+    """
 
     def __init__(self):
-        self.changes_made = []
+        self.changes_made: List[str] = []
+        self.needs_numpy = False
 
-    def visit_BinOp(self, node: ast.BinOp) -> ast.AST:
-        """Detect matrix multiplication patterns."""
+    def visit_Call(self, node: ast.Call) -> ast.AST:
         self.generic_visit(node)
-
-        # Pattern: A @ B or matmul(A, B)
-        if isinstance(node.op, ast.MatMult):
-            self.changes_made.append("matmul_detected")
-
+        if (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "np"
+            and node.func.attr == "einsum"
+        ):
+            if not any(kw.arg == "optimize" for kw in node.keywords):
+                node.keywords.append(
+                    ast.keyword(arg="optimize", value=ast.Constant(value=True))
+                )
+                self.changes_made.append("einsum_optimize_true")
+                self.needs_numpy = True
         return node
 
+
+# ── Broadcasting (nested loops → outer product) ────────────────────────────
 
 class NumPyBroadcastOptimizer(ast.NodeTransformer):
-    """Optimize operations using broadcasting."""
+    """Rewrite the canonical nested loop
+
+        for i in range(n):
+            for j in range(m):
+                C[i][j] = A[i] <op> B[j]
+
+    into the vectorized broadcast
+
+        C = A[:, None] <op> B[None, :]
+    """
 
     def __init__(self):
-        self.changes_made = []
+        self.changes_made: List[str] = []
+        self.needs_numpy = False
 
     def visit_For(self, node: ast.For) -> ast.AST:
-        """Detect broadcasting opportunities."""
+        transformed = self._try_broadcast(node)
+        if transformed is not None:
+            self.changes_made.append("broadcast_nested_loop")
+            self.needs_numpy = True
+            return transformed
         self.generic_visit(node)
+        return node
 
-        # Pattern: for i in range(n): for j in range(m): result[i][j] = A[i] + B[j]
-        if (len(node.body) == 1 and isinstance(node.body[0], ast.For)):
-            self.changes_made.append("broadcasting_opportunity")
+    def _try_broadcast(self, node: ast.For) -> Optional[ast.AST]:
+        # Outer loop body is exactly one inner loop.
+        if len(node.body) != 1 or not isinstance(node.body[0], ast.For):
+            return None
+        inner = node.body[0]
+        if len(inner.body) != 1:
+            return None
+        stmt = inner.body[0]
+        if not isinstance(stmt, ast.Assign) or len(stmt.targets) != 1:
+            return None
+        target = stmt.targets[0]
 
+        # Target shape: C[i][j]
+        if not (
+            isinstance(target, ast.Subscript)
+            and isinstance(target.value, ast.Subscript)
+        ):
+            return None
+        c_node = target.value.value
+        i_node = target.value.slice
+        j_node = target.slice
+        if not (
+            isinstance(c_node, ast.Name)
+            and isinstance(i_node, ast.Name)
+            and isinstance(j_node, ast.Name)
+        ):
+            return None
+
+        # Loop variables must match the subscript indices.
+        if not (isinstance(node.target, ast.Name) and node.target.id == i_node.id):
+            return None
+        if not (isinstance(inner.target, ast.Name) and inner.target.id == j_node.id):
+            return None
+
+        # Value must be a binary operation A[i] <op> B[j].
+        value = stmt.value
+        if not isinstance(value, ast.BinOp):
+            return None
+
+        left = self._as_outer(value.left, i_node.id, "col")
+        right = self._as_outer(value.right, j_node.id, "row")
+        if left is None or right is None:
+            return None
+
+        new_value = ast.BinOp(left=left, op=value.op, right=right)
+        assign = ast.Assign(
+            targets=[ast.Name(id=c_node.id, ctx=ast.Store())],
+            value=new_value,
+        )
+        ast.copy_location(assign, stmt)
+        return assign
+
+    @staticmethod
+    def _as_outer(node: ast.AST, var: str, orientation: str) -> Optional[ast.AST]:
+        """Rewrite ``A[var]`` into ``A[:, None]`` (col) or ``A[None, :]`` (row)."""
+        if not isinstance(node, ast.Subscript):
+            return None
+        arr = node.value
+        idx = node.slice
+        if not (isinstance(idx, ast.Name) and idx.id == var):
+            return None
+        if not isinstance(arr, ast.Name):
+            return None
+
+        colon = ast.Slice(lower=None, upper=None, step=None)
+        none = ast.Constant(value=None)
+        if orientation == "col":
+            tup = ast.Tuple(elts=[colon, none], ctx=ast.Load())
+        else:
+            tup = ast.Tuple(elts=[none, colon], ctx=ast.Load())
+
+        result = ast.Subscript(value=arr, slice=tup, ctx=ast.Load())
+        ast.copy_location(result, node)
+        return result
+
+
+# ── Memory layout ──────────────────────────────────────────────────────────
+
+class NumPyMemoryLayoutOptimizer(ast.NodeTransformer):
+    """Pin an explicit contiguous ``order='C'`` on array constructors.
+
+    Explicit layout avoids a run-time layout decision and ensures the arrays
+    used by vectorized C-order operations are contiguous. Equivalent to the
+    default for Python-list inputs, so it is a safe rewrite.
+    """
+
+    _CONSTRUCTORS = {"array", "zeros", "ones", "empty", "full"}
+
+    def __init__(self):
+        self.changes_made: List[str] = []
+        self.needs_numpy = False
+
+    def visit_Call(self, node: ast.Call) -> ast.AST:
+        self.generic_visit(node)
+        if (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "np"
+            and node.func.attr in self._CONSTRUCTORS
+        ):
+            if not any(kw.arg == "order" for kw in node.keywords):
+                node.keywords.append(
+                    ast.keyword(arg="order", value=ast.Constant(value="C"))
+                )
+                self.changes_made.append("pin_c_order")
+                self.needs_numpy = True
         return node
 
 
+# ── Orchestrator ───────────────────────────────────────────────────────────
+
 class NumPyMutator:
-    """Apply NumPy-specific mutations to Python code."""
+    """Apply real NumPy-specific transformations to Python code."""
 
     def __init__(self):
         self.vectorizer = NumPyVectorizer()
         self.einsum = NumPyEinsumOptimizer()
         self.broadcast = NumPyBroadcastOptimizer()
+        self.memory_layout = NumPyMemoryLayoutOptimizer()
+
+    # ── Analysis (unchanged API) ──────────────────────────────────────────
 
     def analyze(self, code: str) -> dict:
         """Analyze code for NumPy optimization opportunities."""
@@ -102,34 +362,36 @@ class NumPyMutator:
         }
 
         for node in ast.walk(tree):
-            # Check for numpy import
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if 'numpy' in alias.name or alias.name == 'np':
+                    if alias.name == "numpy" or alias.name == "np":
                         opportunities["has_numpy_import"] = True
-
             if isinstance(node, ast.ImportFrom):
-                if node.module and ('numpy' in node.module or node.module == 'np'):
+                if node.module and node.module.startswith("numpy"):
                     opportunities["has_numpy_import"] = True
 
-            # Detect loops that could be vectorized
             if isinstance(node, ast.For):
                 if self._is_vectorizable_loop(node):
                     opportunities["loop_vectorization"] = True
+                if self._is_broadcast_loop(node):
+                    opportunities["broadcasting"] = True
 
-            # Detect matmul patterns
-            if isinstance(node, ast.BinOp) and isinstance(node.op, ast.MatMult):
+            if isinstance(node, ast.Call) and self._is_einsum(node):
                 opportunities["einsum_candidates"] = True
 
-        # Calculate optimization score
+            if isinstance(node, ast.Call) and self._is_constructor(node):
+                opportunities["memory_layout"] = True
+
         score = 0.0
         if opportunities["has_numpy_import"]:
-            score += 0.3
+            score += 0.1
         if opportunities["loop_vectorization"]:
             score += 0.4
         if opportunities["einsum_candidates"]:
             score += 0.2
         if opportunities["broadcasting"]:
+            score += 0.2
+        if opportunities["memory_layout"]:
             score += 0.1
 
         opportunities["score"] = min(score, 1.0)
@@ -138,29 +400,65 @@ class NumPyMutator:
         return opportunities
 
     def _is_vectorizable_loop(self, node: ast.For) -> bool:
-        """Check if a loop can be vectorized."""
-        # Simple heuristic: range-based loop with array assignment
-        if not isinstance(node.iter, ast.Call):
+        if _range_bound(node.iter) is None:
             return False
-        if not (isinstance(node.iter.func, ast.Name) and node.iter.func.id == 'range'):
+        if not isinstance(node.target, ast.Name):
             return False
+        if len(node.body) != 1:
+            return False
+        stmt = node.body[0]
+        if not isinstance(stmt, ast.Assign) or len(stmt.targets) != 1:
+            return False
+        target = stmt.targets[0]
+        if not isinstance(target, ast.Subscript):
+            return False
+        idx = target.slice
+        return isinstance(idx, ast.Name) and idx.id == node.target.id
 
-        # Check body for array operations
-        for stmt in node.body:
-            if isinstance(stmt, ast.Assign):
-                if isinstance(stmt.targets[0], ast.Subscript):
-                    return True
-        return False
+    def _is_broadcast_loop(self, node: ast.For) -> bool:
+        if len(node.body) != 1 or not isinstance(node.body[0], ast.For):
+            return False
+        inner = node.body[0]
+        if len(inner.body) != 1:
+            return False
+        stmt = inner.body[0]
+        if not isinstance(stmt, ast.Assign) or len(stmt.targets) != 1:
+            return False
+        target = stmt.targets[0]
+        return (
+            isinstance(target, ast.Subscript)
+            and isinstance(target.value, ast.Subscript)
+            and isinstance(stmt.value, ast.BinOp)
+        )
+
+    @staticmethod
+    def _is_einsum(node: ast.Call) -> bool:
+        return (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "np"
+            and node.func.attr == "einsum"
+        )
+
+    @staticmethod
+    def _is_constructor(node: ast.Call) -> bool:
+        return (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "np"
+            and node.func.attr in NumPyMemoryLayoutOptimizer._CONSTRUCTORS
+        )
+
+    # ── Transformation ────────────────────────────────────────────────────
 
     def apply_mutation(self, code: str, mutation_type: str = "auto") -> str:
-        """Apply a NumPy-specific mutation."""
+        """Apply a real NumPy-specific transformation and return the new code."""
         try:
             tree = ast.parse(code)
         except SyntaxError:
             return code
 
         if mutation_type == "auto":
-            # Pick random mutation
             mutation_type = random.choice([
                 "vectorize_loop",
                 "einsum_matmul",
@@ -168,31 +466,43 @@ class NumPyMutator:
                 "memory_layout",
             ])
 
-        mutated = copy.deepcopy(tree)
+        transformers = {
+            "vectorize_loop": self.vectorizer,
+            "einsum_matmul": self.einsum,
+            "broadcast_ops": self.broadcast,
+            "memory_layout": self.memory_layout,
+        }
+        transformer = transformers.get(mutation_type)
+        if transformer is None:
+            return code
 
-        if mutation_type == "vectorize_loop":
-            mutated = self.vectorizer.visit(mutated)
-        elif mutation_type == "einsum_matmul":
-            mutated = self.einsum.visit(mutated)
-        elif mutation_type == "broadcast_ops":
-            mutated = self.broadcast.visit(mutated)
+        mutated = transformer.visit(tree)
+        if not isinstance(mutated, ast.Module):
+            return code
+
+        if getattr(transformer, "needs_numpy", False):
+            mutated = _ensure_numpy_import(mutated)
 
         try:
             ast.fix_missing_locations(mutated)
-            result = ast.unparse(mutated)
-            return result
+            return ast.unparse(mutated)
         except Exception:
             return code
 
 
 def generate_numpy_variants(code: str, n: int = 5) -> List[str]:
-    """Generate n optimized variants of NumPy code."""
+    """Generate n transformed variants of NumPy code.
+
+    Variants are produced by the real AST transformers (not the LLM). Each is
+    the result of applying one specific transformation to the source.
+    """
     mutator = NumPyMutator()
-    variants = []
+    variants: List[str] = []
+    seen: set = set()
 
     mutations = [
         "vectorize_loop",
-        "einsum_matmul", 
+        "einsum_matmul",
         "broadcast_ops",
         "memory_layout",
     ]
@@ -200,7 +510,8 @@ def generate_numpy_variants(code: str, n: int = 5) -> List[str]:
     for i in range(n):
         mutation = mutations[i % len(mutations)]
         variant = mutator.apply_mutation(code, mutation)
-        if variant != code:
+        if variant != code and variant not in seen:
+            seen.add(variant)
             variants.append(variant)
 
     return variants

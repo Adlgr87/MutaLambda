@@ -128,6 +128,16 @@ uast:
 | social_architect_pure | **1.5x faster** | 100% |
 | intervention_optimizer | **25.8% simpler** | 100% |
 
+> **Scope caveat (read before citing these numbers).** The targets above are
+> the author's *internal* modules from the MASSIVE framework, not standard
+> public benchmarks such as Rosetta, HumanEval-Plus, or MBPP-Exec. They have
+> **not** been reproduced on hostile/unseen codebases, and the specific
+> before/after diffs are **not published** in this repository — so the 3.6×
+> on `utility_logic` cannot be independently audited here (it may reflect a
+> trivial loop bottleneck rather than a subtle transformation). "100%
+> correctness" means the author's own test targets passed; it is not a claim
+> about correctness on an external benchmark suite.
+
 ## Performance Benchmarks (Phase 6 — 2026-08-18)
 
 ### System-Level Optimizations
@@ -139,7 +149,14 @@ uast:
 | NSGA-II Vectorized Dominance | 3.7-4.3× with N≥50 | Real for large populations | Replaces O(N²) Python loop with NumPy vectorization |
 
 > **End-to-end (5 gen × 2 islands × 4 pop): ~1.0× — within measurement noise.**  
-> On small workloads, LLM latency dominates. These optimizations matter at scale: large populations, many generations, frequent checkpointing.
+> On small workloads, LLM latency dominates. These optimizations matter at scale:
+> large populations, many generations, frequent checkpointing.
+>
+> **The headline here is the infrastructure, not a magic end-to-end speedup.**
+> The micro-benchmarks above (parse cache, msgpack checkpoints, vectorized
+> NSGA-II dominance) show real gains at scale, but the whole-pipeline speedup
+> on a small workload is ~1.0×. Any report of a large end-to-end number on a
+> toy workload should be treated as noise.
 
 **Cache hit-rate instrumentation:**
 ```python
