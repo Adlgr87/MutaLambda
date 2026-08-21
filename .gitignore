@@ -36,3 +36,8 @@ REPOPACK.md
 status_report.json
 status_report.md
 checkpoints/
+
+# build artifacts
+build/
+*.so
+*.pyc
