@@ -17,29 +17,16 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import Individual
-from fitness_vector import FitnessVector
+from bench_utils import random_population
 
 
 def create_test_population(n: int) -> List[Individual]:
     """Create n individuals with random-ish fitness values."""
-    import random
-    random.seed(42)  # Reproducibility
-    population = []
-    for i in range(n):
-        ind = Individual(
-            code=f"def f{i}(): return {i}",
-            score=float(i),
-            fitness=FitnessVector(
-                correctness=0.5 + random.random() * 0.5,
-                latency_p50=random.uniform(0.1, 10.0),
-                latency_p99=random.uniform(1.0, 50.0),
-                throughput=random.uniform(100, 1000),
-                memory_peak_mb=random.uniform(10, 100),
-                parsimony=random.uniform(0.1, 0.9),
-            )
-        )
-        population.append(ind)
-    return population
+    return random_population(
+        n,
+        code_for=lambda i: f"def f{i}(): return {i}",
+        score_for=float,
+    )
 
 
 def benchmark_sort(population: List[Individual], runs: int = 5) -> Tuple[float, float, float]:

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """CoreUAST → C++ source emitter."""
-import shutil
-import subprocess
 from typing import Any, Optional
 
+from muta_ext.uast.emitters.base import BaseEmitter
 from muta_ext.uast.core_uast import (
     CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
     Assign, If, For, While, Return, Function, Comment, Opaque,
@@ -12,38 +11,18 @@ from muta_ext.uast.core_uast import (
 )
 
 
-class CppEmitter:
+class CppEmitter(BaseEmitter):
     """Emit CoreUAST back to C++ source code."""
 
     language = "cpp"
-
-    def can_emit(self, uast: CoreUAST) -> bool:
-        """Check if UAST is for C++ language."""
-        return uast.language == "cpp"
+    formatter_command = ["clang-format"]
 
     def emit(self, uast: CoreUAST) -> str:
         """Emit CoreUAST to C++ source."""
         lines = []
         for node in uast.body:
             lines.extend(self._emit_node(node, indent=0))
-        code = "\n".join(lines)
-        
-        # Try to format with clang-format if available
-        if shutil.which("clang-format"):
-            try:
-                result = subprocess.run(
-                    ["clang-format"],
-                    input=code,
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                if result.returncode == 0:
-                    return result.stdout
-            except Exception:
-                pass
-        
-        return code
+        return self._format("\n".join(lines))
 
     def _emit_node(self, node: Optional[Any], indent: int = 0) -> list:
         """Emit a single node to source lines."""

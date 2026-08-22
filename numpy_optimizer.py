@@ -24,7 +24,7 @@ from __future__ import annotations
 import ast
 import copy
 import random
-from typing import List, Optional
+from typing import Any, List, Optional, Set
 
 
 # ── Shared helpers ─────────────────────────────────────────────────────────
@@ -166,14 +166,19 @@ class NumPyVectorizer(ast.NodeTransformer):
         return assign
 
 
-# ── Einsum optimization ────────────────────────────────────────────────────
+# ── Keyword injection on np.* calls ────────────────────────────────────────
 
-class NumPyEinsumOptimizer(ast.NodeTransformer):
-    """Add ``optimize=True`` to existing ``np.einsum`` calls.
+class _NpKeywordInjector(ast.NodeTransformer):
+    """Add a constant keyword argument to matching ``np.<func>(...)`` calls.
 
-    This lets NumPy use an optimal contraction path (a real speed-up for
-    multi-operand contractions) without changing the computation.
+    Subclasses declare the target functions, the keyword to inject and the
+    label recorded in ``changes_made``.
     """
+
+    functions: Set[str] = set()
+    keyword: str = ""
+    value: Any = None
+    change_label: str = ""
 
     def __init__(self):
         self.changes_made: List[str] = []
@@ -185,15 +190,28 @@ class NumPyEinsumOptimizer(ast.NodeTransformer):
             isinstance(node.func, ast.Attribute)
             and isinstance(node.func.value, ast.Name)
             and node.func.value.id == "np"
-            and node.func.attr == "einsum"
+            and node.func.attr in self.functions
         ):
-            if not any(kw.arg == "optimize" for kw in node.keywords):
+            if not any(kw.arg == self.keyword for kw in node.keywords):
                 node.keywords.append(
-                    ast.keyword(arg="optimize", value=ast.Constant(value=True))
+                    ast.keyword(arg=self.keyword, value=ast.Constant(value=self.value))
                 )
-                self.changes_made.append("einsum_optimize_true")
+                self.changes_made.append(self.change_label)
                 self.needs_numpy = True
         return node
+
+
+class NumPyEinsumOptimizer(_NpKeywordInjector):
+    """Add ``optimize=True`` to existing ``np.einsum`` calls.
+
+    This lets NumPy use an optimal contraction path (a real speed-up for
+    multi-operand contractions) without changing the computation.
+    """
+
+    functions = {"einsum"}
+    keyword = "optimize"
+    value = True
+    change_label = "einsum_optimize_true"
 
 
 # ── Broadcasting (nested loops → outer product) ────────────────────────────
@@ -301,7 +319,7 @@ class NumPyBroadcastOptimizer(ast.NodeTransformer):
 
 # ── Memory layout ──────────────────────────────────────────────────────────
 
-class NumPyMemoryLayoutOptimizer(ast.NodeTransformer):
+class NumPyMemoryLayoutOptimizer(_NpKeywordInjector):
     """Pin an explicit contiguous ``order='C'`` on array constructors.
 
     Explicit layout avoids a run-time layout decision and ensures the arrays
@@ -311,25 +329,10 @@ class NumPyMemoryLayoutOptimizer(ast.NodeTransformer):
 
     _CONSTRUCTORS = {"array", "zeros", "ones", "empty", "full"}
 
-    def __init__(self):
-        self.changes_made: List[str] = []
-        self.needs_numpy = False
-
-    def visit_Call(self, node: ast.Call) -> ast.AST:
-        self.generic_visit(node)
-        if (
-            isinstance(node.func, ast.Attribute)
-            and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "np"
-            and node.func.attr in self._CONSTRUCTORS
-        ):
-            if not any(kw.arg == "order" for kw in node.keywords):
-                node.keywords.append(
-                    ast.keyword(arg="order", value=ast.Constant(value="C"))
-                )
-                self.changes_made.append("pin_c_order")
-                self.needs_numpy = True
-        return node
+    functions = _CONSTRUCTORS
+    keyword = "order"
+    value = "C"
+    change_label = "pin_c_order"
 
 
 # ── Orchestrator ───────────────────────────────────────────────────────────

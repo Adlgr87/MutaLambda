@@ -15,30 +15,16 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models import Individual
-from fitness_vector import FitnessVector
+from bench_utils import random_population
 
 
 def create_large_population(n: int) -> list:
     """Create n individuals with FitnessVector (triggers msgpack path)."""
-    import random
-    random.seed(42)
-    population = []
-    for i in range(n):
-        ind = Individual(
-            code=f"def func_{i}(x): return x + {i}",
-            score=float(i % 100),
-            fitness=FitnessVector(
-                correctness=0.5 + random.random() * 0.5,
-                latency_p50=random.uniform(0.1, 10.0),
-                latency_p99=random.uniform(1.0, 50.0),
-                throughput=random.uniform(100, 1000),
-                memory_peak_mb=random.uniform(10, 100),
-                parsimony=random.uniform(0.1, 0.9),
-            )
-        )
-        population.append(ind)
-    return population
+    return random_population(
+        n,
+        code_for=lambda i: f"def func_{i}(x): return x + {i}",
+        score_for=lambda i: float(i % 100),
+    )
 
 
 def benchmark_json_vs_msgpack(pop_sizes=[500, 1000, 2500, 5000], runs=3):

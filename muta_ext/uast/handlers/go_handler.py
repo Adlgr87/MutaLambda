@@ -8,6 +8,7 @@ from muta_ext.uast.core_uast import CoreUAST
 from muta_ext.uast.adapters.go_adapter import GoAdapter, parse_to_uast
 from muta_ext.uast.emitters.go_emitter import GoEmitter, emit_from_uast
 from muta_ext.uast.handlers.base_handler import BaseLanguageHandler
+from muta_ext.uast.handlers.toolchain import run_on_temp_source
 
 
 class GoHandler(BaseLanguageHandler):
@@ -54,30 +55,14 @@ class GoHandler(BaseLanguageHandler):
         if not shutil.which("go"):
             return False, "go compiler not found"
 
-        # Write source to temp file
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.go', delete=False) as f:
-            f.write(source)
-            temp_path = f.name
-
-        try:
-            result = subprocess.run(
-                ["go", "build", "-o", output_path, temp_path],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            if result.returncode == 0:
-                return True, "compiled successfully"
-            else:
-                return False, result.stderr
-        except subprocess.TimeoutExpired:
-            return False, "compilation timeout"
-        except Exception as e:
-            return False, str(e)
-        finally:
-            import os
-            os.unlink(temp_path)
+        ok, message = run_on_temp_source(
+            source,
+            ".go",
+            lambda path: ["go", "build", "-o", output_path, path],
+            30,
+            "compilation timeout",
+        )
+        return (True, "compiled successfully") if ok else (False, message)
 
     def run_tests(self, source: str, test_source: str) -> Tuple[bool, str, float]:
         """Run Go tests."""
@@ -145,11 +130,6 @@ class GoHandler(BaseLanguageHandler):
             return {"error": "benchmark timeout"}
         except Exception as e:
             return {"error": str(e)}
-
-    def roundtrip(self, source: str) -> str:
-        """Parse → CoreUAST → Emit roundtrip."""
-        uast = self.parse(source)
-        return self.emit(uast)
 
 
 # Registry function

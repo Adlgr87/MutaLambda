@@ -16,24 +16,8 @@ class SafeVectorizationMutator(BaseScientificMutator):
 
     def mutate(self, uast: CoreUAST, rng_seed: Optional[int] = None) -> MutationResult:
         """Intenta vectorizar bucles simples."""
-        rng = random.Random(rng_seed) if rng_seed is not None else random.Random()
-        new_body, changed, descs = list(uast.body), False, []
-
-        for idx, node in enumerate(new_body):
-            if isinstance(node, Function):
-                nf = self._try_vectorize(node, rng, descs)
-                if nf is not node:
-                    new_body[idx], changed = nf, True
-
-        if not changed:
-            return MutationResult(
-                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)),
-                applied=False
-            )
-
-        return MutationResult(
-            CoreUAST(new_body, uast.language, dict(uast.metadata)),
-            applied=True, description="; ".join(descs),
+        return self.mutate_functions(
+            uast, rng_seed, self._try_vectorize,
             score_impact=0.3, confidence=0.5
         )
 
@@ -47,10 +31,7 @@ class SafeVectorizationMutator(BaseScientificMutator):
                     new_body[idx], changed = repl, True
                     descs.append(f"Vectorized in {func.name.name}")
         if changed:
-            return Function(
-                func.name, list(func.params), new_body,
-                list(func.decorators), func.return_type, func.tag
-            )
+            return self.with_body(func, new_body)
         return func
 
     def _vectorize_loop(self, loop: For, rng: random.Random) -> Optional[Node]:

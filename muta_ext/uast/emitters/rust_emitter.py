@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """CoreUAST → Rust source emitter."""
-import shutil
-import subprocess
-import tempfile
 from typing import Any, Optional
 
+from muta_ext.uast.emitters.base import BaseEmitter
 from muta_ext.uast.core_uast import (
     CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
     Assign, If, For, While, Return, Function, Comment, Opaque,
@@ -13,38 +11,18 @@ from muta_ext.uast.core_uast import (
 )
 
 
-class RustEmitter:
+class RustEmitter(BaseEmitter):
     """Emit CoreUAST back to Rust source code."""
 
     language = "rust"
-
-    def can_emit(self, uast: CoreUAST) -> bool:
-        """Check if UAST is for Rust language."""
-        return uast.language == "rust"
+    formatter_command = ["rustfmt"]
 
     def emit(self, uast: CoreUAST) -> str:
         """Emit CoreUAST to Rust source."""
         lines = []
         for node in uast.body:
             lines.extend(self._emit_node(node, indent=0))
-        code = "\n".join(lines)
-        
-        # Try to format with rustfmt if available
-        if shutil.which("rustfmt"):
-            try:
-                result = subprocess.run(
-                    ["rustfmt"],
-                    input=code,
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                if result.returncode == 0:
-                    return result.stdout
-            except Exception:
-                pass
-        
-        return code
+        return self._format("\n".join(lines))
 
     def _emit_node(self, node: Optional[Any], indent: int = 0) -> list:
         """Emit a single node to source lines."""
