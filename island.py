@@ -66,6 +66,7 @@ class Island:
         self._api_policy: str = "strict"
         self._enforce_api_fingerprint: bool = False
         self._enforce_differential: bool = False
+        self._bandit_select_warned: bool = False
 
         self.migration_bus.register_island(island_id, self)
 
@@ -317,7 +318,15 @@ class Island:
                     return "component"
                 return "llm"  # treated as mutation+LLM path
             except Exception:
-                pass
+                # Same bandit fails identically for every candidate; warn once.
+                if not self._bandit_select_warned:
+                    self._bandit_select_warned = True
+                    logger.warning(
+                        "Operator bandit selection failed on island %s; "
+                        "falling back to legacy heuristic",
+                        self.id,
+                        exc_info=True,
+                    )
         # Legacy heuristic (workflow default before bandit).
         if parent.score < 0 and self.rng.random() < 0.10:
             return "redesign"
@@ -332,7 +341,11 @@ class Island:
             return
         try:
             from operator_bandit import compute_operator_reward
-        except Exception:
+        except ImportError:
+            logger.warning(
+                "operator_bandit unavailable; operator rewards will not be credited",
+                exc_info=True,
+            )
             return
         for ind, res in zip(self.population, results):
             op = getattr(ind, "operator", None) or getattr(ind, "creation_reason", None)
@@ -366,7 +379,12 @@ class Island:
                     gain=gain,
                 )
             except Exception:
-                pass
+                logger.warning(
+                    "Operator bandit update failed for operator %s on island %s",
+                    op,
+                    self.id,
+                    exc_info=True,
+                )
 
     def _mutate(self, code: str) -> str:
         """Mutación híbrida: AST o LLM."""

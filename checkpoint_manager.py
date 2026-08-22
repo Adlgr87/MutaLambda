@@ -138,9 +138,9 @@ def save_full_checkpoint(
         )
         if result.returncode == 0:
             checkpoint.git_commit = result.stdout.strip()[:12]
-    except (OSError, subprocess.SubprocessError, TimeoutError):
+    except (OSError, subprocess.SubprocessError, TimeoutError) as exc:
         # Git unavailable or timeout — leave git_commit empty.
-        pass
+        logger.debug("Could not resolve git commit for checkpoint: %s", exc)
 
     # ── Best solution ────────────────────────────────────────────────
     best = (
@@ -264,6 +264,10 @@ def save_full_checkpoint(
             )
         except ImportError:
             # Fall back to JSON if msgpack unavailable
+            logger.warning(
+                "msgpack unavailable; writing JSON checkpoint instead (%d individuals)",
+                total_individuals,
+            )
             with open(ckpt_path, "w", encoding="utf-8") as f:
                 json.dump(_serialise_checkpoint(checkpoint), f, indent=2, ensure_ascii=False)
     else:
@@ -292,6 +296,11 @@ def _serialise_checkpoint(cp: CheckpointData) -> Dict[str, Any]:
             # Convert all elements to JSON-safe types recursively
             random_serialised = _to_json_safe(rs)
         except Exception:
+            logger.warning(
+                "Could not serialise Python RNG state; checkpoint will not be "
+                "bit-reproducible on resume",
+                exc_info=True,
+            )
             random_serialised = None
     else:
         random_serialised = None

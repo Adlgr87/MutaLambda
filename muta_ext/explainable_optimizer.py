@@ -10,8 +10,9 @@ Generates LLM-powered explanations for optimization decisions, including:
 from __future__ import annotations
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-import json
 import hashlib
+import json
+import logging
 from enum import Enum
 
 from muta_ext.uast.core_uast import CoreUAST, Function, Node
@@ -19,6 +20,8 @@ try:
     from llm_backend import LLMBackend
 except ImportError:
     LLMBackend = None  # type: ignore[misc,assignment]
+
+logger = logging.getLogger("MutaLambda")
 
 
 class RiskLevel(str, Enum):
@@ -161,7 +164,11 @@ class ExplanationGenerator:
                 response = self.llm.generate(prompt, max_tokens=500)
                 return response.strip()[:1000]
             except Exception:
-                pass
+                logger.warning(
+                    "LLM explanation failed for %s; using heuristic explanation",
+                    func_name,
+                    exc_info=True,
+                )
 
         # Fallback: heuristic-based explanation
         return self._heuristic_explanation(opt_type, func_name, original, optimized)

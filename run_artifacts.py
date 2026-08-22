@@ -12,6 +12,7 @@ Produces:
 from __future__ import annotations
 
 import json
+import logging
 import platform
 import subprocess
 import sys
@@ -19,6 +20,8 @@ import time
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("MutaLambda")
 
 
 def _git_commit() -> str:
@@ -31,8 +34,8 @@ def _git_commit() -> str:
         )
         if r.returncode == 0:
             return r.stdout.strip()
-    except (OSError, subprocess.SubprocessError, TimeoutError):
-        pass
+    except (OSError, subprocess.SubprocessError, TimeoutError) as exc:
+        logger.debug("Could not resolve git commit for run manifest: %s", exc)
     return "unknown"
 
 
@@ -107,6 +110,10 @@ def write_run_artifacts(
             try:
                 cfg_dict = asdict(config)
             except Exception:
+                logger.warning(
+                    "Could not serialise config for run manifest; storing repr instead",
+                    exc_info=True,
+                )
                 cfg_dict = {"repr": repr(config)}
         else:
             cfg_dict = {"repr": repr(config)}

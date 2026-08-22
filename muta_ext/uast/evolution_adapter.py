@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Adapter that connects UAST language handlers to the existing evolution engine WITHOUT modifying core files."""
+import logging
 import random
 from typing import Optional
 
 from muta_ext.uast.core_uast import CoreUAST
 from muta_ext.uast.handlers.base_handler import BaseLanguageHandler
+
+logger = logging.getLogger("MutaLambda")
 
 
 class UASTEvaluationCache:
@@ -70,6 +73,7 @@ class UASTEvolutionAdapter:
         # Simple evolution loop
         rng = random.Random(self._config.get("seed", 42))
         valid_candidates = 0
+        failed_candidates = 0
         
         for gen in range(generations):
             # Generate mutations
@@ -85,12 +89,21 @@ class UASTEvolutionAdapter:
                     ok, _ = self._handler.validate_syntax(mutated_source)
                     if ok:
                         valid_candidates += 1
-                except Exception:
+                except Exception as exc:
+                    failed_candidates += 1
+                    logger.debug("Candidate emission failed in gen %d: %s", gen, exc)
                     continue
+
+        if failed_candidates:
+            logger.warning(
+                "%d candidate(s) could not be emitted or validated during evolution",
+                failed_candidates,
+            )
 
         return {
             "generations_completed": generations,
             "valid_candidates": valid_candidates,
+            "failed_candidates": failed_candidates,
             "best_fitness": 0.0
         }
 

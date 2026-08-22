@@ -393,7 +393,8 @@ class MutaLambdaSession:
         try:
             self.agent.shutdown()
         except Exception:
-            pass
+            # Never mask the in-flight exception, but do not hide the failure.
+            logger.warning("Agent shutdown failed on session exit", exc_info=True)
         return False
 
     def run(self, task: str = "", **kwargs):

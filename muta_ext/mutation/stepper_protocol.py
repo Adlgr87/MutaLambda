@@ -120,7 +120,12 @@ class MutationComposer:
                 try:
                     self.bandit.register(s.name)  # type: ignore[attr-defined]
                 except Exception:
-                    pass
+                    logger.warning(
+                        "Could not register stepper %s with bandit; "
+                        "it will not receive credit",
+                        s.name,
+                        exc_info=True,
+                    )
 
         # Normalizar pesos (fallback when bandit disabled)
         total_weight = sum(s.weight for s in steppers)
@@ -151,6 +156,10 @@ class MutationComposer:
                 name = self.bandit.select()  # type: ignore[attr-defined]
                 stepper = self._by_name.get(name)
             except Exception:
+                logger.warning(
+                    "Bandit selection failed; falling back to weighted selection",
+                    exc_info=True,
+                )
                 stepper = None
         if stepper is None:
             # Selección ponderada
@@ -197,7 +206,9 @@ class MutationComposer:
                 gain=gain,
             )
         except Exception:
-            pass
+            logger.warning(
+                "Bandit update failed for operator %s", operator, exc_info=True
+            )
 
     def stats(self) -> Dict[str, int]:
         """Estadísticas de uso de steppers."""

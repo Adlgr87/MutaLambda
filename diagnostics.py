@@ -8,11 +8,14 @@ Activated only when detailed analysis is needed.
 from __future__ import annotations
 
 import ast
+import logging
 import time
 import statistics
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Callable
 import sys
+
+logger = logging.getLogger("MutaLambda")
 
 
 @dataclass
@@ -159,8 +162,8 @@ def compute_advanced_metrics(code: str, func: Optional[Callable] = None) -> Adva
         metrics.ast_node_count = analyzer.count_nodes(tree)
         metrics.cyclomatic_complexity = analyzer.cyclomatic_complexity(tree)
         metrics.lines_of_code = len(code.strip().splitlines())
-    except SyntaxError:
-        pass
+    except SyntaxError as exc:
+        logger.debug("Skipping AST metrics, code does not parse: %s", exc)
 
     # Runtime profiling (if function provided)
     if func is not None:
@@ -172,6 +175,9 @@ def compute_advanced_metrics(code: str, func: Optional[Callable] = None) -> Adva
             metrics.latency_p99 = stats["p99"]
             metrics.latency_std = stats["std"]
         except Exception:
-            pass
+            logger.warning(
+                "Latency profiling failed; latency metrics left at defaults",
+                exc_info=True,
+            )
 
     return metrics
