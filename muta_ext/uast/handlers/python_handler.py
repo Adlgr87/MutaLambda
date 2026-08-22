@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Python language handler using existing UAST infrastructure."""
 import ast
-import shutil
 import subprocess
 import tempfile
 import time
@@ -11,6 +10,7 @@ from muta_ext.uast.core_uast import CoreUAST
 from muta_ext.uast.adapters.python_adapter import PythonAdapter
 from muta_ext.uast.emitters.python_emitter import PythonEmitter
 from muta_ext.uast.handlers.base_handler import BaseLanguageHandler
+from muta_ext.uast.handlers.toolchain import benchmark_command, run_on_temp_source
 
 
 class PythonHandler(BaseLanguageHandler):
@@ -39,26 +39,13 @@ class PythonHandler(BaseLanguageHandler):
 
     def compile(self, source: str, output_path: str) -> tuple[bool, str]:
         """Compile Python source (compile to pyc)."""
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".py", delete=False) as f:
-                f.write(source.encode())
-                tmpfile = f.name
-            
-            result = subprocess.run(
-                ["python", "-m", "py_compile", tmpfile],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            
-            import os
-            os.unlink(tmpfile)
-            
-            if result.returncode == 0:
-                return (True, "")
-            return (False, result.stderr)
-        except Exception as e:
-            return (False, str(e))
+        return run_on_temp_source(
+            source,
+            ".py",
+            lambda path: ["python", "-m", "py_compile", path],
+            30,
+            "Compilation timed out",
+        )
 
     def run_tests(self, source: str, test_source: str) -> tuple[bool, str, float]:
         """Run Python tests using pytest."""
@@ -88,33 +75,9 @@ class PythonHandler(BaseLanguageHandler):
 
     def benchmark(self, binary_path: str, iterations: int = 1000) -> dict:
         """Benchmark Python script execution."""
-        times = []
-        try:
-            for _ in range(iterations):
-                start = time.perf_counter()
-                result = subprocess.run(
-                    ["python", binary_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=self._config.get("run_timeout_sec", 10)
-                )
-                elapsed = time.perf_counter() - start
-                times.append(elapsed)
-        except Exception:
-            pass
-        
-        if not times:
-            return {"error": "No successful runs"}
-        
-        import statistics
-        return {
-            "latency_p50": statistics.median(times),
-            "latency_p99": sorted(times)[int(len(times) * 0.99)] if times else 0,
-            "throughput": iterations / sum(times) if times else 0,
-            "runs": len(times)
-        }
-
-    def roundtrip(self, source: str) -> str:
-        """Parse → CoreUAST → Emit roundtrip test."""
-        uast = self.parse(source)
-        return self.emit(uast)
+        return benchmark_command(
+            ["python", binary_path],
+            iterations,
+            self._config.get("run_timeout_sec", 10),
+            ignore_errors=True,
+        )

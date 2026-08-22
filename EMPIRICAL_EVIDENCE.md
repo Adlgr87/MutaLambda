@@ -611,3 +611,45 @@ python -m pytest tests/ -q --deselect tests/test_hfc_tiers.py::test_hfc_deduplic
   - Serialización: 2.8x más rápido
   - Deserialización: 3.1x más rápido
 - **Decision:** ✅ Aprobado con migración automática
+
+---
+
+## Refactor: Duplicated code → shared utilities (2026-08-22)
+
+- **Hypothesis:** The UAST adapters/emitters/handlers, the scientific mutators, the
+  OpenAI-compatible LLM backends and the benchmark scripts repeat the same
+  scaffolding; extracting it removes duplication without changing behavior.
+- **Implementation:**
+  - `muta_ext/uast/adapters/tree_sitter_base.py` — `TreeSitterAdapter` (parser
+    setup, `can_parse`, `parse_to_uast`, generic dispatch, `node_text`).
+  - `muta_ext/uast/emitters/base.py` — `format_source()` + `formatter_command`
+    (clang-format / rustfmt / gofmt) and shared `can_emit`.
+  - `muta_ext/uast/handlers/toolchain.py` — `run_on_temp_source()`,
+    `benchmark_command()`, `latency_stats()`; `BaseLanguageHandler.roundtrip()`.
+  - `muta_ext/uast/mutators/scientific/base_mutator.py` — `mutate_functions()`
+    and `with_body()` used by the four scientific mutators.
+  - `muta_ext/uast/mutators/base_mutator.py` — `_mutate_top_level()`.
+  - `llm_backend.py` — `OPENAI_COMPATIBLE_BACKENDS` table + `_post_chat()`.
+  - `numpy_optimizer.py` — `_NpKeywordInjector` shared by the einsum and
+    memory-layout optimizers.
+  - `scripts/bench_utils.py` — `random_population()`.
+- **Results (jscpd `--pattern "**/*.py"`, same command on both trees):**
+
+  | Metric            | Before        | After         |
+  |-------------------|---------------|---------------|
+  | Clone groups      | 71            | 48            |
+  | Duplicated lines  | 821 (2.10%)   | 487 (1.25%)   |
+  | Duplicated tokens | 5590 (2.58%)  | 3710 (1.73%)  |
+
+- **Verification:**
+  - `python -m pytest tests/ -q --deselect tests/test_hfc_tiers.py::...` →
+    512 passed, 5 skipped (`tests/test_progressive_pipeline.py` is flaky on
+    `main` as well: 1-2 failures in 5 consecutive runs before and after).
+  - `ruff check --select E4,E7,E9,F` on the touched files: 77 → 68 findings.
+  - `mypy --ignore-missing-imports muta_ext/uast scripts`: 212 → 207 findings.
+  - `python scripts/benchmark_nsga2_cache.py` and
+    `python scripts/benchmark_checkpoint_serialization.py` both still run
+    (2.29 ms median sort at N=200; msgpack 7.4x faster, 96% smaller).
+- **Decision:** ✅ Behavior-preserving; language-specific differences (Go's
+  lenient parse and byte-oriented source, per-language compiler/formatter
+  commands, Anthropic's distinct payload shape) stay in the subclasses.

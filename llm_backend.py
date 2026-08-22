@@ -35,6 +35,26 @@ SUPPORTED_BACKENDS = {
     "mistral",
 }
 
+# Backends speaking the OpenAI chat-completions protocol with bearer auth:
+# backend -> (url env var, default url, api key env var)
+OPENAI_COMPATIBLE_BACKENDS: Dict[str, tuple] = {
+    "openai": (
+        "MUTALAMBDA_OPENAI_URL",
+        "https://api.openai.com/v1/chat/completions",
+        "OPENAI_API_KEY",
+    ),
+    "openrouter": (
+        "MUTALAMBDA_OPENROUTER_URL",
+        "https://openrouter.ai/api/v1/chat/completions",
+        "OPENROUTER_API_KEY",
+    ),
+    "mistral": (
+        "MUTALAMBDA_MISTRAL_URL",
+        "https://api.mistral.ai/v1/chat/completions",
+        "MISTRAL_API_KEY",
+    ),
+}
+
 
 def _env(name: str, default: str) -> str:
     return os.getenv(name, default)
@@ -169,15 +189,13 @@ class LLMBackend:
             self._session = requests.Session()
             self._url = _env("MUTALAMBDA_OLLAMA_URL", "http://localhost:11434/api/generate")
             self._headers = {}
-        elif self.backend == "openai":
+        elif self.backend in OPENAI_COMPATIBLE_BACKENDS:
+            url_env, default_url, key_env = OPENAI_COMPATIBLE_BACKENDS[self.backend]
             self._session = requests.Session()
-            self._url = _env(
-                "MUTALAMBDA_OPENAI_URL",
-                "https://api.openai.com/v1/chat/completions",
-            )
-            api_key = os.getenv("OPENAI_API_KEY")
+            self._url = _env(url_env, default_url)
+            api_key = os.getenv(key_env)
             if not api_key:
-                raise ValueError("OPENAI_API_KEY is required for backend=openai")
+                raise ValueError(f"{key_env} is required for backend={self.backend}")
             self._headers = {"Authorization": f"Bearer {api_key}"}
         elif self.backend == "anthropic":
             self._session = requests.Session()
@@ -192,26 +210,6 @@ class LLMBackend:
                 "x-api-key": api_key,
                 "anthropic-version": _env("MUTALAMBDA_ANTHROPIC_VERSION", "2023-06-01"),
             }
-        elif self.backend == "openrouter":
-            self._session = requests.Session()
-            self._url = _env(
-                "MUTALAMBDA_OPENROUTER_URL",
-                "https://openrouter.ai/api/v1/chat/completions",
-            )
-            api_key = os.getenv("OPENROUTER_API_KEY")
-            if not api_key:
-                raise ValueError("OPENROUTER_API_KEY is required for backend=openrouter")
-            self._headers = {"Authorization": f"Bearer {api_key}"}
-        elif self.backend == "mistral":
-            self._session = requests.Session()
-            self._url = _env(
-                "MUTALAMBDA_MISTRAL_URL",
-                "https://api.mistral.ai/v1/chat/completions",
-            )
-            api_key = os.getenv("MISTRAL_API_KEY")
-            if not api_key:
-                raise ValueError("MISTRAL_API_KEY is required for backend=mistral")
-            self._headers = {"Authorization": f"Bearer {api_key}"}
         elif self.backend in {"microsoft_cpp", "huggingface_cli"}:
             raise ValueError(
                 f"LLM backend '{self.backend}' is no longer supported. "
@@ -275,69 +273,27 @@ class LLMBackend:
             resp.raise_for_status()
             return resp.json().get("response", "")
 
-        if self.backend == "openai":
-            payload = {
-                "model": self.model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": self.temperature,
-            }
-            resp = self._session.post(
-                self._url,
-                json=payload,
-                headers=self._headers,
-                timeout=timeout,
+        if self.backend in OPENAI_COMPATIBLE_BACKENDS:
+            data = self._post_chat(
+                {
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": self.temperature,
+                },
+                timeout,
             )
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
-
-        if self.backend == "openrouter":
-            payload = {
-                "model": self.model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": self.temperature,
-            }
-            resp = self._session.post(
-                self._url,
-                json=payload,
-                headers=self._headers,
-                timeout=timeout,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
-
-        if self.backend == "mistral":
-            payload = {
-                "model": self.model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": self.temperature,
-            }
-            resp = self._session.post(
-                self._url,
-                json=payload,
-                headers=self._headers,
-                timeout=timeout,
-            )
-            resp.raise_for_status()
-            data = resp.json()
             return data["choices"][0]["message"]["content"]
 
         if self.backend == "anthropic":
-            payload = {
-                "model": self.model,
-                "max_tokens": int(_env("MUTALAMBDA_ANTHROPIC_MAX_TOKENS", "1024")),
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": self.temperature,
-            }
-            resp = self._session.post(
-                self._url,
-                json=payload,
-                headers=self._headers,
-                timeout=timeout,
+            data = self._post_chat(
+                {
+                    "model": self.model,
+                    "max_tokens": int(_env("MUTALAMBDA_ANTHROPIC_MAX_TOKENS", "1024")),
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": self.temperature,
+                },
+                timeout,
             )
-            resp.raise_for_status()
-            data = resp.json()
             content_blocks = data.get("content", [])
             text = "".join(
                 block.get("text", "") for block in content_blocks if isinstance(block, dict)
@@ -345,6 +301,17 @@ class LLMBackend:
             return text
 
         raise ValueError(f"Unsupported LLM backend: {self.backend}")
+
+    def _post_chat(self, payload: Dict[str, Any], timeout: Any) -> Dict[str, Any]:
+        """POST a chat payload to the configured endpoint and return the JSON body."""
+        resp = self._session.post(
+            self._url,
+            json=payload,
+            headers=self._headers,
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        return resp.json()
 
     def _log_replay(
         self,

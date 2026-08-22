@@ -16,24 +16,8 @@ class StrengthReductionMutator(BaseScientificMutator):
 
     def mutate(self, uast: CoreUAST, rng_seed: Optional[int] = None) -> MutationResult:
         """Aplica strength reduction al UAST."""
-        rng = random.Random(rng_seed) if rng_seed is not None else random.Random()
-        new_body, changed, descs = list(uast.body), False, []
-
-        for idx, node in enumerate(new_body):
-            if isinstance(node, Function):
-                nf = self._mutate_func(node, rng, descs)
-                if nf is not node:
-                    new_body[idx], changed = nf, True
-
-        if not changed:
-            return MutationResult(
-                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)),
-                applied=False
-            )
-
-        return MutationResult(
-            CoreUAST(new_body, uast.language, dict(uast.metadata)),
-            applied=True, description="; ".join(descs),
+        return self.mutate_functions(
+            uast, rng_seed, self._mutate_func,
             score_impact=0.15, confidence=0.8
         )
 
@@ -46,10 +30,7 @@ class StrengthReductionMutator(BaseScientificMutator):
                 new_body[idx], changed = repl, True
                 descs.append(f"Reduced in {func.name.name}")
         if changed:
-            return Function(
-                func.name, list(func.params), new_body,
-                list(func.decorators), func.return_type, func.tag
-            )
+            return self.with_body(func, new_body)
         return func
 
     def _try_reduce(self, node: Any, rng: random.Random) -> Optional[Node]:

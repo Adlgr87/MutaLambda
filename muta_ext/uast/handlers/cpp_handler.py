@@ -10,6 +10,7 @@ from muta_ext.uast.core_uast import CoreUAST
 from muta_ext.uast.adapters.cpp_adapter import CppAdapter
 from muta_ext.uast.emitters.cpp_emitter import CppEmitter
 from muta_ext.uast.handlers.base_handler import BaseLanguageHandler
+from muta_ext.uast.handlers.toolchain import benchmark_command, run_on_temp_source
 
 
 class CppHandler(BaseLanguageHandler):
@@ -36,62 +37,30 @@ class CppHandler(BaseLanguageHandler):
         if not shutil.which("g++"):
             # Fallback: just try to parse with tree-sitter
             return (True, "") if self._adapter.can_parse(source) else (False, "g++ not available")
-        
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".cpp", delete=False) as f:
-                f.write(source.encode())
-                tmpfile = f.name
-            
-            result = subprocess.run(
-                ["g++", "-fsyntax-only", "-std=c++17", tmpfile],
-                capture_output=True,
-                text=True,
-                timeout=self._compile_timeout
-            )
-            
-            import os
-            os.unlink(tmpfile)
-            
-            if result.returncode == 0:
-                return (True, "")
-            return (False, result.stderr)
-        except subprocess.TimeoutExpired:
-            return (False, "Syntax check timed out")
-        except Exception as e:
-            return (False, str(e))
+
+        return run_on_temp_source(
+            source,
+            ".cpp",
+            lambda path: ["g++", "-fsyntax-only", "-std=c++17", path],
+            self._compile_timeout,
+            "Syntax check timed out",
+        )
 
     def compile(self, source: str, output_path: str) -> tuple[bool, str]:
         """Compile C++ source with g++."""
         if not shutil.which("g++"):
             return (False, "g++ not available")
-        
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".cpp", delete=False) as f:
-                f.write(source.encode())
-                tmpfile = f.name
-            
-            cmd = ["g++", "-O2", "-std=c++17", tmpfile, "-o", output_path]
+
+        def build(path: str) -> list:
+            cmd = ["g++", "-O2", "-std=c++17", path, "-o", output_path]
             if self._use_sanitizers:
                 cmd.insert(1, "-fsanitize=undefined,address")
                 cmd.insert(1, "-fno-sanitize-recover=all")
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=self._compile_timeout
-            )
-            
-            import os
-            os.unlink(tmpfile)
-            
-            if result.returncode == 0:
-                return (True, "")
-            return (False, result.stderr)
-        except subprocess.TimeoutExpired:
-            return (False, "Compilation timed out")
-        except Exception as e:
-            return (False, str(e))
+            return cmd
+
+        return run_on_temp_source(
+            source, ".cpp", build, self._compile_timeout, "Compilation timed out"
+        )
 
     def run_tests(self, source: str, test_source: str) -> tuple[bool, str, float]:
         """Run C++ tests."""
@@ -137,39 +106,7 @@ class CppHandler(BaseLanguageHandler):
         """Run benchmark on compiled binary."""
         if not shutil.which(binary_path):
             return {"error": "Binary not found"}
-        
-        times = []
-        try:
-            for _ in range(iterations):
-                start = time.perf_counter()
-                result = subprocess.run(
-                    [binary_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=self._run_timeout
-                )
-                elapsed = time.perf_counter() - start
-                times.append(elapsed)
-        except subprocess.TimeoutExpired:
-            pass
-        except Exception as e:
-            return {"error": str(e)}
-        
-        if not times:
-            return {"error": "No successful runs"}
-        
-        import statistics
-        return {
-            "latency_p50": statistics.median(times),
-            "latency_p99": sorted(times)[int(len(times) * 0.99)] if times else 0,
-            "throughput": iterations / sum(times) if times else 0,
-            "runs": len(times)
-        }
-
-    def roundtrip(self, source: str) -> str:
-        """Parse → CoreUAST → Emit roundtrip test."""
-        uast = self.parse(source)
-        return self.emit(uast)
+        return benchmark_command([binary_path], iterations, self._run_timeout)
 
     def supported_features(self) -> dict:
         """Return supported features information."""

@@ -2,13 +2,7 @@
 """Go → CoreUAST adapter using tree-sitter."""
 from typing import Any, Optional, List
 
-try:
-    from tree_sitter import Language, Parser
-    TREE_SITTER_AVAILABLE = True
-except ImportError:
-    TREE_SITTER_AVAILABLE = False
-
-from muta_ext.uast.adapters.base import BaseAdapter
+from muta_ext.uast.adapters.tree_sitter_base import TreeSitterAdapter, node_text as _get_text
 from muta_ext.uast.core_uast import (
     CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
     Assign, If, For, While, Return, Function, Comment, Opaque,
@@ -17,74 +11,18 @@ from muta_ext.uast.core_uast import (
 )
 
 
-def _get_text(node: Any, source: bytes) -> str:
-    """Extract text from node, handling both str and bytes."""
-    text = source[node.start_byte:node.end_byte]
-    if isinstance(text, bytes):
-        return text.decode("utf-8", errors="replace")
-    return text
-
-
-class GoAdapter(BaseAdapter):
+class GoAdapter(TreeSitterAdapter):
     """Go source to CoreUAST converter using tree-sitter."""
 
     language = "go"
+    display_name = "Go"
+    # Go parses leniently: partial trees with errors are still transformed.
+    strict_parse = False
+    source_as_bytes = True
 
-    def __init__(self):
-        if not TREE_SITTER_AVAILABLE:
-            raise ImportError("tree-sitter is required for Go adapter")
+    def _load_language(self) -> Any:
         from tree_sitter_go import language as go_lang
-        self._parser = Parser(Language(go_lang()))
-
-    @property
-    def language(self) -> str:
-        return "go"
-
-    def can_parse(self, source: str) -> bool:
-        """Check if source is valid Go."""
-        try:
-            tree = self._parser.parse(bytes(source, "utf-8"))
-            return not tree.root_node.has_error
-        except Exception:
-            return False
-
-    def parse_to_uast(self, source: str) -> CoreUAST:
-        """Parse Go source to CoreUAST."""
-        try:
-            tree = self._parser.parse(bytes(source, "utf-8"))
-            if tree.root_node.has_error:
-                # Try to continue anyway for partial parsing
-                pass
-            return self._transform(tree.root_node, source.encode("utf-8"))
-        except Exception as e:
-            raise ValueError(f"Cannot parse Go source: {e}")
-
-    def _transform(self, node: Any, source: bytes) -> CoreUAST:
-        """Transform tree-sitter node to CoreUAST."""
-        body = []
-
-        for child in node.children:
-            uast_node = self._visit(child, source)
-            if uast_node is not None:
-                body.append(uast_node)
-
-        return CoreUAST(
-            body=body,
-            language="go",
-            metadata={"source": source.decode("utf-8", errors="replace")}
-        )
-
-    def _visit(self, node: Any, source: bytes) -> Optional[Node]:
-        """Visit and transform a tree-sitter node."""
-        node_type = node.type
-        method = f"_visit_{node_type.replace('-', '_')}"
-        visitor = getattr(self, method, None)
-
-        if visitor:
-            return visitor(node, source)
-
-        # Default: Opaque for unsupported nodes
-        return Opaque(original_text=_get_text(node, source), lang="go")
+        return go_lang()
 
     # ===== Declarations =====
 

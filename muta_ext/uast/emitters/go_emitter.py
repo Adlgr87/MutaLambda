@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """CoreUAST → Go source emitter."""
-import shutil
-import subprocess
-import tempfile
 from typing import Any, Optional, List
 
+from muta_ext.uast.emitters.base import BaseEmitter
 from muta_ext.uast.core_uast import (
     CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
     Assign, If, For, While, Return, Function, Comment, Opaque,
@@ -13,14 +11,11 @@ from muta_ext.uast.core_uast import (
 )
 
 
-class GoEmitter:
+class GoEmitter(BaseEmitter):
     """Emit CoreUAST back to Go source code."""
 
     language = "go"
-
-    def can_emit(self, uast: CoreUAST) -> bool:
-        """Check if UAST is for Go language."""
-        return uast.language == "go"
+    formatter_command = ["gofmt"]
 
     def emit(self, uast: CoreUAST) -> str:
         """Emit CoreUAST to Go source."""
@@ -33,24 +28,7 @@ class GoEmitter:
                 lines.extend(emitted)
             lines.append("")
 
-        code = "\n".join(lines)
-
-        # Try to format with gofmt if available
-        if shutil.which("gofmt"):
-            try:
-                result = subprocess.run(
-                    ["gofmt"],
-                    input=code,
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                if result.returncode == 0:
-                    return result.stdout
-            except Exception:
-                pass
-
-        return code
+        return self._format("\n".join(lines))
 
     def _emit_node(self, node: Optional[Any], indent: int = 0) -> list:
         """Emit a single node to source lines."""

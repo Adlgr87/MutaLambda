@@ -2,6 +2,7 @@
 import ast
 from typing import Optional
 
+from muta_ext.uast.emitters.base import BaseEmitter
 from muta_ext.uast.core_uast import (
     CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
     Assign, If, For, While, Return, Function, ParallelFor,
@@ -10,14 +11,10 @@ from muta_ext.uast.core_uast import (
 )
 
 
-class PythonEmitter:
+class PythonEmitter(BaseEmitter):
     """Emit CoreUAST back to Python source code."""
 
     language = "python"
-
-    def can_emit(self, uast: CoreUAST) -> bool:
-        """Check if UAST is for Python language."""
-        return uast.language == "python"
 
     def emit(self, uast: CoreUAST) -> str:
         """Emit CoreUAST to Python source."""

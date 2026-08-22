@@ -2,9 +2,7 @@
 """C++ → CoreUAST adapter using tree-sitter."""
 from typing import Any, Optional
 
-from tree_sitter import Language, Parser
-
-from muta_ext.uast.adapters.base import BaseAdapter
+from muta_ext.uast.adapters.tree_sitter_base import TreeSitterAdapter, node_text as _get_text
 from muta_ext.uast.core_uast import (
     CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
     Assign, If, For, While, Return, Function, Comment, Opaque,
@@ -13,68 +11,15 @@ from muta_ext.uast.core_uast import (
 )
 
 
-def _get_text(node: Any, source: str) -> str:
-    """Extract text from node, handling both str and bytes."""
-    text = source[node.start_byte:node.end_byte]
-    if isinstance(text, bytes):
-        return text.decode("utf-8", errors="replace")
-    return text
-
-
-class CppAdapter(BaseAdapter):
+class CppAdapter(TreeSitterAdapter):
     """C++ source to CoreUAST converter using tree-sitter."""
 
     language = "cpp"
-    
-    def __init__(self):
+    display_name = "C++"
+
+    def _load_language(self) -> Any:
         from tree_sitter_cpp import language as cpp_lang
-        self._parser = Parser(Language(cpp_lang()))
-
-    def can_parse(self, source: str) -> bool:
-        """Check if source is valid C++."""
-        try:
-            tree = self._parser.parse(bytes(source, "utf-8"))
-            return not tree.root_node.has_error
-        except Exception:
-            return False
-
-    def parse_to_uast(self, source: str) -> CoreUAST:
-        """Parse C++ source to CoreUAST."""
-        try:
-            tree = self._parser.parse(bytes(source, "utf-8"))
-            if tree.root_node.has_error:
-                raise ValueError("C++ source has parse errors")
-            return self._transform(tree.root_node, source)
-        except Exception as e:
-            raise ValueError(f"Cannot parse C++ source: {e}")
-
-    def _transform(self, node: Any, source: str) -> CoreUAST:
-        """Transform tree-sitter node to CoreUAST."""
-        body = []
-        
-        for child in node.children:
-            uast_node = self._visit(child, source)
-            if uast_node is not None:
-                body.append(uast_node)
-        
-        return CoreUAST(
-            body=body,
-            language="cpp",
-            metadata={"source": source}
-        )
-
-    def _visit(self, node: Any, source: str) -> Optional[Any]:
-        """Visit and transform a tree-sitter node."""
-        node_type = node.type
-        
-        method = f"_visit_{node_type}"
-        visitor = getattr(self, method, None)
-        
-        if visitor:
-            return visitor(node, source)
-        
-        # Default: Opaque for unsupported nodes
-        return Opaque(original_text=_get_text(node, source), lang="cpp")
+        return cpp_lang()
 
     def _visit_function_definition(self, node: Any, source: str) -> Function:
         """Transform C++ function_definition to Function."""

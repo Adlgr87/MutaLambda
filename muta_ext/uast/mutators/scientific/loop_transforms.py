@@ -16,24 +16,8 @@ class LoopFusionMutator(BaseScientificMutator):
 
     def mutate(self, uast: CoreUAST, rng_seed: Optional[int] = None) -> MutationResult:
         """Fusiona bucles adyacentes."""
-        rng = random.Random(rng_seed) if rng_seed is not None else random.Random()
-        new_body, changed, descs = list(uast.body), False, []
-
-        for idx, node in enumerate(new_body):
-            if isinstance(node, Function):
-                nf = self._fuse_in_func(node, rng, descs)
-                if nf is not node:
-                    new_body[idx], changed = nf, True
-
-        if not changed:
-            return MutationResult(
-                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)),
-                applied=False
-            )
-
-        return MutationResult(
-            CoreUAST(new_body, uast.language, dict(uast.metadata)),
-            applied=True, description="; ".join(descs),
+        return self.mutate_functions(
+            uast, rng_seed, self._fuse_in_func,
             score_impact=0.2, confidence=0.6
         )
 
@@ -52,10 +36,7 @@ class LoopFusionMutator(BaseScientificMutator):
                     continue
             i += 1
         if changed:
-            return Function(
-                func.name, list(func.params), new_body,
-                list(func.decorators), func.return_type, func.tag
-            )
+            return self.with_body(func, new_body)
         return func
 
     def _fuse(self, loop1: For, loop2: For, rng: random.Random) -> Optional[For]:
@@ -84,25 +65,8 @@ class LoopFissionMutator(BaseScientificMutator):
 
     def mutate(self, uast: CoreUAST, rng_seed: Optional[int] = None) -> MutationResult:
         """Aplica fission a bucles."""
-        rng = random.Random(rng_seed) if rng_seed is not None else random.Random()
-        new_body, changed, descs = list(uast.body), False, []
-
-        for idx, node in enumerate(new_body):
-            if isinstance(node, Function):
-                nf = self._fission_in_func(node, rng, descs)
-                if nf is not node:
-                    new_body[idx] = nf
-                    changed = True
-
-        if not changed:
-            return MutationResult(
-                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)),
-                applied=False
-            )
-
-        return MutationResult(
-            CoreUAST(new_body, uast.language, dict(uast.metadata)),
-            applied=True, description="; ".join(descs),
+        return self.mutate_functions(
+            uast, rng_seed, self._fission_in_func,
             score_impact=0.15, confidence=0.5
         )
 
@@ -123,8 +87,5 @@ class LoopFissionMutator(BaseScientificMutator):
                 descs.append(f"Fissioned in {func.name.name}")
 
         if changed:
-            return Function(
-                func.name, list(func.params), new_body,
-                list(func.decorators), func.return_type, func.tag
-            )
+            return self.with_body(func, new_body)
         return func

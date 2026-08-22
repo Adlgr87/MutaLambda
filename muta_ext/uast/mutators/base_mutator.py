@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import random
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from muta_ext.uast.core_uast import (
     CoreUAST, Node, BinaryOp, UnaryOp, If, For, While, Assign, Identifier, Call,
@@ -18,6 +18,36 @@ class BaseMutator:
     def mutate(self, uast: CoreUAST, rng: random.Random) -> CoreUAST:
         """Apply mutation to UAST. Must return a NEW UAST (immutability)."""
         raise NotImplementedError
+
+    @staticmethod
+    def _mutate_top_level(
+        uast: CoreUAST,
+        try_mutate: Callable[[Node, bool], Optional[Node]],
+    ) -> CoreUAST:
+        """Rewrite top-level nodes with ``try_mutate(node, already_mutated)``.
+
+        Nodes for which the callback returns ``None`` are kept as-is; the
+        original UAST is returned when nothing was rewritten.
+        """
+        new_body = []
+        mutated = False
+
+        for node in uast.body:
+            result = try_mutate(node, mutated)
+            if result is not None:
+                new_body.append(result)
+                mutated = True
+            else:
+                new_body.append(node)
+
+        if not mutated:
+            return uast
+
+        return CoreUAST(
+            body=new_body,
+            language=uast.language,
+            metadata=uast.metadata.copy()
+        )
 
 
 class SwapConditionMutator(BaseMutator):
@@ -129,24 +159,9 @@ class NegateConditionMutator(BaseMutator):
     
     def mutate(self, uast: CoreUAST, rng: random.Random) -> CoreUAST:
         """Negate a random If condition."""
-        new_body = []
-        mutated = False
-        
-        for node in uast.body:
-            result = self._try_negate(node, rng, mutated)
-            if result is not None:
-                new_body.append(result)
-                mutated = True
-            else:
-                new_body.append(node)
-        
-        if not mutated:
-            return uast
-        
-        return CoreUAST(
-            body=new_body,
-            language=uast.language,
-            metadata=uast.metadata.copy()
+        return self._mutate_top_level(
+            uast,
+            lambda node, mutated: self._try_negate(node, rng, mutated),
         )
     
     def _try_negate(self, node: Node, rng: random.Random, already_mutated: bool) -> Node | None:
@@ -188,24 +203,9 @@ class LoopBoundMutator(BaseMutator):
     
     def mutate(self, uast: CoreUAST, rng: random.Random) -> CoreUAST:
         """Mutate loop bounds in For/While nodes."""
-        new_body = []
-        mutated = False
-        
-        for node in uast.body:
-            result = self._try_mutate_loop(node, rng)
-            if result is not None:
-                new_body.append(result)
-                mutated = True
-            else:
-                new_body.append(node)
-        
-        if not mutated:
-            return uast
-        
-        return CoreUAST(
-            body=new_body,
-            language=uast.language,
-            metadata=uast.metadata.copy()
+        return self._mutate_top_level(
+            uast,
+            lambda node, _mutated: self._try_mutate_loop(node, rng),
         )
     
     def _try_mutate_loop(self, node: Node, rng: random.Random) -> Node | None:

@@ -10,6 +10,7 @@ from muta_ext.uast.core_uast import CoreUAST
 from muta_ext.uast.adapters.rust_adapter import RustAdapter
 from muta_ext.uast.emitters.rust_emitter import RustEmitter
 from muta_ext.uast.handlers.base_handler import BaseLanguageHandler
+from muta_ext.uast.handlers.toolchain import benchmark_command, run_on_temp_source
 
 
 class RustHandler(BaseLanguageHandler):
@@ -35,57 +36,29 @@ class RustHandler(BaseLanguageHandler):
         if not shutil.which("rustc"):
             # Fallback: just try to parse with tree-sitter
             return (True, "") if self._adapter.can_parse(source) else (False, "rustc not available")
-        
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".rs", delete=False) as f:
-                f.write(source.encode())
-                tmpfile = f.name
-            
-            result = subprocess.run(
-                ["rustc", "--edition", "2021", "--crate-type", "lib", "-o", "/dev/null", tmpfile],
-                capture_output=True,
-                text=True,
-                timeout=self._compile_timeout
-            )
-            
-            import os
-            os.unlink(tmpfile)
-            
-            if result.returncode == 0:
-                return (True, "")
-            return (False, result.stderr)
-        except subprocess.TimeoutExpired:
-            return (False, "Syntax check timed out")
-        except Exception as e:
-            return (False, str(e))
+
+        return run_on_temp_source(
+            source,
+            ".rs",
+            lambda path: [
+                "rustc", "--edition", "2021", "--crate-type", "lib", "-o", "/dev/null", path
+            ],
+            self._compile_timeout,
+            "Syntax check timed out",
+        )
 
     def compile(self, source: str, output_path: str) -> tuple[bool, str]:
         """Compile Rust source with rustc."""
         if not shutil.which("rustc"):
             return (False, "rustc not available")
-        
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".rs", delete=False) as f:
-                f.write(source.encode())
-                tmpfile = f.name
-            
-            result = subprocess.run(
-                ["rustc", "--edition", "2021", tmpfile, "-o", output_path],
-                capture_output=True,
-                text=True,
-                timeout=self._compile_timeout
-            )
-            
-            import os
-            os.unlink(tmpfile)
-            
-            if result.returncode == 0:
-                return (True, "")
-            return (False, result.stderr)
-        except subprocess.TimeoutExpired:
-            return (False, "Compilation timed out")
-        except Exception as e:
-            return (False, str(e))
+
+        return run_on_temp_source(
+            source,
+            ".rs",
+            lambda path: ["rustc", "--edition", "2021", path, "-o", output_path],
+            self._compile_timeout,
+            "Compilation timed out",
+        )
 
     def run_tests(self, source: str, test_source: str) -> tuple[bool, str, float]:
         """Run Rust tests using cargo or rustc."""
@@ -132,39 +105,7 @@ class RustHandler(BaseLanguageHandler):
         """Run benchmark on compiled binary."""
         if not shutil.which(binary_path):
             return {"error": "Binary not found"}
-        
-        times = []
-        try:
-            for _ in range(iterations):
-                start = time.perf_counter()
-                result = subprocess.run(
-                    [binary_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=self._run_timeout
-                )
-                elapsed = time.perf_counter() - start
-                times.append(elapsed)
-        except subprocess.TimeoutExpired:
-            pass
-        except Exception as e:
-            return {"error": str(e)}
-        
-        if not times:
-            return {"error": "No successful runs"}
-        
-        import statistics
-        return {
-            "latency_p50": statistics.median(times),
-            "latency_p99": sorted(times)[int(len(times) * 0.99)] if times else 0,
-            "throughput": iterations / sum(times) if times else 0,
-            "runs": len(times)
-        }
-
-    def roundtrip(self, source: str) -> str:
-        """Parse → CoreUAST → Emit roundtrip test."""
-        uast = self.parse(source)
-        return self.emit(uast)
+        return benchmark_command([binary_path], iterations, self._run_timeout)
 
     def supported_features(self) -> dict:
         """Return supported features information."""

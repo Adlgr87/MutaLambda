@@ -40,7 +40,6 @@ class BaseLanguageHandler(ABC):
         """Run benchmark on compiled binary."""
         ...
 
-    @abstractmethod
     def roundtrip(self, source: str) -> str:
         """Parse → CoreUAST → Emit roundtrip."""
-        ...
+        return self.emit(self.parse(source))

@@ -1,4 +1,6 @@
 """UAST emitters for different languages."""
+from typing import Callable, Dict
+
 from muta_ext.uast.emitters.base import BaseEmitter
 from muta_ext.uast.emitters.python_emitter import PythonEmitter, emit_from_uast
 from muta_ext.uast.emitters.rust_emitter import RustEmitter
@@ -6,7 +8,7 @@ from muta_ext.uast.emitters.cpp_emitter import CppEmitter
 from muta_ext.uast.emitters.go_emitter import GoEmitter
 
 # Registry for known emitters
-_EMITTERS = {
+_EMITTERS: Dict[str, Callable[[], BaseEmitter]] = {
     "python": PythonEmitter,
     "rust": RustEmitter,
     "cpp": CppEmitter,

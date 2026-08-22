@@ -1,9 +1,10 @@
 """Base classes para operadores de mutación científicos."""
 
 from __future__ import annotations
+import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 # Import CoreUAST nodes - will work with actual imports
 try:
@@ -95,6 +96,51 @@ class BaseScientificMutator(BaseMutator):
 
     def domain_tags(self) -> Dict[str, str]:
         return {"domain": self.domain, "strength": str(self.strength)}
+
+    def mutate_functions(
+        self,
+        uast: CoreUAST,
+        rng_seed: Optional[int],
+        transform: Callable[[Function, random.Random, List[str]], Optional[Function]],
+        *,
+        score_impact: float,
+        confidence: float,
+    ) -> MutationResult:
+        """Apply ``transform`` to every top-level function and wrap the result.
+
+        ``transform(func, rng, descriptions)`` returns the rewritten function, or
+        the function itself when nothing changed. The mutation is reported as
+        applied only when at least one function was rewritten.
+        """
+        rng = random.Random(rng_seed) if rng_seed is not None else random.Random()
+        new_body, changed = list(uast.body), False
+        descs: List[str] = []
+
+        for idx, node in enumerate(new_body):
+            if isinstance(node, Function):
+                nf = transform(node, rng, descs)
+                if nf is not None and nf is not node:
+                    new_body[idx], changed = nf, True
+
+        if not changed:
+            return MutationResult(
+                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)),
+                applied=False
+            )
+
+        return MutationResult(
+            CoreUAST(new_body, uast.language, dict(uast.metadata)),
+            applied=True, description="; ".join(descs),
+            score_impact=score_impact, confidence=confidence
+        )
+
+    @staticmethod
+    def with_body(func: Function, body: List) -> Function:
+        """Copy ``func`` with a new body."""
+        return Function(
+            func.name, list(func.params), body,
+            list(func.decorators), func.return_type, func.tag
+        )
 
     def find_functions(self, uast: CoreUAST) -> List[Function]:
         """Encuentra todas las funciones definidas en el UAST."""
