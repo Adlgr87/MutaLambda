@@ -5,11 +5,13 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 import yaml
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt, Confirm
+from rich.syntax import Syntax
 from rich.table import Table
 
 from muta_ext import (
@@ -439,7 +441,7 @@ def cmd_explain_run(args):
                             f"{complexity.get('space_before', '?')} → {complexity.get('space_after', '?')} (space)")
             if args.full:
                 console.print("\n[bold]Best Solution Code:[/bold]")
-                console.print(code_format(best_path.read_text(encoding="utf-8"), "python"))
+                console.print(Syntax(best_path.read_text(encoding="utf-8"), "python"))
         except Exception as e:
             console.print(f"[yellow]⚠ Could not generate LLM explanation: {e}[/yellow]")
 
@@ -496,7 +498,7 @@ def cmd_compare(args):
     console.print(f"\n[bold green]📝 Changes:[/bold green]")
     diff_text = "".join(diff)
     if diff_text:
-        console.print(code_format(diff_text, "diff"))
+        console.print(Syntax(diff_text, "diff"))
     else:
         console.print("[dim]No differences found[/dim]")
 

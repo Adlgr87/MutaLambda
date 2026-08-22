@@ -15,6 +15,7 @@ Uso:
     python cli.py interactive
 """
 
+import json
 import sys
 from pathlib import Path
 
