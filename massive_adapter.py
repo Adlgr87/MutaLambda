@@ -17,6 +17,7 @@ from __future__ import annotations
 import ast
 import difflib
 import json
+import logging
 import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,6 +27,8 @@ from api_fingerprint import compare_api, extract_api_fingerprint
 from benchmarking import BenchmarkConfig, BenchmarkResult, run_callable_benchmark
 from differential import DifferentialResult, differential_test
 from runners import SubprocessRunner
+
+logger = logging.getLogger("MutaLambda")
 
 
 @dataclass
@@ -89,8 +92,12 @@ class MassiveTargetAdapter:
                     operations_per_case=int(data.get("operations_per_case", 1)),
                     repetitions=int(data.get("repetitions", 1)),
                 )
-            except OSError:
-                pass
+            except OSError as exc:
+                logger.warning(
+                    "Could not read benchmark file %s (%s); using defaults",
+                    self.benchmark_file,
+                    exc,
+                )
 
     @staticmethod
     def _load_json_list(path: str) -> List[Dict[str, Any]]:

@@ -131,8 +131,10 @@ class CheckpointManager:
                         generation = data.get("generation", "?")
                         timestamp = data.get("timestamp", "?")
                         metadata = data.get("metadata", {})
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.animator.warning_message(
+                        f"Failed to parse {filepath.name}: {e}"
+                    )
 
                 checkpoints.append(
                     {
@@ -168,8 +170,10 @@ class CheckpointManager:
             try:
                 Path(item["path"]).unlink(missing_ok=True)
                 removed += 1
-            except OSError:
-                pass
+            except OSError as e:
+                self.animator.warning_message(
+                    f"Could not delete {item['filename']}: {e}"
+                )
         return removed
 
     def display_list(self) -> None:
@@ -201,6 +205,6 @@ class CheckpointManager:
                 if path.stat().st_mtime < cutoff:
                     path.unlink(missing_ok=True)
                     removed += 1
-            except OSError:
-                pass
+            except OSError as e:
+                self.animator.warning_message(f"Could not delete {path.name}: {e}")
         return removed

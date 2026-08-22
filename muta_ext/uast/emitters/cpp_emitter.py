@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """CoreUAST → C++ source emitter."""
+import logging
 import shutil
 import subprocess
 from typing import Any, Optional
@@ -10,6 +11,8 @@ from muta_ext.uast.core_uast import (
     TryExcept, ExceptClause, StructDef, FieldDef, TypeAnnotation,
     Match, MatchArm, Reference, Break, ParallelFor
 )
+
+logger = logging.getLogger("MutaLambda")
 
 
 class CppEmitter:
@@ -40,8 +43,10 @@ class CppEmitter:
                 )
                 if result.returncode == 0:
                     return result.stdout
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(
+                    "clang-format formatting failed; emitting unformatted source: %s", exc
+                )
         
         return code
 

@@ -6,8 +6,15 @@ lifecycle instead of ad-hoc attribute poking on MigrationBus.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+
+logger = logging.getLogger("MutaLambda")
+
+
+def _ext_name(ext: Any) -> str:
+    return getattr(ext, "name", None) or type(ext).__name__
 
 
 @dataclass
@@ -55,8 +62,8 @@ class ExtensionRegistry:
         if not hasattr(ext, "name"):
             try:
                 ext.name = name
-            except Exception:
-                pass
+            except (AttributeError, TypeError) as exc:
+                logger.debug("Could not set name on extension %s: %s", name, exc)
         self._extensions.append(ext)
 
     def __iter__(self):
@@ -69,7 +76,12 @@ class ExtensionRegistry:
                 try:
                     hook(context)
                 except Exception:
-                    pass
+                    logger.warning(
+                        "Extension %s failed in on_generation_start (gen %d)",
+                        _ext_name(ext),
+                        context.generation,
+                        exc_info=True,
+                    )
 
     def on_candidate(self, candidate: Any, context: ExtensionContext) -> Any:
         current = candidate
@@ -81,7 +93,13 @@ class ExtensionRegistry:
                     if out is not None:
                         current = out
                 except Exception:
-                    pass
+                    logger.warning(
+                        "Extension %s failed in on_candidate (gen %d); "
+                        "candidate left unmodified",
+                        _ext_name(ext),
+                        context.generation,
+                        exc_info=True,
+                    )
         return current
 
     def on_generation_end(self, context: ExtensionContext) -> None:
@@ -91,7 +109,12 @@ class ExtensionRegistry:
                 try:
                     hook(context)
                 except Exception:
-                    pass
+                    logger.warning(
+                        "Extension %s failed in on_generation_end (gen %d)",
+                        _ext_name(ext),
+                        context.generation,
+                        exc_info=True,
+                    )
 
     def all_metrics(self) -> Dict[str, dict]:
         out: Dict[str, dict] = {}
@@ -102,6 +125,9 @@ class ExtensionRegistry:
                 try:
                     out[name] = dict(m() or {})
                 except Exception:
+                    logger.warning(
+                        "Extension %s failed to report metrics", name, exc_info=True
+                    )
                     out[name] = {}
             elif hasattr(ext, "metrics") and not callable(ext.metrics):
                 metrics_obj = ext.metrics
@@ -156,16 +182,25 @@ class EngineExtensionAdapter:
                             candidate.code = out
                             return candidate
                         return out
-            except TypeError:
+            except TypeError as exc:
                 # refine signatures vary; ignore
-                pass
+                logger.debug("Extension %s refine signature mismatch: %s", self.name, exc)
             except Exception:
-                pass
+                logger.warning(
+                    "Extension %s failed during refine; candidate left unmodified",
+                    self.name,
+                    exc_info=True,
+                )
         hook = getattr(self.engine, "on_candidate", None)
         if callable(hook):
             try:
                 return hook(candidate, context)
             except Exception:
+                logger.warning(
+                    "Extension %s failed in on_candidate; candidate left unmodified",
+                    self.name,
+                    exc_info=True,
+                )
                 return candidate
         return candidate
 
@@ -175,7 +210,9 @@ class EngineExtensionAdapter:
             try:
                 hook(context)
             except Exception:
-                pass
+                logger.warning(
+                    "Extension %s failed in on_generation_end", self.name, exc_info=True
+                )
 
     def metrics(self) -> dict:
         m = getattr(self.engine, "metrics", None)
@@ -183,6 +220,9 @@ class EngineExtensionAdapter:
             try:
                 return dict(m() or {})
             except Exception:
+                logger.warning(
+                    "Extension %s failed to report metrics", self.name, exc_info=True
+                )
                 return {}
         if m is not None and hasattr(m, "__dict__"):
             return dict(m.__dict__)

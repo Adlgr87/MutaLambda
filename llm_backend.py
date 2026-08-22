@@ -88,8 +88,10 @@ def parse_structured_response(text: str) -> StructuredLLMResponse:
                     confidence=float(data.get("confidence") or 0.0),
                     raw=raw,
                 )
-        except (json.JSONDecodeError, TypeError, ValueError):
-            pass
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            logger.debug(
+                "LLM response is not structured JSON (%s); trying fenced block", exc
+            )
 
     # Fenced python block.
     fence = re.search(r"```(?:python)?\s*([\s\S]*?)```", raw, re.IGNORECASE)

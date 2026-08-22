@@ -412,7 +412,7 @@ class ProgressivePipeline:
             try:
                 self._evaluator.shutdown()
             except Exception:
-                pass
+                logger.warning("Evaluator shutdown failed", exc_info=True)
             self._evaluator = None
 
     def _evaluate(self, code: str) -> FitnessVector:
@@ -548,7 +548,7 @@ class ProgressivePipeline:
             try:
                 agent.shutdown()
             except Exception:
-                pass
+                logger.warning("Deep evolution agent shutdown failed", exc_info=True)
 
         if best is None or not getattr(best, "code", ""):
             return {"success": False, "reason": "no_best"}

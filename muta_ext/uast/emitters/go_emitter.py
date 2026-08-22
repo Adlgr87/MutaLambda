@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """CoreUAST → Go source emitter."""
+import logging
 import shutil
 import subprocess
 import tempfile
@@ -11,6 +12,8 @@ from muta_ext.uast.core_uast import (
     TryExcept, ExceptClause, StructDef, FieldDef, TypeAnnotation,
     Match, MatchArm, Reference, Break, ParallelFor, Node
 )
+
+logger = logging.getLogger("MutaLambda")
 
 
 class GoEmitter:
@@ -47,8 +50,10 @@ class GoEmitter:
                 )
                 if result.returncode == 0:
                     return result.stdout
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(
+                    "gofmt formatting failed; emitting unformatted source: %s", exc
+                )
 
         return code
 

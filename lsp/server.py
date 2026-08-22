@@ -7,6 +7,7 @@ Supports VS Code and Neovim integration.
 """
 from __future__ import annotations
 import json
+import logging
 import sys
 import argparse
 from typing import Dict, List, Optional, Any
@@ -15,6 +16,18 @@ from enum import Enum
 import asyncio
 import threading
 from pathlib import Path
+
+logger = logging.getLogger("MutaLambda.lsp")
+
+
+def _request_id(msg: Any) -> Optional[int]:
+    """Best-effort JSON-RPC request id from a decoded message."""
+    if isinstance(msg, dict):
+        raw = msg.get("id")
+        if isinstance(raw, int):
+            return raw
+    return None
+
 
 # LSP Message types
 class LSPMethod(str, Enum):
@@ -91,14 +104,21 @@ class MutaLambdaLSPServer:
 
     def _run_server(self):
         """Main server loop reading from stdin."""
-        while self._running:
-            line = sys.stdin.readline()
-            if not line:
-                break
-            self._handle_message(line.strip())
+        try:
+            while self._running:
+                line = sys.stdin.readline()
+                if not line:
+                    break
+                self._handle_message(line.strip())
+        except Exception:
+            # Runs in a daemon thread, so the traceback would be lost otherwise.
+            logger.exception("LSP server loop terminated unexpectedly")
 
     def _handle_message(self, line: str):
         """Handle incoming LSP message."""
+        if not line:
+            return
+        msg: Any = None
         try:
             msg = json.loads(line)
             lsp_msg = LSPMessage(**msg)
@@ -115,8 +135,16 @@ class MutaLambdaLSPServer:
                 self._handle_shutdown(lsp_msg)
             elif lsp_msg.method == LSPMethod.EXIT:
                 self._handle_exit(lsp_msg)
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as exc:
+            logger.warning("Discarding malformed LSP message: %s", exc)
+            self._send_error(None, -32700, f"Parse error: {exc}")
+        except TypeError as exc:
+            logger.warning("Discarding invalid LSP request: %s", exc)
+            self._send_error(_request_id(msg), -32600, f"Invalid request: {exc}")
+        except Exception as exc:
+            method = msg.get("method") if isinstance(msg, dict) else None
+            logger.exception("LSP handler failed for method %s", method)
+            self._send_error(_request_id(msg), -32603, f"Internal error: {exc}")
 
     def _handle_initialize(self, msg: LSPMessage):
         """Handle initialize request."""
@@ -265,6 +293,10 @@ class MutaLambdaLSPServer:
             '.c': 'cpp',
         }
         return mapping.get(ext)
+
+    def _send_error(self, request_id: Optional[int], code: int, message: str):
+        """Report a JSON-RPC error back to the client."""
+        self._send(LSPMessage(id=request_id, error={"code": code, "message": message}))
 
     def _send(self, message: LSPMessage):
         """Send LSP message to stdout."""
