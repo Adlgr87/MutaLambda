@@ -88,6 +88,12 @@ _FORBIDDEN_IMPORTS = frozenset({
     "shelve",
     "pty",
     "commands",
+    "builtins",
+    "posix",
+    "nt",
+    "gc",
+    "tempfile",
+    "glob",
 })
 
 # Calls that are inherently dynamic / unsafe regardless of argument.
@@ -114,6 +120,10 @@ _FORBIDDEN_ATTR_CALLS = {
     ("shutil", "rmtree"), ("shutil", "remove"), ("shutil", "move"), ("shutil", "copy"),
     ("shutil", "copyfile"), ("shutil", "copytree"),
     ("importlib", "import_module"),
+    # sys is allowed (candidates use it) but sys.modules hands out any module.
+    ("sys", "modules"),
+    ("builtins", "eval"), ("builtins", "exec"), ("builtins", "compile"),
+    ("builtins", "__import__"), ("builtins", "open"), ("builtins", "getattr"),
     ("pickle", "loads"), ("pickle", "load"), ("pickle", "dumps"),
     ("marshal", "loads"), ("marshal", "load"),
     ("ctypes", "cdll"), ("ctypes", "pythonapi"),
@@ -124,6 +134,15 @@ _FORBIDDEN_ATTR_CALLS = {
 _SENSITIVE_NAMES = frozenset({
     "__builtins__", "__import__", "__globals__", "__locals__",
     "globals", "locals",
+})
+
+# Attributes that walk the object graph back to the interpreter internals,
+# e.g. ``().__class__.__base__.__subclasses__()`` to rebuild ``__builtins__``.
+_SENSITIVE_ATTRIBUTES = frozenset({
+    "__class__", "__bases__", "__base__", "__mro__", "__subclasses__",
+    "__globals__", "__builtins__", "__code__", "__closure__", "__func__",
+    "__self__", "__dict__", "__getattribute__", "__reduce__", "__reduce_ex__",
+    "__loader__", "__spec__", "__init_subclass__",
 })
 
 
@@ -219,7 +238,9 @@ class SecurityVisitor(ast.NodeVisitor):
     def visit_Attribute(self, node: ast.Attribute) -> None:
         # ``__builtins__.exec`` / ``getattr(__builtins__, ...)`` style access
         if isinstance(node.value, ast.Name) and node.value.id == "__builtins__":
-            self._add("dunder_access", f"access:__builtins__", node)
+            self._add("dunder_access", "access:__builtins__", node)
+        if node.attr in _SENSITIVE_ATTRIBUTES:
+            self._add("dunder_access", f"access:{node.attr}", node)
         owner = self._module_root(node.value)
         key = (owner, node.attr) if owner else (None, node.attr)
         if key in _FORBIDDEN_ATTR_CALLS:

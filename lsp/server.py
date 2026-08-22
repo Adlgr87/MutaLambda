@@ -97,11 +97,45 @@ class MutaLambdaLSPServer:
                 break
             self._handle_message(line.strip())
 
+    @staticmethod
+    def _parse_message(msg: Dict[str, Any]) -> Optional[LSPMessage]:
+        """Build an :class:`LSPMessage` from an untrusted JSON object."""
+        method = msg.get("method")
+        if method is not None and not isinstance(method, str):
+            return None
+        msg_id = msg.get("id")
+        if not isinstance(msg_id, int) or isinstance(msg_id, bool):
+            msg_id = None
+        params = msg.get("params")
+        if not isinstance(params, dict):
+            params = None
+        error = msg.get("error")
+        if not isinstance(error, dict):
+            error = None
+        jsonrpc = msg.get("jsonrpc")
+        return LSPMessage(
+            id=msg_id,
+            jsonrpc=jsonrpc if isinstance(jsonrpc, str) else "2.0",
+            method=method,
+            params=params,
+            result=msg.get("result"),
+            error=error,
+        )
+
     def _handle_message(self, line: str):
-        """Handle incoming LSP message."""
+        """Handle incoming LSP message.
+
+        The payload comes from an untrusted client, so unknown or wrongly
+        typed fields are dropped instead of being splatted into
+        :class:`LSPMessage` (which would raise and kill the read loop).
+        """
         try:
             msg = json.loads(line)
-            lsp_msg = LSPMessage(**msg)
+            if not isinstance(msg, dict):
+                return
+            lsp_msg = self._parse_message(msg)
+            if lsp_msg is None:
+                return
 
             if lsp_msg.method == LSPMethod.INITIALIZE:
                 self._handle_initialize(lsp_msg)

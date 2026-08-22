@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from api_fingerprint import compare_api, extract_api_fingerprint
 from benchmarking import BenchmarkConfig, BenchmarkResult, run_callable_benchmark
 from differential import DifferentialResult, differential_test
-from runners import SubprocessRunner
+from runners import SubprocessRunner, scan_code_security
 
 
 @dataclass
@@ -175,6 +175,10 @@ class MassiveTargetAdapter:
     def benchmark(self, code: str) -> BenchmarkResult:
         """Micro-benchmark entrypoint using declared test inputs when available."""
         # Build a zero-arg callable that runs the entrypoint on first test args.
+        findings = scan_code_security(code)
+        if findings:
+            return BenchmarkResult(error=f"security_scan:{','.join(findings)}")
+
         namespace: Dict[str, Any] = {"__name__": "__massive_bench__"}
         try:
             exec(compile(code, "<bench>", "exec"), namespace, namespace)  # noqa: S102

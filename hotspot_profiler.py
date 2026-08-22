@@ -11,7 +11,9 @@ import ast
 import cProfile
 import pstats
 import io
+import shutil
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Callable, Any
@@ -61,31 +63,45 @@ class HotspotProfiler:
         self.min_time_threshold = min_time_threshold  # 5% minimum to report
 
     def profile_script(self, script_path: str, args: list = None) -> List[Hotspot]:
-        """Profile a Python script and return top hotspots."""
+        """Profile a Python script and return top hotspots.
+
+        The target path is passed through ``sys.argv`` instead of being
+        interpolated into the profiler source, so a path cannot inject code
+        into the profiling process.
+        """
         import subprocess
 
-        # Run with cProfile
-        profiler_script = f"""
+        profiler_script = """
 import cProfile
 import pstats
+import runpy
 import sys
+
+target = sys.argv[1]
+profile_out = sys.argv[2]
 
 profiler = cProfile.Profile()
 profiler.enable()
 
-exec(open("{script_path}").read())
+runpy.run_path(target, run_name='__main__')
 
 profiler.disable()
 stats = pstats.Stats(profiler)
 stats.sort_stats('cumulative')
-stats.dump_stats('/tmp/mutalambda_profile.prof')
+stats.dump_stats(profile_out)
 stats.print_stats(20)
 """
 
-        result = subprocess.run(
-            [sys.executable, '-c', profiler_script],
-            capture_output=True, text=True, timeout=60
-        )
+        workdir = tempfile.mkdtemp(prefix="mutalambda_prof_")
+        try:
+            result = subprocess.run(
+                [sys.executable, '-c', profiler_script, str(script_path),
+                 str(Path(workdir) / "profile.prof"),
+                 *[str(a) for a in (args or [])]],
+                capture_output=True, text=True, timeout=60
+            )
+        finally:
+            shutil.rmtree(workdir, ignore_errors=True)
 
         return self._parse_profile_output(result.stdout, result.stderr)
 
