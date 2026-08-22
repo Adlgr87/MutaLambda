@@ -3,6 +3,9 @@
 For each input case, compare outputs and exception types between a baseline
 implementation and a candidate. Used as a promotion gate when a seed/baseline
 source is available.
+
+Both sources are executed in the *current* process, so they must pass the AST
+security gate (``runners.scan_code_security``) first.
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from comparison import compare_values
+from runners import scan_code_security
 
 
 @dataclass
@@ -57,7 +61,14 @@ def _call(fn: Callable, args: list, kwargs: dict) -> Tuple[Any, Optional[BaseExc
         return None, exc
 
 
+class UnsafeCodeError(RuntimeError):
+    """Raised when code rejected by the AST security gate is about to run."""
+
+
 def _load_function(code: str, function_name: str) -> Callable:
+    findings = scan_code_security(code)
+    if findings:
+        raise UnsafeCodeError(f"security_scan:{','.join(findings)}")
     namespace: Dict[str, Any] = {"__name__": "__mutalambda_diff__"}
     exec(compile(code, "<diff_candidate>", "exec"), namespace, namespace)  # noqa: S102
     fn = namespace.get(function_name)

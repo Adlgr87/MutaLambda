@@ -28,7 +28,44 @@ _BLOCKED_IMPORTS = {
     "telnetlib",
     "paramiko",
 }
-_BLOCKED_CALLS = {"eval", "exec", "__import__", "compile"}
+_BLOCKED_CALLS = {
+    "eval",
+    "exec",
+    "__import__",
+    "compile",
+    "getattr",
+    "setattr",
+    "delattr",
+    "globals",
+    "locals",
+    "vars",
+    "open",
+    "input",
+    "breakpoint",
+    "memoryview",
+}
+# Attribute names that reach the interpreter internals and therefore defeat a
+# restricted ``__builtins__`` mapping (``().__class__.__base__.__subclasses__()``).
+_BLOCKED_ATTRIBUTES = {
+    "__class__",
+    "__bases__",
+    "__base__",
+    "__mro__",
+    "__subclasses__",
+    "__globals__",
+    "__builtins__",
+    "__code__",
+    "__closure__",
+    "__func__",
+    "__self__",
+    "__dict__",
+    "__getattribute__",
+    "__reduce__",
+    "__reduce_ex__",
+    "__init_subclass__",
+    "__loader__",
+    "__import__",
+}
 _BLOCKED_ATTR_CALLS = {
     "os.system",
     "os.popen",
@@ -128,7 +165,17 @@ def _resolve_attr_name(node: ast.AST) -> str:
 
 
 def _assert_safe_ast(tree: ast.AST) -> None:
+    """Reject generated code that could escape the restricted exec namespace.
+
+    This is a best-effort static gate, not a sandbox: it blocks imports of
+    capability modules, dynamic-execution builtins and the dunder attribute
+    chains that reconstruct the real ``__builtins__`` from a restricted one.
+    """
     for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr in _BLOCKED_ATTRIBUTES:
+            raise MutatorSafetyError(f"Blocked attribute access detected: {node.attr}")
+        if isinstance(node, ast.Name) and node.id in _BLOCKED_ATTRIBUTES:
+            raise MutatorSafetyError(f"Blocked name detected: {node.id}")
         if isinstance(node, ast.Import):
             for alias in node.names:
                 name = (alias.name or "").split(".")[0]
