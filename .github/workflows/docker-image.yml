@@ -10,7 +10,9 @@ permissions:
   contents: read
 
 env:
-  IMAGE: ghcr.io/${{ github.repository }}
+  # GHCR requires fully lowercase image references; github.repository
+  # ("Adlgr87/MutaLambda") contains uppercase letters and breaks docker push.
+  IMAGE: ghcr.io/adlgr87/mutalambda
 
 jobs:
   build-test-push:

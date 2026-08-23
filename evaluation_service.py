@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import multiprocessing
 import os
 import sys
 import threading
@@ -114,8 +115,6 @@ class EvaluationService:
         if os.getenv("MUTALAMBDA_E2E_SERIAL", "0") == "1":
             self.max_workers = 1
         elif self.max_workers is None:
-            import multiprocessing
-
             self.max_workers = min(4, multiprocessing.cpu_count())
 
     # ── Compatibility with SandboxEvaluator interface ─────────────────────
@@ -141,24 +140,47 @@ class EvaluationService:
             )
         return self._runner
 
+    def _make_pool(self, workers: int) -> ProcessPoolExecutor:
+        """Create a process pool using a start method safe for threaded parents.
+
+        The pytest process (and the agent runtime in general) is multi-threaded
+        (island threads, LSP server threads from earlier tests, ...). With the
+        Linux default ``fork`` start method (Python <= 3.13), forking a
+        multi-threaded parent can produce dead/broken children — observed in
+        CI as BrokenProcessPool right after unrelated tests left threads
+        behind, which cascaded into "Evolution produced no valid individuals".
+
+        ``forkserver`` forks workers from a clean single-threaded server
+        process instead; ``spawn`` is the portable fallback (and the default
+        on Windows/macOS, where forkserver does not exist).
+        """
+        ctx = None
+        if "forkserver" in multiprocessing.get_all_start_methods():
+            try:
+                ctx = multiprocessing.get_context("forkserver")
+            except ValueError:  # pragma: no cover - defensive
+                ctx = None
+        if ctx is not None:
+            return ProcessPoolExecutor(max_workers=workers, mp_context=ctx)
+        return ProcessPoolExecutor(max_workers=workers)
+
     def _ensure_pool(self) -> ProcessPoolExecutor:
         with self._pool_lock:
             if self._pool is None:
                 workers = max(1, int(self.max_workers or 1))
-                self._pool = ProcessPoolExecutor(max_workers=workers)
+                self._pool = self._make_pool(workers)
                 logger.debug("EvaluationService pool started with %d workers", workers)
             return self._pool
 
     def _get_ready_pool(self):
         """Return an executor whose workers are guaranteed to be up.
 
-        Python >= 3.14 uses the *forkserver* start method by default on Linux,
-        and ``ProcessPoolExecutor`` spawns its worker processes lazily on the
+        ``ProcessPoolExecutor`` spawns its worker processes lazily on the
         first ``submit()``. When island threads issue concurrent first-submits,
-        the forkserver bootstrap can race and die, surfacing as
-        BrokenProcessPool / ConnectionResetError. Warming one worker while
-        holding ``_pool_lock`` serializes that bootstrap exactly once; later
-        calls take the fast path (workers already alive).
+        the bootstrap can race and die, surfacing as BrokenProcessPool /
+        ConnectionResetError. Warming one worker while holding ``_pool_lock``
+        serializes that bootstrap exactly once; later calls take the fast path
+        (workers already alive).
         """
         if self._serial_fallback is not None:
             return self._serial_fallback
@@ -167,7 +189,7 @@ class EvaluationService:
                 return self._serial_fallback
             if self._pool is None:
                 workers = max(1, int(self.max_workers or 1))
-                self._pool = ProcessPoolExecutor(max_workers=workers)
+                self._pool = self._make_pool(workers)
                 logger.debug("EvaluationService pool started with %d workers", workers)
             try:
                 # The first submit bootstraps the forkserver and its first
