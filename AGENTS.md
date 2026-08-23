@@ -23,6 +23,20 @@ python -m pytest tests/ -q --deselect tests/test_hfc_tiers.py::test_hfc_deduplic
 
 # AGENTS.md — MutaLambda Workflow Guide
 
+## Production readiness (cerrado 2026-08-23)
+- Fuente de verdad: `docs/PRODUCTION_CHECKLIST.md` (workflow `Workflow_productionready_mutalambda`).
+- CI verde en main: Python 3.10/3.11/3.12 + Docker; imagen publicada en
+  `ghcr.io/adlgr87/mutalambda:{4.0.0,latest}`.
+- **Gotcha pools de procesos**: crear SIEMPRE `ProcessPoolExecutor` con contexto
+  explícito (`multiprocessing.get_context("forkserver")`, fallback spawn). Con el
+  default `fork` (py<=3.13), forkear desde proceso multi-hilo (pytest, runtime con
+  hilos de islas/LSP) produce hijos muertos → BrokenProcessPool →
+  "Evolution produced no valid individuals". Ver `EvaluationService._make_pool`.
+- **Gotcha GHCR**: la referencia de imagen debe ser 100% minúsculas y el workflow
+  necesita `permissions: packages: write` para que GITHUB_TOKEN pueda pushear.
+- ProfileMode: los valores legacy STRICT/PERMISSIVE fueron eliminados de los call
+  sites; no reintroducirlos (el enum válido es HOTFIX/BALANCED/DEBT/RELEASE).
+
 ## Overview
 MutaLambda is an evolutionary code optimization system. This guide documents
 CLI workflows, key modules, and conventions for contributors.
