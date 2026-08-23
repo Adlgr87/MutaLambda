@@ -7,7 +7,7 @@ Handles loading, saving, validating, and creating configuration files.
 import yaml
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 from rich.console import Console
 from rich.table import Table
 
