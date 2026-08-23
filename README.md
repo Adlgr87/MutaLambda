@@ -240,7 +240,11 @@ Current status: **521 tests passing**, CI green across Python 3.10/3.11/3.12 plu
 
 ## License
 
-MIT License
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+> **Commercial availability:** MutaLambda is currently evaluating a dual-license model
+> (open-core). Future releases may be distributed under a commercial license for
+> business use. See [COMMERCIAL.md](COMMERCIAL.md) for details.
 
 ---
 

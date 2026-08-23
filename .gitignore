@@ -39,5 +39,10 @@ checkpoints/
 
 # build artifacts
 build/
+dist/
+*.egg-info/
 *.so
 *.pyc
+
+# commercial planning (private, not part of the open distribution)
+MutaLambda_Commercial/
