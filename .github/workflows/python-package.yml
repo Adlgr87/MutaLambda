@@ -37,10 +37,10 @@ jobs:
         pytest tests/ -v --ignore=tests/e2e_tests.py
     - name: CLI smoke
       run: |
-        python cli.py --help
-        python cli.py config create --output /tmp/ml-test.yaml --template basic
-        python cli.py config validate --path /tmp/ml-test.yaml
-        python cli.py doctor || true
+        python mutalambda_cli.py --help
+        python mutalambda_cli.py config create --output /tmp/ml-test.yaml --template basic
+        python mutalambda_cli.py config validate --path /tmp/ml-test.yaml
+        python mutalambda_cli.py doctor || true
     - name: Fast E2E (serial)
       env:
         MUTALAMBDA_E2E_SERIAL: "1"
