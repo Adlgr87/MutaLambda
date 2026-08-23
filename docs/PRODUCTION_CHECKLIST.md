@@ -8,7 +8,7 @@
 
 | Área | Estado | Nota |
 |------|--------|------|
-| Tests | ✅ PASS | 521 passed / 0 failed (run limpio; flakiness intermitente en 2 tests deep-mode) |
+| Tests | ✅ PASS | 521 passed / 0 failed; flakiness deep-mode mitigado (timeout 120s + `@pytest.mark.flaky(reruns=2)`) y **CI verde** en Python 3.10/3.11/3.12 |
 | Benchmarks | ✅ PASS | Los 3 benchmarks dentro de umbrales |
 | Packaging (wheel/sdist) | ✅ FIXED | Wheel roto corregido; verificado end-to-end en venv limpio |
 | Docker | ⚠️ GAP | No existe Dockerfile en el repo |
