@@ -114,7 +114,7 @@ py-modules = [
   "logging_setup",
   "constants",
 ]
-packages = ["cli", "muta_ext", "muta_ext.evaluation", "muta_ext.lineage", "muta_ext.mutation", "muta_ext.config", "muta_ext.diagnostics", "lsp"]
+packages = ["bench", "bench.suites", "cli", "muta_ext", "muta_ext.evaluation", "muta_ext.lineage", "muta_ext.mutation", "muta_ext.config", "muta_ext.diagnostics", "lsp"]
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.md", "*.json"]
@@ -131,6 +131,7 @@ markers = [
     "v4: tests de nuevas funcionalidades v4.0",
     "go: tests de soporte Go",
     "ci: tests de integración CI/CD",
+    "bench: harness de benchmarks públicos (bench/)",
 ]
 
 [tool.ruff]

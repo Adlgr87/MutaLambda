@@ -53,6 +53,45 @@ Internal targets from the author's MASSIVE framework (see honesty note below):
 > [!IMPORTANT]
 > **Honesty note:** these targets are internal modules, not standard public benchmarks (Rosetta / HumanEval-Plus / MBPP-Exec). They have not been reproduced on unseen codebases and before/after diffs are not published here, so these numbers cannot be independently audited from this repository. "Correctness" means the author's own test targets passed. The Phase-6 micro-benchmarks show real gains at scale; end-to-end speedup on small workloads is ~1.0× because LLM latency dominates.
 
+### Public benchmarks (`bench/`)
+
+The table above is being replaced by numbers a stranger can re-derive. `bench/` is an
+auditable harness that runs MutaLambda against public benchmarks and actively tries to
+catch itself cheating — see **[docs/BENCHMARKS.md](docs/BENCHMARKS.md)** for the full
+methodology.
+
+| Tier | Suite | Settles |
+|---|---|---|
+| 1 | `effibench` | ratio to the human canonical solution (EffiBench's 3.12× finding) |
+| 1 | `pie` | %Opt and speedup on C++ pairs already compiled at `-O3` |
+| 1 | `polybench` | numerical kernels — where vectorisation shows up or does not |
+| 2 | `effibench-plus` | optimize the code **without breaking the physics** (invariants) |
+| 2 | `rosetta` | does a Python-side optimization survive emission to Rust/C++? |
+| 3 | `eoh` | heuristic discovery quality per dollar (bin packing, circle packing) |
+
+```bash
+python -m bench.runner list                                    # suites + status
+python -m bench.runner run --suite smoke --optimizer baseline  # harness self-test
+python -m bench.runner run --suite effibench --optimizer mutalambda:deep \
+    --repeats 5 --out results/ --include-diffs
+```
+
+What makes a result publishable here:
+
+- **Held-out tests** the optimizer never sees decide whether a speedup counts.
+- **Integrity gates** reject hardcoded answer tables, no-op entrypoints, forbidden
+  imports and clock tampering; every finding is printed with its reason.
+- **A measured noise floor**: the harness times identical code against itself and
+  refuses to count wins below that band.
+- **Interleaved A/B measurement**, N repeats, mean ± std, plus token and USD cost.
+- **Ablations** (`--ablation no_hfc`, `no_thc`, `no_prompt_evolution`, …) so a gain
+  can be attributed to a component instead of asserted.
+
+> Current status: the harness and its gates are tested (43 tests, CI-guarded) and the
+> download-free suites run today. Dataset-backed suites need a local fetch
+> (`scripts/fetch_bench_datasets.py`); no benchmark data is committed. **No public
+> benchmark result is claimed yet** — the numbers go here when they exist.
+
 ## Architecture Overview
 
 ```
