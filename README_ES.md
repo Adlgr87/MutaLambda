@@ -2,6 +2,8 @@
 
 <div align="center">
 
+<img src="assets/MutaLambda_Logo.png" alt="MutaLambda logo" width="220"/>
+
 **Mejoras de Rendimiento Validadas mediante Optimización Evolutiva**
 
 [![Rendimiento](https://img.shields.io/badge/Rendimiento-50--263%25%20speedup-blue)]()
