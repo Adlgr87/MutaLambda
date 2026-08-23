@@ -8,6 +8,10 @@ on:
 
 permissions:
   contents: read
+  # Required for docker/login-action + docker push to GHCR using GITHUB_TOKEN;
+  # without it the push is rejected with "denied: installation not allowed
+  # to Create organization package".
+  packages: write
 
 env:
   # GHCR requires fully lowercase image references; github.repository
