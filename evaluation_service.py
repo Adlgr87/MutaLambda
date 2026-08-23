@@ -14,7 +14,7 @@ import logging
 import os
 import sys
 import threading
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
@@ -101,6 +101,7 @@ class EvaluationService:
     def __post_init__(self) -> None:
         self._pool: Optional[ProcessPoolExecutor] = None
         self._pool_lock = threading.Lock()
+        self._serial_fallback: Optional[ThreadPoolExecutor] = None
         self._cache: Dict[str, EvalResult] = {}
         self._cache_lock = threading.Lock()
         self._runner: Optional[CandidateRunner] = None
@@ -147,6 +148,61 @@ class EvaluationService:
                 self._pool = ProcessPoolExecutor(max_workers=workers)
                 logger.debug("EvaluationService pool started with %d workers", workers)
             return self._pool
+
+    def _get_ready_pool(self):
+        """Return an executor whose workers are guaranteed to be up.
+
+        Python >= 3.14 uses the *forkserver* start method by default on Linux,
+        and ``ProcessPoolExecutor`` spawns its worker processes lazily on the
+        first ``submit()``. When island threads issue concurrent first-submits,
+        the forkserver bootstrap can race and die, surfacing as
+        BrokenProcessPool / ConnectionResetError. Warming one worker while
+        holding ``_pool_lock`` serializes that bootstrap exactly once; later
+        calls take the fast path (workers already alive).
+        """
+        if self._serial_fallback is not None:
+            return self._serial_fallback
+        with self._pool_lock:
+            if self._serial_fallback is not None:
+                return self._serial_fallback
+            if self._pool is None:
+                workers = max(1, int(self.max_workers or 1))
+                self._pool = ProcessPoolExecutor(max_workers=workers)
+                logger.debug("EvaluationService pool started with %d workers", workers)
+            try:
+                # The first submit bootstraps the forkserver and its first
+                # worker; performing it under the lock removes the race.
+                self._pool.submit(int, 0).result(timeout=60.0)
+            except Exception as exc:
+                logger.warning(
+                    "Process pool unavailable (%s); falling back to serial evaluation", exc
+                )
+                try:
+                    self._pool.shutdown(wait=False)
+                except Exception:
+                    pass
+                self._pool = None
+                executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="eval-serial")
+                self._serial_fallback = executor
+                return executor
+            return self._pool
+
+    def shutdown_pool(self) -> None:
+        pool = getattr(self, "_pool", None)
+        if pool is not None:
+            try:
+                pool.shutdown(wait=False, cancel_futures=True)
+            except TypeError:
+                pool.shutdown(wait=False)
+            self._pool = None
+
+    def shutdown(self) -> None:
+        """Release pooled resources (process pool / serial fallback)."""
+        self.shutdown_pool()
+        fallback = getattr(self, "_serial_fallback", None)
+        if fallback is not None:
+            fallback.shutdown(wait=False)
+            self._serial_fallback = None
 
     def evaluate_one(self, code: str) -> EvalResult:
         results = self.evaluate_batch([code])
@@ -199,7 +255,7 @@ class EvaluationService:
             for i in pending_idx:
                 results[i] = runner.run(codes[i], self.test_cases)
         else:
-            pool = self._ensure_pool()
+            pool = self._get_ready_pool()
             args_list = [
                 (
                     codes[i],

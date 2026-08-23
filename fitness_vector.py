@@ -23,6 +23,15 @@ DEFAULT_WEIGHTS: Dict[str, float] = {
     "memory_peak_mb":-0.10,
 }
 
+# Reference costs for normalizing absolute units (milliseconds / MiB) into
+# dimensionless penalties in FitnessVector.to_scalar(). A candidate costing
+# exactly these references pays RESOURCE_PENALTY_WEIGHT points; the total
+# penalty is capped so resource terms can never outweigh correctness ordering.
+REF_LATENCY_MS: float = 500.0
+REF_MEMORY_MB: float = 64.0
+RESOURCE_PENALTY_WEIGHT: float = 0.05
+MAX_RESOURCE_PENALTY: float = 0.25
+
 
 @dataclass
 class FitnessVector:
@@ -93,12 +102,17 @@ class FitnessVector:
         if self.correctness < 1.0:
             return self.correctness - 1.0  # All imperfect solutions rank below perfect
 
-        # Weighted sum for correct solutions
-        return (
-            DEFAULT_WEIGHTS["correctness"] * self.correctness
-            + DEFAULT_WEIGHTS["latency_p50"] * self.latency_p50
-            + DEFAULT_WEIGHTS["memory_peak_mb"] * self.memory_peak_mb
+        # Weighted sum over *normalized* objectives. Raw absolute units
+        # (milliseconds / MiB) previously dominated correctness units and sank
+        # fully-correct candidates below the -1.0 floor reserved for broken
+        # ones, inverting selection pressure (evolution preferred crashing code).
+        latency_norm = max(0.0, self.latency_p50) / REF_LATENCY_MS
+        memory_norm = max(0.0, self.memory_peak_mb) / REF_MEMORY_MB
+        penalty = min(
+            MAX_RESOURCE_PENALTY,
+            RESOURCE_PENALTY_WEIGHT * (latency_norm + memory_norm),
         )
+        return DEFAULT_WEIGHTS["correctness"] * self.correctness - penalty
 
     def weighted_sum(self) -> float:
         """Alias for to_scalar()."""

@@ -558,7 +558,24 @@ class ProgressivePipeline:
         improvement = self._calculate_improvement(baseline_fitness, optimized_fitness)
 
         if optimized_fitness.correctness < 1.0:
-            return {"success": False, "reason": "best_not_correct"}
+            # Surface WHY the evolved candidate failed re-evaluation: without
+            # this, every divergence collapsed into an opaque
+            # "best_not_correct" and required manual probing to diagnose.
+            reason = "best_not_correct"
+            best_fitness = getattr(best, "fitness", None)
+            if best_fitness is not None:
+                try:
+                    best_score = best_fitness.to_scalar()
+                except Exception:
+                    best_score = float("nan")
+                reason = (
+                    "best_not_correct: agent-side fitness had "
+                    f"correctness={getattr(best_fitness, 'correctness', float('nan')):.3f} "
+                    f"(score={best_score:.4f}) but pipeline re-evaluation measured "
+                    f"correctness={optimized_fitness.correctness:.3f}"
+                )
+            logger.error("%s", reason)
+            return {"success": False, "reason": reason}
 
         if improvement < self.min_improvement:
             logger.info(
