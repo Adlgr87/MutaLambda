@@ -94,22 +94,21 @@ Artefactos regenerados en `dist/`:
 
 ## 4. Docker
 
-**GAP CONFIRMADO**: no existe `Dockerfile` ni `docker-compose.yml` en el repo.
-El código ya soporta `runner_mode="container"` (recomendado para candidatos no confiables),
-pero no hay imagen base lista. Plantilla mínima sugerida:
+**COMPLETADO (2026-08-22)**: imagen de producción multi-stage validada end-to-end.
 
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-COPY pyproject.toml README.md ./
-COPY . .
-RUN pip install --no-cache-dir . && useradd -m runner && usermod -aG docker runner
-USER runner
-ENTRYPOINT ["mutalambda"]
-```
-
-Pendiente para próxima iteración: construir, probar `docker run ... mutalambda --help`
-y añadir job de build al workflow CI.
+- `Dockerfile` multi-stage (`python:3.12-slim` builder → runtime), extras
+  `cli,uast,scientific` instalados en venv aislado; el extra `archive`
+  (faiss/sentence-transformers → torch) queda opcional fuera por defecto.
+- Endurecida: usuario no-root `mutalambda` (uid/gid 10001), compatible con rootfs
+  read-only (`HOME=/tmp`), labels OCI, `.dockerignore` de contexto mínimo (~635 MB final).
+- Workflow `.github/workflows/docker-image.yml`: build con cache GHA, smoke tests
+  endurecidos (`--cap-drop=ALL`, `--security-opt=no-new-privileges`, `--read-only`,
+  `--network=none`) y push a GHCR (`ghcr.io/adlgr87/mutalambda:{version,latest}`)
+  únicamente en push a `main`.
+- Fixes habilitantes: versión CLI single-source desde `pyproject.toml` (antes hardcodeada
+  3.1.0 vs 4.0.0 real) y `CheckpointManager.__init__` tolerante a filesystem read-only.
+- Validado localmente: `docker build` ✓ y smokes `--version` / `examples` ✓ bajo sandbox
+  endurecido como usuario sin privilegios.
 
 ## 5. Seguridad
 
@@ -150,7 +149,8 @@ Recomendación: documentar que `container` es el modo soportado para código de 
 
 1. **[ALTA] ProfileMode mismatch** — 4 call sites usan valores legacy inexistentes;
    fallback silencioso puede alterar comportamiento esperado en producción.
-2. **[ALTA] Dockerfile ausente** — bloquea despliegue containerizado y job CI de imagen.
+2. ~~**[ALTA] Dockerfile ausente**~~ — **COMPLETADA (2026-08-22)**: imagen multi-stage
+   endurecida + workflow GHCR (`docker-image.yml`) con smokes endurecidos en verde.
 3. ~~**[MEDIA] Flaky deep-mode tests**~~ — **MITIGADA**: `@pytest.mark.flaky(reruns=2)`
    aplicado a los 2 tests deep-mode con `pytest-rerunfailures` en CI (pendiente solo
    la mejora de fondo: LLM cerrado determinista sin dependencia del timing del pool).

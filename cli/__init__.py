@@ -1,6 +1,12 @@
 """MutaLambda CLI package."""
 
-__version__ = "3.1.0"
+# Single source of truth: pyproject.toml ([project] version).
+try:
+    from importlib.metadata import version as _version
+
+    __version__ = _version("mutalambda")
+except Exception:  # paquete no instalado (uso desde el arbol fuente)
+    __version__ = "4.0.0"
 
 from cli.main import MutaLambdaCLI, InteractiveREPL
 from cli.animator import RetroAnimator

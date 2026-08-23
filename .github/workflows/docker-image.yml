@@ -1,0 +1,60 @@
+name: Docker image
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build-test-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: mutalambda:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test (hardened sandbox)
+        run: |
+          docker run --rm \
+            --cap-drop=ALL --security-opt=no-new-privileges \
+            --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --network=none \
+            mutalambda:ci --version
+          docker run --rm \
+            --cap-drop=ALL --security-opt=no-new-privileges \
+            --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --network=none \
+            mutalambda:ci examples
+
+      - name: Login to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)
+          docker tag mutalambda:ci "$IMAGE:$VERSION"
+          docker tag mutalambda:ci "$IMAGE:latest"
+          docker push "$IMAGE:$VERSION"
+          docker push "$IMAGE:latest"
