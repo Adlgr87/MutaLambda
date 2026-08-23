@@ -39,11 +39,13 @@ ejecutan el motor real vía sandbox subprocess con `timeout_sec=60`; bajo carga 
 suite completa, las evaluaciones paralelas pueden exceder el timeout → pipeline agotada
 sin variantes evaluadas.
 
-Mitigaciones sugeridas:
+Mitigaciones:
 1. Aumentar `timeout_sec` a 120s en esos dos tests, o
-2. Marcarlos `@pytest.mark.flaky(reruns=2)` / moverlos a un job serializado en CI,
-   o
-3. Inyectar un `_closed_form_llm` más determinista que no dependa de timing del pool.
+2. Marcarlos `@pytest.mark.flaky(...)` — **APLICADA**: ambos tests llevan
+   `@pytest.mark.flaky(reruns=2, reruns_delay=2)` vía `pytest-rerunfailures`
+   (añadido a las deps del CI), o
+3. Inyectar un `_closed_form_llm` más determinista que no dependa de timing del pool
+   (mejora de fondo pendiente).
 
 ## 2. Benchmarks
 
@@ -149,7 +151,9 @@ Recomendación: documentar que `container` es el modo soportado para código de 
 1. **[ALTA] ProfileMode mismatch** — 4 call sites usan valores legacy inexistentes;
    fallback silencioso puede alterar comportamiento esperado en producción.
 2. **[ALTA] Dockerfile ausente** — bloquea despliegue containerizado y job CI de imagen.
-3. **[MEDIA] Flaky deep-mode tests** — estabilizar (timeout↑ / serializar / marcar flaky).
+3. ~~**[MEDIA] Flaky deep-mode tests**~~ — **MITIGADA**: `@pytest.mark.flaky(reruns=2)`
+   aplicado a los 2 tests deep-mode con `pytest-rerunfailures` en CI (pendiente solo
+   la mejora de fondo: LLM cerrado determinista sin dependencia del timing del pool).
 4. **[MEDIA] Migrar packaging a src-layout + auto-discovery** — elimina la clase entera
    de bugs "py-modules desactualizado".
 5. **[BAJA] Exporter de métricas** (Prometheus/OTel) si se expone como servicio long-running.

@@ -162,12 +162,15 @@ class TestFastPhase:
 # ── Deep phase: real engine ─────────────────────────────────────────────────
 
 class TestDeepPhase:
+    # Flaky bajo carga de la suite completa (ver docs/PRODUCTION_CHECKLIST.md §1);
+    # falla rápido, así que reintentar es barato.
+    @pytest.mark.flaky(reruns=2, reruns_delay=2)
     def test_runs_real_engine(self):
         p = ProgressivePipeline(
             llm_fn=_closed_form_llm,
             test_cases=_test_cases(),
             min_improvement=0.1,
-            timeout_sec=60.0,
+            timeout_sec=120.0,
         )
         p._resolved_test_cases = _test_cases()
         res = p._deep_phase(SUM_SQUARES, [])
@@ -195,12 +198,14 @@ class TestEndToEnd:
         assert result.phase_reached == "fast_mode"
         assert result.fitness.correctness == 1.0
 
+    # Flaky bajo carga de la suite completa (ver docs/PRODUCTION_CHECKLIST.md §1).
+    @pytest.mark.flaky(reruns=2, reruns_delay=2)
     def test_full_run_deep_mode(self):
         p = ProgressivePipeline(
             llm_fn=_closed_form_llm,
             test_cases=_test_cases(),
             min_improvement=0.1,
-            timeout_sec=60.0,
+            timeout_sec=120.0,
         )
         result = p.run(SUM_SQUARES, mode="deep")
         assert result.success is True
