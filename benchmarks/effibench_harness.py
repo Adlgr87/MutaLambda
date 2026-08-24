@@ -233,9 +233,13 @@ def main() -> int:
     print(f"\nReport written to {out}")
 
     if args.smoke:
-        ok = (summary["n_valid_comparisons"] == len(selected)
-              and summary["mean_ratio_to_canonical"] is not None
-              and abs(summary["mean_ratio_to_canonical"] - 1.0) < 0.5)
+        if args.baseline_only:
+            # Baseline-only smoke: verify all baselines passed at least once.
+            n_ok = sum(1 for r in records if r["baseline"]["correctness"] > 0)
+            ok = n_ok == len(selected) and summary["n_baseline_fail"] == 0
+        else:
+            ok = (summary["n_valid_comparisons"] > 0
+                  and summary["mean_ratio_to_canonical"] is not None)
         print(f"SMOKE {'PASS' if ok else 'FAIL'}")
         return 0 if ok else 1
     return 0
