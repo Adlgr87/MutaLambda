@@ -58,6 +58,7 @@ test_cases = [
     {"function": "fft_iterative", "args": [list(R), list(I)], "expected": (rr, ii), "comparison": "array_allclose"},
 ]
 invariants = ['len(out[0]) == len(x[0]) and len(out[1]) == len(x[0])']
+input_strategy = "st.sampled_from([1, 2, 4, 8]).flatmap(lambda n: st.tuples(st.lists(st.floats(min_value=-5,max_value=5,allow_nan=False), min_size=n, max_size=n), st.lists(st.floats(min_value=-5,max_value=5,allow_nan=False), min_size=n, max_size=n)))"
 
 def arg_factory():
     import random

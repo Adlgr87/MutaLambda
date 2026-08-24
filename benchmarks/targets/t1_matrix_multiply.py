@@ -23,6 +23,7 @@ test_cases = [
     {"function": "matrix_multiply", "args": [[[1, 0], [0, 1]], [[1, 0], [0, 1]]], "expected": [[1, 0], [0, 1]], "comparison": "equal"},
 ]
 invariants = ['len(out) == len(x[0]) and (len(out[0]) == len(x[1][0]) if out else True)']
+input_strategy = "st.sampled_from([(1, 1, 1), (2, 2, 2), (2, 3, 2), (3, 2, 3)]).flatmap(lambda dims: st.tuples(st.lists(st.lists(st.integers(min_value=0, max_value=5), min_size=dims[1], max_size=dims[1]), min_size=dims[0], max_size=dims[0]), st.lists(st.lists(st.integers(min_value=0, max_value=5), min_size=dims[2], max_size=dims[2]), min_size=dims[1], max_size=dims[1])))"
 
 def arg_factory():
     import random

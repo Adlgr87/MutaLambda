@@ -13,6 +13,8 @@ jobs:
   mutate:
     name: MutaLambda benchmark
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -40,6 +42,9 @@ jobs:
     needs: mutate
     if: github.event_name == 'pull_request' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -69,4 +74,3 @@ jobs:
               await github.rest.issues.createIssueComment({ owner, repo, issue_number: pr, body });
               console.log('Created new MutaLambda PR comment');
             }
-

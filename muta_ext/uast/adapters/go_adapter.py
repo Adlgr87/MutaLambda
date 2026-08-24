@@ -32,7 +32,7 @@ class GoAdapter(BaseAdapter):
 
     def __init__(self):
         if not TREE_SITTER_AVAILABLE:
-            raise ImportError("tree-sitter is required for Go adapter")
+            raise ModuleNotFoundError("No module named 'tree_sitter'", name="tree_sitter")
         from tree_sitter_go import language as go_lang
         self._parser = Parser(Language(go_lang()))
 

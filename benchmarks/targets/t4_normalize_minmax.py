@@ -39,4 +39,4 @@ test_cases = [
     {"function": "normalize_minmax", "args": [[[5.0,5.0,5.0]], 0.0, 1.0], "expected": [[0.5,0.5,0.5]], "comparison": "array_allclose"},
 ]
 invariants = ['all(x[1] <= float(v) <= x[2] for row in out for v in row)']
-input_strategy = "st.lists(st.lists(st.floats(min_value=-100,max_value=100,allow_nan=False),min_size=2,max_size=4),min_size=2,max_size=8)"
+input_strategy = "st.sampled_from([2, 3, 4]).flatmap(lambda cols: st.tuples(st.lists(st.lists(st.floats(min_value=-100,max_value=100,allow_nan=False,allow_infinity=False), min_size=cols, max_size=cols), min_size=2, max_size=8), st.floats(min_value=-100,max_value=100,allow_nan=False,allow_infinity=False), st.floats(min_value=-100,max_value=100,allow_nan=False,allow_infinity=False)).filter(lambda x: x[1] <= x[2]))"

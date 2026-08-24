@@ -141,7 +141,7 @@ def test_subprocess_runner_blocks_cpu_burn():
     # The candidate must NOT pass: it either times out or is killed by the
     # CPU RLIMIT. Either way ``passed`` is False and the run terminated abruptly.
     assert result.passed is False
-    assert result.timed_out is True or "TimeoutExpired" in str(result.stderr) or result.stderr
+    assert result.metrics["latency"] <= timeout_sec + 1.0
 
 
 def test_subprocess_runner_cpu_limit_attribute():

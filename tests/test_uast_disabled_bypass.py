@@ -16,6 +16,7 @@ import os
 import subprocess
 import sys
 import textwrap
+from ast import literal_eval
 
 import pytest
 
@@ -45,7 +46,7 @@ _BLOCKER_SCRIPT = textwrap.dedent(
         blocked = set(os.environ["MUTA_TEST_BLOCK"].splitlines())
         def find_spec(self, name, path, target=None):
             if name in self.blocked or name == "tree_sitter" or name.startswith("tree_sitter."):
-                raise ImportError("blocked " + name)
+                raise ModuleNotFoundError(f"No module named {name!r}", name=name)
             return None
         find_module = find_spec
 
@@ -106,7 +107,7 @@ def test_package_import_does_not_pull_tree_sitter():
     out = _run_isolated(_TREE_SITTER_BINDINGS, _ADAPTER_MODULES)
     assert "PKG_IMPORT_OK" in out
     loaded_line = [l for l in out.splitlines() if l.startswith("HEAVY_LOADED:")][0]
-    loaded = eval(loaded_line.split("HEAVY_LOADED:", 1)[1].strip())
+    loaded = literal_eval(loaded_line.split("HEAVY_LOADED:", 1)[1].strip())
     assert loaded == [], f"eager imports detected: {loaded}"
 
 

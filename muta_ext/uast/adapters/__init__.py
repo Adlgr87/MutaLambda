@@ -44,6 +44,20 @@ def _missing_extra_message(language: str, extra: Optional[str]) -> ImportError:
     )
 
 
+def _is_missing_tree_sitter(exc: BaseException) -> bool:
+    """Return True only for missing optional tree-sitter modules."""
+    seen = set()
+    current: Optional[BaseException] = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, ModuleNotFoundError):
+            module_name = getattr(current, "name", "") or ""
+            if module_name == "tree_sitter" or module_name.startswith("tree_sitter_"):
+                return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
 def _load_class(language: str, module_path: str, class_name: str, extra: Optional[str]):
     """Import and return an adapter class, translating missing deps."""
     try:
@@ -51,7 +65,7 @@ def _load_class(language: str, module_path: str, class_name: str, extra: Optiona
     except ImportError as exc:
         # Re-raise as a friendly ImportError mentioning the install command
         # when the failure is tied to the optional tree-sitter bindings.
-        if extra is not None:
+        if extra is not None and _is_missing_tree_sitter(exc):
             raise _missing_extra_message(language, extra) from exc
         raise
     try:
@@ -81,7 +95,7 @@ def get_adapter(language: str) -> BaseAdapter:
         # The adapter module imported but instantiation failed because an
         # optional tree-sitter binding was unavailable — surface the friendly
         # install hint instead of a raw error.
-        if extra is not None:
+        if extra is not None and _is_missing_tree_sitter(exc):
             raise _missing_extra_message(language, extra) from exc
         raise
 

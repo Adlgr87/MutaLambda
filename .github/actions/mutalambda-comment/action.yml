@@ -30,7 +30,7 @@ runs:
           --targets "$TARGETS" \
           --skip-llm --skip-compilers --real-muta 0 \
           --reps "${{ inputs.reps }}" \
-          > mutalambda-bench.log 2>&1 || true
+          > mutalambda-bench.log 2>&1
         # Generate the optimization-table markdown from the result artifacts.
         python - "$TARGETS" <<'PY'
         import json, os, sys
