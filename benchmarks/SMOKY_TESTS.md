@@ -11,6 +11,21 @@
 pip install pyarrow
 ```
 
+## Coverage Audit (auditability / methodology)
+
+```bash
+# Fast coverage report (how many of the 1000 tasks are convertible)
+python benchmarks/effibench_loader.py --coverage-only
+# Expected: Coverage: 891/1000 (excluded 109)
+
+# Full loader check (includes first task sample)
+python benchmarks/effibench_loader.py /tmp/effibench_train.parquet
+# Expected: Coverage: 891/1000, Loaded 891 tasks; first: ...
+
+# Show help
+python benchmarks/effibench_loader.py --help
+```
+
 ## Smoke Test Commands
 
 ### Baseline-only (correctness + timing verification)
