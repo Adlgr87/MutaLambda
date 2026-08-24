@@ -7,6 +7,7 @@
 **Evolutionary code optimization: LLMs + genetic algorithms (NSGA-II) that make your Python, Rust and C++ faster without breaking it.**
 
 [![CI](https://github.com/Adlgr87/MutaLambda/actions/workflows/python-package.yml/badge.svg?branch=main)](https://github.com/Adlgr87/MutaLambda/actions/workflows/python-package.yml)
+[![Optimization Pipeline](https://github.com/Adlgr87/MutaLambda/actions/workflows/mutalambda-optimization-pipeline.yml/badge.svg)](https://github.com/Adlgr87/MutaLambda/actions/workflows/mutalambda-optimization-pipeline.yml)
 [![Docker Image](https://github.com/Adlgr87/MutaLambda/actions/workflows/docker-image.yml/badge.svg?branch=main)](https://github.com/Adlgr87/MutaLambda/actions/workflows/docker-image.yml)
 [![Docker pulls](https://img.shields.io/badge/ghcr.io-adlgr87%2Fmutalambda-blue)](https://github.com/Adlgr87?tab=packages&q=mutalambda)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
@@ -169,6 +170,37 @@ mutalambda tutorial            # guided step-by-step walkthrough
 
 Full reference: [docs/CLI.md](docs/CLI.md) · Guided walkthrough: [docs/getting-started/first-optimization.md](docs/getting-started/first-optimization.md)
 
+## Pipeline CLI Modules
+
+> **Status:** FASES 0–2 of the 2.0 pipeline implemented (2026-08-24). FASE 3+ pending CI validation.
+
+The optimization pipeline is composed of independent CLI modules that chain together via GitHub Actions artifacts:
+
+| Module | Usage | Description |
+|--------|-------|-------------|
+| `universal_parser.py` | `python universal_parser.py examples/target.py -o uast.json` | CLI wrapper over UAST adapters (Python, Rust, C++) → CoreUAST JSON |
+| `invariant_detector.py` | `python invariant_detector.py uast.json -o invariants.lock` | Static analyzer: CODATA constants, math identities, numeric tolerances, crypto patterns |
+| `evolve.py` | `python evolve.py --uast uast.json --profile scientific --generations 50` | Unified orchestrator: AST mutation + HFC tiers + checkpoints. Profiles: `enterprise`, `scientific`, `gpu` |
+| `regression_gate.py` | `python regression_gate.py comparison.json --max-regression 2` | Gate with configurable thresholds. PR-gate mode is non-blocking (annotate only) |
+| `certify.py` | `python certify.py --baseline baseline.json --optimized optimized.json --invariants invariants.lock --sign` | Generates `certificate.json` with content hashes + optional HMAC signature |
+
+### Artifact Wire Contracts
+
+See [docs/pipeline.md](docs/pipeline.md) for full JSON schemas. Key artifacts:
+
+- **`uast.json`** — flat node list with `type`, `name`, `start_line`, `end_line`, `children`
+- **`invariants.lock`** — versioned JSON with `content_hash`, `constants`, `identities`, `tolerances`, `crypto_patterns`
+- **`comparison.json`** — baseline vs optimized metrics with Mann-Whitney U test results
+- **`certificate.json`** — signed binding of baseline_hash, optimized_hash, invariants_hash, seed, config_hash
+
+### GitHub Actions Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `python-package.yml` | push/PR | Lightweight CI: lint + tests + CLI smoke |
+| `mutalambda-pr-gate.yml` | PR on main | Fast gate (<10 min): flake8 + black + pytest + CLI smoke |
+| `mutalambda-optimization-pipeline.yml` | `workflow_dispatch` only | Full 6-phase pipeline: fingerprint → baseline → evolve → verify → compare → explain/publish |
+
 ## Configuration
 
 Configuration lives in `config.yaml` with Pydantic validation:
@@ -219,7 +251,7 @@ uast:
 python -m pytest tests/ -v
 ```
 
-Current status: **521 tests passing**, CI green across Python 3.10/3.11/3.12 plus Docker build/test/push. See [docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md) for the production-readiness audit.
+Current status: **558 tests passing** (441 existing + 37 new pipeline tests), CI green across Python 3.10/3.11/3.12 plus Docker build/test/push. See [docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md) for the production-readiness audit.
 
 ## Documentation
 
@@ -234,6 +266,10 @@ Current status: **521 tests passing**, CI green across Python 3.10/3.11/3.12 plu
 
 ## Roadmap
 
+- [x] FASES 0–2: Pipeline CLI modules (universal_parser, invariant_detector, evolve, regression_gate, certify)
+- [x] FASES 0–2: GitHub Actions workflows (PR gate + optimization pipeline)
+- [ ] FASE 3: Full pipeline CI validation (requires 3 consecutive green runs)
+- [ ] FASE 4: Enable weekly schedule trigger
 - [ ] src-layout packaging migration (eliminates py-modules maintenance class of bugs)
 - [ ] Metrics exporter (Prometheus/OTel) for long-running service deployments
 - [ ] Independent reproduction of validated results on public benchmarks
