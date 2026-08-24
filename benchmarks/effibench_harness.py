@@ -209,6 +209,8 @@ def main() -> int:
         print(f"LLM backend: {args.backend}:{args.model}")
 
     records = []
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
     for i, task in enumerate(selected):
         rec = run_task(task, args, generate)
         records.append(rec)
@@ -218,14 +220,19 @@ def main() -> int:
             extra = f" ratio={rec['ratio_to_canonical']} kept={rec['kept']}"
         print(f"[{i+1}/{len(selected)}] #{task.problem_idx} {task.task_name[:44]:44s} "
               f"{tag}{extra}")
+        # Incremental write for resilience
+        summary = summarize(records, args.min_improvement)
+        report = {"benchmark": "EffiBench", "mode": "smoke" if args.smoke else
+                  "baseline" if args.baseline_only else "llm",
+                  "config": vars(args) | {"parquet": str(args.parquet)},
+                  "summary": summary, "results": records}
+        out.write_text(json.dumps(report, indent=1))
 
     summary = summarize(records, args.min_improvement)
     report = {"benchmark": "EffiBench", "mode": "smoke" if args.smoke else
               "baseline" if args.baseline_only else "llm",
               "config": vars(args) | {"parquet": str(args.parquet)},
               "summary": summary, "results": records}
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=1))
     print("\n== SUMMARY ==")
     for k, v in summary.items():
