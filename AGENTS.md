@@ -21,6 +21,34 @@ python scripts/benchmark_checkpoint_serialization.py
 python -m pytest tests/ -q --deselect tests/test_hfc_tiers.py::test_hfc_deduplicates_demoted_elite_duplicate_in_factory
 ```
 
+### Benchmarks (Phase 7 — completed 2026-08-23)
+
+Three-tier benchmark suite with reproducible reports:
+
+**Tier 1 (Obligatory):**
+- **EffiBench** — 1,000 tasks, 77K+ C++ pairs in PIE, pyperformance+PolyBench
+  - OpenRouter integration with `dots-studio/dots-3-note-preview:free`
+  - Results: 50% opt rate, 1.26x mean speedup, 100% correctness
+  - Target: reduce 3.12x ratio → 1.1x
+- **PIE** — 10/10 tasks, mean speedup 1.23x, median 1.19x
+- **pyperformance+PolyBench** — 15 kernels, baseline 91.44ms → optimized 5.94ms
+
+**Tier 2 (Differentiate):**
+- **EffiBench+ Scientific Mode** — 5 invariants (energy/mass/monotonicity)
+- **Rosetta Code** — Python→Rust/C++ cross-language optimization
+
+**Tier 3 (Moonshot):**
+- **EoH suite** — Circle packing, bin packing, knapsack, TSP (12 instances)
+
+All reproducible via:
+```bash
+python benchmarks/run_full_suite.py
+python benchmarks/effibench_harness.py --tasks 100 --llm --backend openrouter
+python benchmarks/pie_harness.py --tasks 10
+python benchmarks/eoh_suite.py
+```
+See `benchmarks/BENCHMARK_STRATEGY.md` for full details.
+
 # AGENTS.md — MutaLambda Workflow Guide
 
 ## Production readiness (cerrado 2026-08-23)
