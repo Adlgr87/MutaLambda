@@ -30,7 +30,13 @@ class CheckpointManager:
         self.checkpoint_dir = Path(checkpoint_dir)
         self.animator = animator or RetroAnimator()
         self.console = Console()
-        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            # Filesystem read-only (p.ej. contenedor con rootfs inmutable): los
+            # comandos de solo lectura deben seguir funcionando; save() emitira
+            # un error claro al intentar escribir.
+            pass
 
     def save(
         self,

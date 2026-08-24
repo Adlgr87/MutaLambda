@@ -32,11 +32,13 @@ from rich.console import Console
 
 from cli.main import MutaLambdaCLI, InteractiveREPL
 
+from cli import __version__
+
 console = Console()
 
 
 @click.group()
-@click.version_option(version="3.1.0", prog_name="MutaLambda")
+@click.version_option(version=__version__, prog_name="MutaLambda")
 @click.pass_context
 def cli(ctx):
     """🧬 MutaLambda — Evolución genética de código Python."""

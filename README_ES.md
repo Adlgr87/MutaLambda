@@ -2,6 +2,8 @@
 
 <div align="center">
 
+<img src="assets/MutaLambda_Logo.png" alt="MutaLambda logo" width="220"/>
+
 **Mejoras de Rendimiento Validadas mediante Optimización Evolutiva**
 
 [![Rendimiento](https://img.shields.io/badge/Rendimiento-50--263%25%20speedup-blue)]()
@@ -26,6 +28,19 @@ MutaLambda es un sistema de optimización evolutiva de código que utiliza Model
 ✅ **Optimización de `_get_fitness()`** — +10.2% de speedup validado con 149/149 tests pasando
 ✅ **CLI Interactiva** — Interfaz de línea de comandos completa con animaciones retro
 ✅ **Sistema de Checkpoints** — Guarda y reanuda ejecuciones evolutivas sin problemas
+
+> ⚠️ **Alcance de las métricas (leer antes de citarlas).** Los módulos
+> optimizados (`utility_logic`, `energy_engine_pure`, etc.) son targets
+> **internos** del autor dentro del framework MASSIVE, **no** benchmarks
+> estándar como Rosetta, HumanEval-Plus o MBPP-Exec. No se han reproducido en
+> codebases hostiles/desconocidas, y los diffs antes/después **no se publican**
+> en este repositorio — por lo que el "3.6×" de `utility_logic` no es auditable
+> de forma independiente (podría reflejar un cuello de botella trivial de un
+> bucle, no una transformación sutil). "100% correctitud" significa que pasaron
+> los tests propios del autor, no una afirmación de correctitud sobre un
+> benchmark externo. Las cifras de "rigor estadístico" (p-value, intervalos de
+> confianza, "revisión por pares") citadas más abajo corresponden a la
+> documentación histórica y no a una evaluación re-auditable en este repo.
 
 ---
 

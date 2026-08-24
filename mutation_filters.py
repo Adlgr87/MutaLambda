@@ -224,9 +224,16 @@ def check_import_cycles(code):
 
 
 def run_all_filters(code, profile="balanced", enforce_syntax=True):
-    from models import ProfileMode as PM, FitnessReport as FR
+    from models import FitnessReport as FR
+    from mutation_filters import ProfileMode
 
-    profile_enum = PM.from_str(profile) if isinstance(profile, str) else profile
+    if isinstance(profile, str):
+        profile_enum = ProfileMode.from_str(profile)
+    elif isinstance(profile, ProfileMode):
+        profile_enum = profile
+    else:
+        logger.warning("Unknown profile type %r, defaulting to 'balanced'", type(profile).__name__)
+        profile_enum = ProfileMode.BALANCED
 
     checks = [
         ("empty", check_empty_code(code)),

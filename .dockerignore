@@ -1,0 +1,39 @@
+# VCS y metadatos de CI
+.git
+.github
+.gitignore
+
+# Desarrollo y pruebas
+tests
+docs
+PLANS
+legacy
+scripts
+run_tests.sh
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+
+# Artefactos de build locales
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+
+# Caches de Python
+__pycache__/
+*.py[cod]
+
+# Informes que no viajan en la imagen
+MULTILANGUAGE_REPORT.md
+EMPIRICAL_EVIDENCE.md
+repomix.config.json
+CLAUDE.md
+
+# Backups y temporales
+*.bak
+*.orig
+*.log

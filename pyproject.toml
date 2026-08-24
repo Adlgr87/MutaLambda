@@ -67,10 +67,11 @@ all = [
 ]
 
 [project.scripts]
-mutalambda = "cli:cli"
+mutalambda = "mutalambda_cli:cli"
 
 [tool.setuptools]
 py-modules = [
+  "mutalambda_cli",
   "muta_lambda",
   "sandbox",
   "models",
@@ -81,6 +82,15 @@ py-modules = [
   "archive",
   "llm_backend",
   "evolution_engine",
+  "mutation_filters",
+  "progressive_pipeline",
+  "component_evolution",
+  "ast_math_verifier",
+  "hotspot_profiler",
+  "numpy_optimizer",
+  "test_synthesizer",
+  "diagnostics",
+  "dashboard_run",
   "nsga2",
   "checkpoint_manager",
   "config_loader",
