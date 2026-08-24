@@ -24,7 +24,7 @@ jobs:
           pip install -e ".[core,dev,bench]"
       - name: Run MutaLambda comment action (fast subset)
         id: mutualambda
-        uses: Adlgr87/MutaLambda/.github/actions/mutalambda-comment@main
+        uses: ./.github/actions/mutalambda-comment
         with:
           targets: t1_matrix_multiply,t1_primes_sieve,t3_page_rank
           reps: 5
