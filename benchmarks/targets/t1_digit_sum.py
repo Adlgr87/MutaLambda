@@ -1,4 +1,3 @@
-\
 TARGET_NAME = "digit_sum"
 TIER = 1
 function_name = "digit_sum"
