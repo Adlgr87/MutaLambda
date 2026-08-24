@@ -46,3 +46,7 @@ dist/
 
 # commercial planning (private, not part of the open distribution)
 MutaLambda_Commercial/
+
+# benchmarks runtime artifacts
+benchmarks/results_*.json
+benchmarks/checkpoints/
