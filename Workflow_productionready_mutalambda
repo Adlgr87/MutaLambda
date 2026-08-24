@@ -1,0 +1,202 @@
+necesito optimizar mutalambda para que  este production ready tengo este borrador de workflow puedes agregar cualquier ejecucion que consideres relevante o notes areas  de optimizacion para este  fin . Lo resumo así: las áreas críticas a mejorar son sandbox/seguridad, observabilidad, estabilidad de API/CLI, empaquetado (wheel/Docker), benchmarks reproducibles y documentación de “production checklist”. El workflow que te propongo para OpenHands está pensado para ejecutar todo eso de forma repetible en tu repo y dejar un reporte único que te acerque a “listo para mercado”. [perplexity](https://www.perplexity.ai/search/8c343fe7-3361-44d4-84ca-d7fda4d11cdc)
+
+***
+
+## Áreas y tareas clave a mejorar (síntesis)
+
+1. **Sandbox y seguridad de ejecución**
+   - Endurecer `sandbox.py`/`evaluation_service.py` con límites de CPU, memoria, tiempo, FS efímero y egress por defecto bloqueado, siguiendo las guías modernas de ejecución de código no confiable. [pandastack](https://www.pandastack.ai/blog/secure-untrusted-code-execution-checklist/)
+   - Documentar claramente qué nivel de aislamiento ofreces (modo dev vs modo “seguro/production”). [pandastack](https://www.pandastack.ai/blog/secure-untrusted-code-execution-checklist/)
+
+2. **Observabilidad y operación**
+   - Añadir logging estructurado por run (run_id, fase del pipeline, errores, timings) y métricas básicas (latencia por fase, tasa de errores, uso de recursos). [kuberstar](https://kuberstar.com/guides/production-readiness-checklist)
+   - Si en el futuro lo expones como servicio, preparar healthchecks y export de métricas (Prometheus). [port](https://www.port.io/blog/production-readiness-checklist-ensuring-smooth-deployments)
+
+3. **API/CLI y contratos estables**
+   - Definir un CLI estable en `muta_lambda.py`/`cli.py` con subcomandos claros (`optimize`, `bench`, `diagnostics`, `resume`) y ejemplos en `README`. [github](https://github.com/Adlgr87/MutaLambda)
+   - Exponer una capa mínima de API pública (módulo `muta_lambda.api`) con 2–3 funciones “bendecidas” (p. ej. `optimize_module`, `optimize_repo`) y empezar a respetar versionado semántico. [perplexity](https://www.perplexity.ai/search/ebb2905d-adb7-440f-bd4e-28b8ee2c4651)
+
+4. **Pruebas y benchmarks orientados a clientes**
+   - Mantener la suite (~600 tests) verde y automatizada (por ejemplo `python -m pytest tests/ -v --deselect tests/test_hfc_tiers.py::test_hfc_deduplicates_demoted_elite_duplicate_in_factory`). [github](https://github.com/Adlgr87/MutaLambda)
+   - Estandarizar cómo se ejecutan los benchmarks (`bench_phase6.py` y otros) y guardar resultados en un formato reproducible (p. ej. tabla en Markdown o JSON en `docs/benchmarks/`). [perplexity](https://www.perplexity.ai/search/8c343fe7-3361-44d4-84ca-d7fda4d11cdc)
+
+5. **Empaquetado y distribución**
+   - Validar en cada run que el paquete Python se construye correctamente via tooling estándar (por ejemplo `python -m build` usando `pyproject.toml` y `requirements.txt`). [kuberstar](https://kuberstar.com/guides/production-readiness-checklist)
+   - Añadir/validar un `Dockerfile` oficial para MutaLambda, de forma que se pueda desplegar como componente on‑prem sin depender de tu entorno local. [groundy](https://groundy.com/articles/openhands-autonomous-coding/)
+
+6. **Documentación de production readiness**
+   - Mantener un único documento tipo `docs/PRODUCTION_CHECKLIST.md` donde se liste: comandos ejecutados, resultados de tests/benchmarks/build, gaps pendientes y fecha de la última revisión. [gist.github](https://gist.github.com/mikaelvesavuori/1715a45914b51de460d2b36d97d75e51)
+   - Este documento se vuelve la “fuente de verdad” que puedes enseñar a clientes, partners (tipo Arcee) o en una pitch deck. [perplexity](https://www.perplexity.ai/search/2f050b1e-551f-410d-8cbb-fdd859403e3e)
+
+***
+
+## Workflow de tareas para el agente (alto nivel)
+
+Este es el pipeline que OpenHands debería ejecutar cada vez que lo dispares sobre el repo: [openhands](https://www.openhands.dev/)
+
+1. **Descubrimiento rápido del proyecto**
+   - Leer `README.md`, `README_ES.md`, `muta_lambda.py`, `sandbox.py`, `evaluation_service.py`, `pyproject.toml` y `requirements.txt` para entender comandos y estructura actual. [github](https://github.com/Adlgr87/MutaLambda)
+   - Resumir internamente qué ya existe (tests, benchmarks, empaquetado) y anotarlo en el reporte.
+
+2. **Preparación de entorno**
+   - Instalar dependencias (`pip install -r requirements.txt` y herramienta de build estándar).
+   - Verificar versión de Python compatible con `pyproject.toml` y dejarla registrada en el reporte. [kuberstar](https://kuberstar.com/guides/production-readiness-checklist)
+
+3. **Ejecución de pruebas**
+   - Correr la suite de tests principal: `python -m pytest tests/ -v --deselect tests/test_hfc_tiers.py::test_hfc_deduplicates_demoted_elite_duplicate_in_factory` (o el comando que uses). [github](https://github.com/Adlgr87/MutaLambda)
+   - Si hay fallos, listarlos y localizar los tests más críticos sin hacer refactors agresivos automáticamente.
+
+4. **Benchmarks y medición**
+   - Ejecutar los scripts de benchmark documentados (p. ej. `python bench_phase6.py`) y capturar métricas clave de parse cache, checkpoints, NSGA‑II, etc. [perplexity](https://www.perplexity.ai/search/8c343fe7-3361-44d4-84ca-d7fda4d11cdc)
+   - Volcar resultados en una sección de `PRODUCTION_CHECKLIST.md` con fecha, comando y números.
+
+5. **Empaquetado y artefactos**
+   - Construir paquete Python (sdist + wheel) vía `python -m build` (u otro comando declarado en `pyproject.toml`) y verificar que genere artefactos sin error. [kuberstar](https://kuberstar.com/guides/production-readiness-checklist)
+   - Si existe `Dockerfile`, construir imagen localmente y anotar tag y tamaño, sin publicar. [groundy](https://groundy.com/articles/openhands-autonomous-coding/)
+
+6. **Checks básicos de seguridad/observabilidad**
+   - Revisar `sandbox.py` y `evaluation_service.py` buscando: ausencia de límites de tiempo/CPU/memoria, acceso a red sin control, uso de filesystem no efímero, etc. [pandastack](https://www.pandastack.ai/blog/secure-untrusted-code-execution-checklist/)
+   - Verificar si hay algún logging estructurado/métricas; si no, escribir TODOs concretos en el reporte (qué métricas/logs faltan). [petrashov](https://petrashov.com/post/production-readiness/)
+
+7. **Actualización de reporte de readiness**
+   - Crear o actualizar `docs/PRODUCTION_CHECKLIST.md` con:
+     - Fecha de ejecución.
+     - Comandos de tests/benchmarks/build.
+     - Estado (OK/fallo) de cada bloque.
+     - Lista de gaps pendientes y recomendaciones concretas.
+
+***
+
+## Workflow propuesto (OpenHands + GitHub Actions)
+
+Te dejo una versión más compacta del workflow que puedes pegar casi tal cual y ajustar:
+
+### 1. Agente file‑based de OpenHands
+
+`./.agents/mutalambda-ci.md`:
+
+```markdown
+---
+name: mutalambda-ci-optimizer
+description: "Agente que ejecuta el checklist de production readiness sobre MutaLambda."
+tools:
+  - terminal
+  - file_editor
+  - browser
+max_iterations: 40
+---
+
+Eres un agente de OpenHands trabajando sobre el repositorio MutaLambda.
+
+Sigue este checklist en este orden:
+
+1) Preparación
+- Lee README.md, README_ES.md, muta_lambda.py, sandbox.py, evaluation_service.py,
+  pyproject.toml y requirements.txt.
+- Identifica los comandos de tests, benchmarks y build ya documentados.
+
+2) Entorno
+- Instala dependencias con: `pip install -r requirements.txt`.
+- Instala herramienta de build estándar: `pip install build`.
+
+3) Pruebas
+- Ejecuta: `python -m pytest tests/ -v --deselect tests/test_hfc_tiers.py::test_hfc_deduplicates_demoted_elite_duplicate_in_factory`.
+- Si fallan tests, lista cuáles fallan y resume causas probables sin hacer cambios agresivos.
+
+4) Benchmarks
+- Ejecuta los scripts de benchmark existentes (por ejemplo `python bench_phase6.py` si está documentado).
+- Registra los resultados en un formato tabular (Markdown) con comando, métrica y valor.
+
+5) Empaquetado
+- Construye el paquete Python con `python -m build`.
+- Si hay Dockerfile, intenta `docker build . -t mutalambda:test` y reporta éxito/fracaso (sin publicar la imagen).
+
+6) Seguridad y observabilidad
+- Revisa sandbox.py y evaluation_service.py buscando ejecución sin límites, acceso de red no controlado
+  o acceso a filesystem fuera de un directorio temporal.
+- Revisa si hay logs estructurados y métricas; si no, anota TODOs concretos.
+
+7) Reporte
+- Crea o actualiza `docs/PRODUCTION_CHECKLIST.md` con:
+  - Fecha de ejecución.
+  - Comandos usados en cada paso.
+  - Resultados (OK/FAIL) de tests, benchmarks y build.
+  - Lista de gaps de seguridad/observabilidad/packaging con recomendaciones.
+
+Reglas:
+- No modifiques archivos fuera del repo.
+- No añadas nuevas dependencias sin explicarlo en el reporte.
+- Si algo no está claro en la documentación, deja un TODO explícito en el checklist en lugar de adivinar.
+```
+
+Este formato encaja con el modelo de “file‑based agents” descrito en la documentación del SDK de OpenHands. [docs.openhands](https://docs.openhands.dev/sdk/guides/agent-file-based)
+
+### 2. Workflow de GitHub Actions para disparar el agente
+
+`.github/workflows/mutalambda-ci-optimizer.yml`:
+
+```yaml
+name: MutaLambda CI Optimizer
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - "**/*.py"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - ".agents/**"
+      - "docs/**"
+
+jobs:
+  openhands-mutalambda-ci:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install base deps
+        run: |
+          pip install --upgrade pip
+          pip install build
+          pip install -r requirements.txt
+
+      - name: Run OpenHands agent
+        env:
+          OPENHANDS_API_KEY: ${{ secrets.OPENHANDS_API_KEY }}
+          OPENHANDS_BASE_URL: ${{ vars.OPENHANDS_BASE_URL }}
+        run: |
+          # Ajusta este comando al CLI/SDK de OpenHands que uses.
+          openhands-agent \
+            --agent-file .agents/mutalambda-ci.md \
+            --workspace "$(pwd)" \
+            --max-steps 40 \
+            --task "Ejecuta el checklist de production readiness sobre este repo"
+
+      - name: Upload production checklist
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutalambda-production-checklist
+          path: docs/PRODUCTION_CHECKLIST.md
+
+La parte crítica a ajustar es el comando `openhands-agent ...`, que debe alinearse con la forma en que tengas instalado/expueso OpenHands (CLI local, agente remoto, etc.); el SDK oficial incluye ejemplos de workflows muy similares para tareas de PR review que puedes copiar como base. [docs.openhands](https://docs.openhands.dev/sdk/arch/agent)
+
+
+
+
+
+
+

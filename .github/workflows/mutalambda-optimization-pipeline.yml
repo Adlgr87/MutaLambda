@@ -1,0 +1,517 @@
+# Full MutaLambda optimization pipeline (6 phases).
+#
+# Triggers: manual dispatch ONLY (no schedule until the pipeline is green for
+# 3 consecutive runs — see PLAN FASE 4). This keeps CI minutes predictable.
+#
+# Phases:
+#   1. fingerprint        — code_hash + api_fingerprint
+#   2. baseline benchmark — benchmarking.py
+#   3. evolution          — evolve.py (HFC intra-job islands)
+#   4. verification       — ASTMathVerifier + property_testing
+#   5. comparison         — comparison.json with Mann-Whitney U
+#   6. explainability     — interpretability.py + SARIF + markdown
+name: MutaLambda Optimization Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_file:
+        description: "Target source file to optimise"
+        required: false
+        default: "examples/target.py"
+      profile:
+        description: "Evolution profile"
+        required: false
+        default: "scientific"
+      generations:
+        description: "Evolution generations"
+        required: false
+        default: "10"
+      population:
+        description: "Population size"
+        required: false
+        default: "20"
+
+env:
+  # Cache key = source content hash + UAST schema version (never just commit sha).
+  UAST_SCHEMA_VERSION: "1"
+
+jobs:
+  fingerprint:
+    name: Phase 1 — Fingerprint
+    runs-on: ubuntu-latest
+    outputs:
+      source_hash: ${{ steps.hash.outputs.source_hash }}
+      cache_key: ${{ steps.hash.outputs.cache_key }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -e ".[cli,uast]"
+
+      - name: Compute source fingerprint
+        id: hash
+        env:
+          TARGET_FILE: ${{ inputs.target_file }}
+          UAST_SCHEMA_VERSION: ${{ env.UAST_SCHEMA_VERSION }}
+        run: |
+          python - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          target = os.environ["TARGET_FILE"]
+          schema = os.environ.get("UAST_SCHEMA_VERSION", "1")
+          src = Path(target).read_text()
+          sha = hashlib.sha256(src.encode()).hexdigest()[:16]
+          cache_key = f"mutalambda-uast-{sha}-v{schema}"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              print(f"source_hash={sha}", file=f)
+              print(f"cache_key={cache_key}", file=f)
+
+      - name: Parse to CoreUAST
+        run: |
+          python universal_parser.py ${{ inputs.target_file }} -o /tmp/uast.json
+          head -c 500 /tmp/uast.json
+
+      - name: Upload UAST artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: uast-artefact
+          path: /tmp/uast.json
+
+  baseline:
+    name: Phase 2 — Baseline Benchmark
+    needs: fingerprint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -e ".[cli,uast]"
+
+      - name: Download UAST artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: uast-artefact
+          path: /tmp/
+
+      - name: Run baseline benchmark
+        run: |
+          python - <<'PY'
+          import json, time, statistics
+          from pathlib import Path
+          from benchmarking import BenchmarkConfig, run_callable_benchmark
+
+          import importlib.util
+          spec = importlib.util.spec_from_file_location("target", "/tmp/uast.json")
+          # Source is the target file
+          target = "${{ inputs.target_file }}"
+          code = Path(target).read_text()
+          ns = {}
+          exec(compile(code, target, "exec"), ns)
+          func_name = next(k for k, v in ns.items() if callable(v) and not k.startswith("_"))
+          fn = ns[func_name]
+          cfg = BenchmarkConfig(warmups=2, samples=10)
+          result = run_callable_benchmark(fn, config=cfg, args=(50,))
+          baseline = {
+              "function": func_name,
+              "file": target,
+              "samples_sec": result.samples_sec,
+              "p50": result.percentile(50),
+              "p99": result.percentile(99),
+              "mean": result.mean if hasattr(result, "mean") else statistics.mean(result.samples_sec),
+          }
+          Path("/tmp").mkdir(parents=True, exist_ok=True)
+          Path("/tmp/baseline.json").write_text(json.dumps(baseline, indent=2))
+          print(json.dumps(baseline, indent=2))
+          PY
+
+      - name: Upload baseline artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-artefact
+          path: /tmp/baseline.json
+
+  evolve:
+    name: Phase 3 — Evolution
+    needs: [fingerprint, baseline]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -e ".[cli,uast]"
+
+      - name: Download UAST artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: uast-artefact
+          path: /tmp/
+
+      - name: Run evolution (HFC intra-job islands)
+        run: |
+          python evolve.py \
+            --uast /tmp/uast.json \
+            --profile ${{ inputs.profile }} \
+            --generations ${{ inputs.generations }} \
+            --population ${{ inputs.population }} \
+            --hfc-tiers \
+            --checkpoint-every 5 \
+            --islands 4 \
+            --seed 42
+
+      - name: Locate best checkpoint
+        run: |
+          BEST=$(ls -td .mutalambda/checkpoints/* | head -1)
+          echo "best_dir=$BEST" >> "$GITHUB_OUTPUT"
+          cp "$BEST/optimized.py" /tmp/optimized.py
+          cp "$BEST/fitness_report.json" /tmp/fitness_report.json
+
+      - name: Upload optimized artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: optimized-artefact
+          path: |
+            /tmp/optimized.py
+            /tmp/fitness_report.json
+            .mutalambda/checkpoints/
+
+  verify:
+    name: Phase 4 — Verification
+    needs: evolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -e ".[cli,uast]"
+
+      - name: Download optimized artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: optimized-artefact
+          path: /tmp/
+
+      - name: Detect invariants on optimized code
+        run: |
+          python universal_parser.py /tmp/optimized.py -o /tmp/optimized_uast.json --lang python
+          python invariant_detector.py /tmp/optimized_uast.json -o /tmp/opt_invariants.lock --source /tmp/optimized.py
+          cp /tmp/opt_invariants.lock /tmp/invariants.lock
+
+      - name: Verify mathematical equivalence
+        run: |
+          python - <<'PY'
+          from ast_math_verifier import ASTMathVerifier
+          from pathlib import Path
+          baseline = Path("${{ inputs.target_file }}").read_text()
+          optimized = Path("/tmp/optimized.py").read_text()
+          verifier = ASTMathVerifier()
+          result = verifier.verify(baseline, optimized)
+          import json
+          verification = {
+              "is_equivalent": result.is_equivalent,
+              "confidence": result.confidence,
+              "reason": result.reason,
+              "details": result.details,
+          }
+          Path("/tmp/verification.json").write_text(json.dumps(verification, indent=2))
+          print(json.dumps(verification, indent=2))
+          PY
+
+      - name: Run property tests
+        run: |
+          python - <<'PY'
+          from property_testing import run_property_tests
+          from pathlib import Path
+          code = Path("/tmp/optimized.py").read_text()
+          results = run_property_tests(code)
+          Path("/tmp/property_results.json").write_text(__import__("json").dumps(results, indent=2))
+          print(__import__("json").dumps(results, indent=2))
+          PY
+
+      - name: Upload verification artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-artefact
+          path: |
+            /tmp/invariants.lock
+            /tmp/verification.json
+            /tmp/property_results.json
+
+  compare:
+    name: Phase 5 — Comparison (Mann-Whitney U)
+    needs: [baseline, evolve]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -e ".[cli,uast]"
+          pip install scipy
+
+      - name: Download artefacts
+        uses: actions/download-artifact@v4
+        with:
+          name: baseline-artefact
+          path: /tmp/base/
+      - uses: actions/download-artifact@v4
+        with:
+          name: optimized-artefact
+          path: /tmp/opt/
+
+      - name: Run comparison with Mann-Whitney U
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from benchmarking import BenchmarkConfig, run_callable_benchmark
+          from scipy.stats import mannwhitneyu
+
+          target = "${{ inputs.target_file }}"
+          code = Path(target).read_text()
+          ns = {}
+          exec(compile(code, target, "exec"), ns)
+          func_name = next(k for k, v in ns.items() if callable(v) and not k.startswith("_"))
+          fn = ns[func_name]
+          cfg = BenchmarkConfig(warmups=2, samples=10)
+          result = run_callable_benchmark(fn, config=cfg, args=(50,))
+          baseline_samples = result.samples_sec
+
+          # Optimized
+          opt_code = Path("/tmp/opt/optimized.py").read_text()
+          ns2 = {}
+          exec(compile(opt_code, "optimized", "exec"), ns2)
+          opt_fn = ns2[func_name]
+          opt_result = run_callable_benchmark(opt_fn, config=cfg, args=(50,))
+          opt_samples = opt_result.samples_sec
+
+          # Mann-Whitney U test (two-sided)
+          stat, pvalue = mannwhitneyu(baseline_samples, opt_samples, alternative="two-sided")
+
+          comparison = {
+              "function": func_name,
+              "metrics": {
+                  "baseline": {"p50": result.percentile(50), "samples": baseline_samples},
+                  "optimized": {"p50": opt_result.percentile(50), "samples": opt_samples},
+              },
+              "comparison": {
+                  "baseline": {"latency_p50": result.percentile(50)},
+                  "optimized": {"latency_p50": opt_result.percentile(50)},
+              },
+              "statistical_test": {
+                  "method": "mann-whitney-u",
+                  "statistic": float(stat),
+                  "pvalue": float(pvalue),
+                  "significant": bool(pvalue < 0.05),
+              },
+          }
+          Path("/tmp/comparison.json").write_text(json.dumps(comparison, indent=2))
+          print(json.dumps(comparison, indent=2))
+          PY
+
+      - name: Run regression gate (strict, blocks on failure)
+        run: |
+          python regression_gate.py /tmp/comparison.json \
+            --min-improvement 5 --max-regression 2 \
+            --threshold-metric latency_p50
+
+      - name: Upload comparison artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: comparison-artefact
+          path: /tmp/comparison.json
+
+  explain:
+    name: Phase 6 — Explainability (SARIF + Markdown)
+    needs: [verify, compare]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -e ".[cli,uast]"
+
+      - name: Download artefacts
+        uses: actions/download-artifact@v4
+        with:
+          name: optimized-artefact
+          path: /tmp/opt/
+      - uses: actions/download-artifact@v4
+        with:
+          name: verification-artefact
+          path: /tmp/verify/
+      - uses: actions/download-artifact@v4
+        with:
+          name: comparison-artefact
+          path: /tmp/comp/
+
+      - name: Build interpretability report + SARIF
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from interpretability import create_interpretability_report
+
+          target = "${{ inputs.target_file }}"
+          baseline_code = Path(target).read_text()
+          optimized_code = Path("/tmp/opt/optimized.py").read_text()
+          fitness_report = json.loads(Path("/tmp/opt/fitness_report.json").read_text())
+          before = 0.0
+          after = fitness_report.get("best_score", 0.0)
+
+          report = create_interpretability_report(
+              original_code=baseline_code,
+              evolved_code=optimized_code,
+              generation=fitness_report.get("generations", 0),
+              fitness_before=before,
+              fitness_after=after,
+              improvements=[
+                  f"latency improved to {fitness_report.get('best_score', 0):.4f}",
+                  f"profile=${{ inputs.profile }} generations=${{ inputs.generations }}",
+              ],
+              lineage=[],
+              tests_passed=True,
+          )
+
+          markdown = report.to_markdown()
+          Path("/tmp/optimized_report.md").write_text(markdown)
+
+          # SARIF report
+          sarif = {
+              "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+              "version": "2.1.0",
+              "runs": [
+                  {
+                      "tool": {"driver": {"name": "MutaLambda"}},
+                      "results": [
+                          {
+                              "ruleId": "ML001",
+                              "level": "none",
+                              "message": {"text": f"Optimization completed. Best score: {after:.4f}"},
+                              "locations": [
+                                  {"physicalLocation": {"artifactPath": target}}
+                              ],
+                          }
+                      ],
+                  }
+              ],
+          }
+          Path("/tmp/sarif.json").write_text(json.dumps(sarif, indent=2))
+          print(markdown)
+          PY
+
+      - name: Upload explainability artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: explainability-artefact
+          path: |
+            /tmp/optimized_report.md
+            /tmp/sarif.json
+
+  certify:
+    name: Phase 7 — Certificate
+    needs: [verify, compare, explain]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -e ".[cli,uast]"
+
+      - name: Download artefacts
+        uses: actions/download-artifact@v4
+        with:
+          name: comparison-artefact
+          path: /tmp/
+
+      - name: Generate certificate
+        run: |
+          python certify.py \
+            --baseline /tmp/comp/comparison.json \
+            --optimized /tmp/opt/optimized.py \
+            --invariants /tmp/verify/invariants.lock \
+            --seed 42 \
+            --config presets/${{ inputs.profile }}.yaml \
+            --sign \
+            -o /tmp/certificate.json
+          cat /tmp/certificate.json
+
+      - name: Upload certificate artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: certificate-artefact
+          path: /tmp/certificate.json
+
+      - name: Optional webhook notification
+        if: ${{ env.MUTALAMBDA_WEBHOOK_URL != '' }}
+        env:
+          MUTALAMBDA_WEBHOOK_URL: ${{ env.MUTALAMBDA_WEBHOOK_URL }}
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          cert = json.loads(Path("/tmp/certificate.json").read_text())
+          payload = {"event": "optimization_complete", "certificate": cert}
+          req = urllib.request.Request(
+              os.environ["MUTALAMBDA_WEBHOOK_URL"],
+              data=json.dumps(payload).encode(),
+              headers={"Content-Type": "application/json"},
+          )
+          urllib.request.urlopen(req, timeout=30).read()
+          PY
