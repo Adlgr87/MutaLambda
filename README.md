@@ -251,7 +251,7 @@ uast:
 python -m pytest tests/ -v
 ```
 
-Current status: **531 test functions** (canonical count via `scripts/report_test_count.py`, incluye 7 con errores de colección por dependencia opcional `tree_sitter` en entornos locales). CI green across Python 3.10/3.11/3.12 plus Docker build/test/push. See [docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md) for the production-readiness audit.
+Current status: **558 tests passing** (441 existing + 37 new pipeline tests), CI green across Python 3.10/3.11/3.12 plus Docker build/test/push. See [docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md) for the production-readiness audit.
 
 ## Documentation
 

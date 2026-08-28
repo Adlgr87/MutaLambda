@@ -125,9 +125,8 @@ jobs:
           ns = {}
           exec(compile(code, target, "exec"), ns)
           func_name = next(k for k, v in ns.items() if callable(v) and not k.startswith("_"))
-          fn = ns[func_name]
           cfg = BenchmarkConfig(warmups=2, samples=10)
-          result = run_callable_benchmark(fn, config=cfg, args=(50,))
+          result = run_callable_benchmark(lambda n=50: fn(n), config=cfg)
           baseline = {
               "function": func_name,
               "file": target,
@@ -311,9 +310,8 @@ jobs:
           ns = {}
           exec(compile(code, target, "exec"), ns)
           func_name = next(k for k, v in ns.items() if callable(v) and not k.startswith("_"))
-          fn = ns[func_name]
           cfg = BenchmarkConfig(warmups=2, samples=10)
-          result = run_callable_benchmark(fn, config=cfg, args=(50,))
+          result = run_callable_benchmark(lambda n=50: fn(n), config=cfg)
           baseline_samples = result.samples_sec
 
           # Optimized
@@ -321,7 +319,7 @@ jobs:
           ns2 = {}
           exec(compile(opt_code, "optimized", "exec"), ns2)
           opt_fn = ns2[func_name]
-          opt_result = run_callable_benchmark(opt_fn, config=cfg, args=(50,))
+          opt_result = run_callable_benchmark(lambda n=50: opt_fn(n), config=cfg)
           opt_samples = opt_result.samples_sec
 
           # Mann-Whitney U test (two-sided)
