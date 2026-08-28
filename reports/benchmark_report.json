@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-08-28T21:26:43.186517",
+  "config": {
+    "num_repeats": 1,
+    "num_generations": 2,
+    "population_size": 4,
+    "seed": 42,
+    "cpu_only": true,
+    "report_dir": "reports",
+    "save_results": true
+  },
+  "results": [
+    {
+      "benchmark_name": "quadratic_sphere",
+      "method": "cpu",
+      "duration_sec": 3.3352000173181295e-05,
+      "score": 6.4540123716710625,
+      "throughput": 400.0,
+      "memory_mb": 0.0,
+      "success": true,
+      "error": null,
+      "timestamp": "2026-08-28T21:26:43.186127",
+      "details": {
+        "generations": 2,
+        "population_size": 4
+      }
+    },
+    {
+      "benchmark_name": "quadratic_sphere",
+      "method": "cpu",
+      "duration_sec": 1.2279000657144934e-05,
+      "score": 6.4540123716710625,
+      "throughput": 400.0,
+      "memory_mb": 0.0,
+      "success": true,
+      "error": null,
+      "timestamp": "2026-08-28T21:26:43.186149",
+      "details": {
+        "generations": 2,
+        "population_size": 4
+      }
+    },
+    {
+      "benchmark_name": "quadratic_sphere",
+      "method": "gpu",
+      "duration_sec": 0.0003369109999766806,
+      "score": 6.4540123716710625,
+      "throughput": 0,
+      "memory_mb": 0,
+      "success": true,
+      "error": null,
+      "timestamp": "2026-08-28T21:26:43.186495",
+      "details": {
+        "generations": 2,
+        "population_size": 4
+      }
+    }
+  ],
+  "summary": {
+    "total_runs": 3,
+    "successful": 3,
+    "failed": 0,
+    "by_method": {
+      "cpu": {
+        "count": 2,
+        "duration_mean": 2.2815500415163115e-05,
+        "score_mean": 6.4540123716710625
+      },
+      "gpu": {
+        "count": 1,
+        "duration_mean": 0.0003369109999766806,
+        "score_mean": 6.4540123716710625
+      }
+    }
+  }
+}
