@@ -126,7 +126,7 @@ jobs:
           exec(compile(code, target, "exec"), ns)
           func_name = next(k for k, v in ns.items() if callable(v) and not k.startswith("_"))
           cfg = BenchmarkConfig(warmups=2, samples=10)
-          result = run_callable_benchmark(lambda n=50: fn(n), config=cfg)
+          result = run_callable_benchmark(lambda n=50: ns[func_name](n), config=cfg)
           baseline = {
               "function": func_name,
               "file": target,
@@ -224,8 +224,8 @@ jobs:
 
       - name: Detect invariants on optimized code
         run: |
-          python universal_parser.py /tmp/optimized.py -o /tmp/optimized_uast.json --lang python
-          python invariant_detector.py /tmp/optimized_uast.json -o /tmp/opt_invariants.lock --source /tmp/optimized.py
+          python universal_parser.py /tmp/optimized-artefact/optimized.py -o /tmp/optimized_uast.json --lang python
+          python invariant_detector.py /tmp/optimized_uast.json -o /tmp/opt_invariants.lock --source /tmp/optimized-artefact/optimized.py
           cp /tmp/opt_invariants.lock /tmp/invariants.lock
 
       - name: Verify mathematical equivalence
@@ -234,7 +234,7 @@ jobs:
           from ast_math_verifier import ASTMathVerifier
           from pathlib import Path
           baseline = Path("${{ inputs.target_file }}").read_text()
-          optimized = Path("/tmp/optimized.py").read_text()
+          optimized = Path("/tmp/optimized-artefact/optimized.py").read_text()
           verifier = ASTMathVerifier()
           result = verifier.verify(baseline, optimized)
           import json
@@ -253,7 +253,7 @@ jobs:
           python - <<'PY'
           from property_testing import run_property_tests
           from pathlib import Path
-          code = Path("/tmp/optimized.py").read_text()
+          code = Path("/tmp/optimized-artefact/optimized.py").read_text()
           results = run_property_tests(code)
           Path("/tmp/property_results.json").write_text(__import__("json").dumps(results, indent=2))
           print(__import__("json").dumps(results, indent=2))
@@ -311,11 +311,11 @@ jobs:
           exec(compile(code, target, "exec"), ns)
           func_name = next(k for k, v in ns.items() if callable(v) and not k.startswith("_"))
           cfg = BenchmarkConfig(warmups=2, samples=10)
-          result = run_callable_benchmark(lambda n=50: fn(n), config=cfg)
+          result = run_callable_benchmark(lambda n=50: ns[func_name](n), config=cfg)
           baseline_samples = result.samples_sec
 
           # Optimized
-          opt_code = Path("/tmp/opt/optimized.py").read_text()
+          opt_code = Path("/tmp/opt/optimized-artefact/optimized.py").read_text()
           ns2 = {}
           exec(compile(opt_code, "optimized", "exec"), ns2)
           opt_fn = ns2[func_name]
