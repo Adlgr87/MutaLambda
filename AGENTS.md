@@ -7,6 +7,11 @@
 - Evaluation key caching — invariant `tests_hash` and `environment_hash` precomputed; **242.7× faster** on key generation
 - HFC evaluation volume optimization — factory clones skip re-evaluation, inherit parent fitness (~15-25% predicted)
 
+### HFC micro-mutator memoization (added — 2026-08-22)
+- Deterministic mutators in `hfc_tiers.py` (`_parsimony_prune`, `_loop_unrolling`, `_memory_optimization`) decorated with `@_memoize` keyed on `stable_code_hash(code)`.
+- Cache is module-level (`_micro_mutator_cache`) and cleared between independent runs via `HFCLeagueEngine.clear_caches()`, invoked from `seed()` and `restore()` — prevents cross-generation leakage.
+- `tests_hash` invalidation is *automatic*: `cli/main.py` reloads `target_tests.json` each invocation → loaded `test_cases` → hash recalculado → cache de evaluación invalidado (no change needed).
+
 ### Pending / Future proposals (from SWE-Agent analysis)
 1. ProtocolWorkflow per-candidate overhead — skip gates for AST-only mutations (~10-20% predicted, Medium risk)
 2. Sandbox worker spawn overhead — persistent worker pool (~5-15% predicted, High risk)
@@ -20,6 +25,8 @@ python scripts/benchmark_nsga2_cache.py
 python scripts/benchmark_checkpoint_serialization.py
 python -m pytest tests/ -q --deselect tests/test_hfc_tiers.py::test_hfc_deduplicates_demoted_elite_duplicate_in_factory
 ```
+> Resultados actuales (post-optimización memoización HFC): ~458 tests OK.  
+> Tests preexistentes en error de colección: 7 (dependencia `tree_sitter` no instalada en el entorno local — ver `DEPENDENCIES note` más abajo; no correlacionados con los cambios).
 
 # AGENTS.md — MutaLambda Workflow Guide
 
@@ -91,6 +98,10 @@ pytest tests/ -v
 ```
 Tests cover config management, checkpoint logic, fitness caching, and
 evolution operators. Target: 80%+ coverage.
+
+The canonical test count is maintained by `scripts/report_test_count.py`
+→ `docs/ARTIFACTS/test_count.txt`. Reference it in docs instead of hard-coding
+numbers so the count never drifts.
 
 ## Performance Notes
 - AST parse cache: `code_hash.cached_parse` wraps `ast.parse` with an

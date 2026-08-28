@@ -177,7 +177,7 @@ class EvolveConfig:
     llm_max_total_calls: int = 0
     llm_replay_log: str = ""
     master_seed: Optional[int] = None
-    operator_bandit_enabled: bool = False
+    operator_bandit_enabled: bool = True
     operator_bandit_strategy: str = "ucb1"
     fitness_normalize: bool = True
     archive_dedupe_similarity: float = 0.98
@@ -432,6 +432,9 @@ class MutaLambdaAgent:
                     getattr(config, "llm_max_calls_per_generation", 0) or 0
                 ),
                 max_total_calls=int(getattr(config, "llm_max_total_calls", 0) or 0),
+                max_cost_usd=float(
+                    getattr(config, "llm_max_cost_usd", 0.0) or 0.0
+                ),
                 privacy_allow_external=bool(
                     getattr(config, "privacy_allow_external_llm", True)
                 ),

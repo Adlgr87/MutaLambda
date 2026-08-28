@@ -27,7 +27,7 @@ class EvolutionSection(BaseModel):
     novelty_alpha: float = Field(0.15, ge=0.0, le=1.0)
     fitness_normalize: bool = True
     use_process_pool: bool = False
-    operator_bandit_enabled: bool = False
+    operator_bandit_enabled: bool = True
     operator_bandit_strategy: Literal["ucb1", "epsilon_greedy"] = "ucb1"
 
     @model_validator(mode="before")

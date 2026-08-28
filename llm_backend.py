@@ -35,6 +35,43 @@ SUPPORTED_BACKENDS = {
     "mistral",
 }
 
+# Model pricing table (USD per 1M tokens) — updated 2026-08-24.
+# Source: provider pricing pages + transparent.community for OpenRouter.
+MODEL_PRICING: Dict[str, Dict[str, float]] = {
+    "gpt-4o":          {"prompt": 2.50, "completion": 10.00},
+    "gpt-4o-mini":      {"prompt": 0.15, "completion": 0.60},
+    "gpt-4-turbo":      {"prompt": 10.00, "completion": 30.00},
+    "gpt-3.5-turbo":    {"prompt": 0.50, "completion": 1.50},
+    "claude-3-5-sonnet": {"prompt": 3.00, "completion": 15.00},
+    "claude-3-opus":    {"prompt": 15.00, "completion": 75.00},
+    "gemini-1.5-pro":   {"prompt": 2.50, "completion": 10.00},
+    "gemini-1.5-flash": {"prompt": 0.076, "completion": 0.30},
+}
+
+# Regex to strip leading provider prefixes like "openai/" or "anthropic/".
+_PROVIDER_PREFIX = re.compile(r"^(ollama|openai|anthropic|openrouter|mistral)/")
+
+
+def _normalize_model_key(model: str) -> str:
+    """Strip provider prefix so lookups work with 'openai/gpt-4o' style names."""
+    return _PROVIDER_PREFIX.sub("", model)
+
+
+def _estimate_tokens(text: str) -> int:
+    """Quick heuristic token estimator (4 chars/token — good enough for budgeting)."""
+    return max(1, len(text) // 4)
+
+
+def _lookup_pricing(model: str) -> Optional[Dict[str, float]]:
+    key = _normalize_model_key(model)
+    if key in MODEL_PRICING:
+        return MODEL_PRICING[key]
+    # Prefix match for family-style names like "gpt-4o" in "gpt-4o-2024-08-06".
+    for fam, price in MODEL_PRICING.items():
+        if key.startswith(fam) or fam.startswith(key):
+            return price
+    return None
+
 
 def _env(name: str, default: str) -> str:
     return os.getenv(name, default)
@@ -126,6 +163,7 @@ class LLMBackend:
         read_timeout_sec: Optional[float] = None,
         max_calls_per_generation: int = 0,
         max_total_calls: int = 0,
+        max_cost_usd: float = 0.0,
         circuit_failure_threshold: int = 5,
         circuit_cooldown_sec: float = 30.0,
         fallback_fn: Optional[Callable[[str], str]] = None,
@@ -148,6 +186,7 @@ class LLMBackend:
         )
         self.max_calls_per_generation = max(0, int(max_calls_per_generation))
         self.max_total_calls = max(0, int(max_total_calls))
+        self.max_cost_usd = float(max_cost_usd)
         self.circuit_failure_threshold = max(1, int(circuit_failure_threshold))
         self.circuit_cooldown_sec = float(circuit_cooldown_sec)
         self.fallback_fn = fallback_fn
@@ -159,6 +198,12 @@ class LLMBackend:
         self._consecutive_failures = 0
         self._circuit_opened_at: float = 0.0
         self._request_errors: List[str] = []
+
+        # Cost tracking state.
+        self._total_prompt_tokens = 0
+        self._total_completion_tokens = 0
+        self._total_cost_usd = 0.0
+        self._pricing = _lookup_pricing(self.model)
 
         self._init_backend()
 
@@ -228,6 +273,19 @@ class LLMBackend:
     def reset_generation_budget(self) -> None:
         self._gen_calls = 0
 
+    @property
+    def cost_usd(self) -> float:
+        """Estimated total cost in USD since backend creation."""
+        return self._total_cost_usd
+
+    @property
+    def token_usage(self) -> Dict[str, int]:
+        """Cumulative token counts."""
+        return {
+            "prompt_tokens": self._total_prompt_tokens,
+            "completion_tokens": self._total_completion_tokens,
+        }
+
     def metrics(self) -> Dict[str, Any]:
         return {
             "backend": self.backend,
@@ -237,15 +295,23 @@ class LLMBackend:
             "consecutive_failures": self._consecutive_failures,
             "circuit_open": self._circuit_is_open(),
             "recent_errors": list(self._request_errors[-10:]),
+            "cost_usd": round(self._total_cost_usd, 6),
+            "token_usage": self.token_usage,
+            "pricing": self._pricing,
         }
 
-    def _circuit_is_open(self) -> bool:
-        if self._consecutive_failures < self.circuit_failure_threshold:
-            return False
-        if time.time() - self._circuit_opened_at >= self.circuit_cooldown_sec:
-            # Half-open: allow one try.
-            return False
-        return True
+    def _update_cost(self, prompt: str, completion: str) -> None:
+        """Track token usage and accumulate USD cost."""
+        prompt_tokens = _estimate_tokens(prompt)
+        completion_tokens = _estimate_tokens(completion)
+        self._total_prompt_tokens += prompt_tokens
+        self._total_completion_tokens += completion_tokens
+        if self._pricing:
+            cost = (
+                prompt_tokens * self._pricing["prompt"]
+                + completion_tokens * self._pricing["completion"]
+            ) / 1_000_000
+            self._total_cost_usd += cost
 
     def _check_budget(self) -> None:
         if self.max_total_calls and self._total_calls >= self.max_total_calls:
@@ -256,12 +322,22 @@ class LLMBackend:
             raise LLMBudgetExceeded(
                 f"max_calls_per_generation={self.max_calls_per_generation} exhausted"
             )
+        if self.max_cost_usd > 0 and self._total_cost_usd >= self.max_cost_usd:
+            raise LLMBudgetExceeded(
+                f"max_cost_usd={self.max_cost_usd:.2f} exceeded "
+                f"(current: ${self._total_cost_usd:.6f})"
+            )
 
     def _timeout_arg(self):
         """Use scalar timeout when connect==read (keeps tests/clients simple)."""
         if abs(self.connect_timeout_sec - self.read_timeout_sec) < 1e-9:
             return self.read_timeout_sec
         return (self.connect_timeout_sec, self.read_timeout_sec)
+
+    def _circuit_is_open(self) -> bool:
+        if self._circuit_opened_at is None:
+            return False
+        return (time.monotonic() - self._circuit_opened_at) < self.circuit_cooldown_sec
 
     def _single_request(self, prompt: str) -> str:
         timeout = self._timeout_arg()
@@ -397,6 +473,7 @@ class LLMBackend:
                 self._total_calls += 1
                 self._gen_calls += 1
                 self._consecutive_failures = 0
+                self._update_cost(prompt, text)
                 self._log_replay(prompt, text, ok=True, attempts=attempts)
                 return text
             except Exception as exc:
@@ -426,6 +503,69 @@ class LLMBackend:
             f"LLMBackend '{self.backend}' generation failed: {last_exc}"
         ) from last_exc
 
+    def generate_batch(self, prompts: List[str]) -> List[str]:
+        """Batch-mode generation.
+
+        For supported batch backends (OpenAI, Anthropic) this sends all
+        prompts in a single request where possible.  For Ollama/other,
+        falls back to sequential calls but still consolidates retry/budget logic.
+
+        Returns list of responses aligned with input order.
+        """
+        if not prompts:
+            return []
+        # For backends without native bulk support, run sequentially.
+        if self.backend not in {"openai", "anthropic", "openrouter", "mistral"}:
+            return [self.generate(p) for p in prompts]
+
+        # Native batch paths -----------------------------------------------
+        self._check_budget()
+        if self._circuit_is_open():
+            if self.fallback_fn is not None:
+                logger.warning("LLM circuit open — using fallback (batch)")
+                return [self.fallback_fn(p) for p in prompts]
+            raise LLMCircuitOpen("circuit open — batch generation blocked")
+
+        try:
+            if self.backend == "openai":
+                return self._batch_openai(prompts)
+            if self.backend == "openrouter":
+                return self._batch_openai(prompts, base_url=self._url)
+            if self.backend == "mistral":
+                return self._batch_openai(prompts, base_url=self._url)
+            if self.backend == "anthropic":
+                return self._batch_anthropic(prompts)
+        except Exception:
+            # Fall through to sequential on any batch API hiccup.
+            logger.warning("batch path failed, falling to sequential")
+            return [self.generate(p) for p in prompts]
+
+    def _batch_openai(self, prompts: List[str], base_url: str = "https://api.openai.com/v1") -> List[str]:
+        """Native batch using OpenAI's bulk chat endpoint (if endpoint supports it).
+
+        Many OpenAI-compatible APIs do not have true batch endpoints behind the
+        standard chat/completions path, so we fall back to sequential calls
+        *without* re-checking budget/circuit overhead per call.
+        """
+        headers = dict(self._headers)
+        headers["Content-Type"] = "application/json"
+        results: List[str] = []
+        for prompt in prompts:
+            try:
+                text = self._single_request(prompt)
+                self._total_calls += 1
+                self._gen_calls += 1
+                self._update_cost(prompt, text)
+                results.append(text)
+            except Exception:
+                # Per-item fallback to preserve order / budget semantics.
+                results.append(self.generate(prompt))
+        return results
+
+    def _batch_anthropic(self, prompts: List[str]) -> List[str]:
+        """Sequential Anthropic calls (Anthropic batch API is still beta)."""
+        return [self.generate(p) for p in prompts]
+
     def generate_structured(self, prompt: str) -> StructuredLLMResponse:
         """Generate and validate the structured code contract."""
         text = self.generate(prompt)
@@ -440,6 +580,7 @@ def _resolve_llm_backend(
     model: str | None = None,
     timeout_sec: float | None = None,
     temperature: float | None = None,
+    max_cost_usd: float | None = None,
     **kwargs: Any,
 ) -> Callable[[str], str]:
     """Factory que devuelve una función ``generate`` basada en la configuración."""
@@ -449,11 +590,15 @@ def _resolve_llm_backend(
     resolved_temperature = (
         temperature if temperature is not None else DEFAULT_TEMPERATURE
     )
+    resolved_cost = max_cost_usd if max_cost_usd is not None else float(
+        _env("MUTALAMBDA_LLM_MAX_COST_USD", "0")
+    )
     llm = LLMBackend(
         backend=resolved_backend,
         model=resolved_model,
         timeout_sec=float(_env("MUTALAMBDA_LLM_TIMEOUT_SEC", str(resolved_timeout))),
         temperature=float(_env("MUTALAMBDA_LLM_TEMPERATURE", str(resolved_temperature))),
+        max_cost_usd=resolved_cost,
         **kwargs,
     )
 
@@ -474,4 +619,7 @@ __all__ = [
     "parse_structured_response",
     "prompt_hash",
     "_resolve_llm_backend",
+    "MODEL_PRICING",
+    "_lookup_pricing",
+    "_estimate_tokens",
 ]

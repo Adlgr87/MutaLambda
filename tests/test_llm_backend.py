@@ -2,7 +2,16 @@ import pytest
 
 import requests
 
-from llm_backend import LLMBackend, LLMBackendError, _resolve_llm_backend
+from llm_backend import (
+    LLMBackend,
+    LLMBackendError,
+    LLMBudgetExceeded,
+    LLMCircuitOpen,
+    MODEL_PRICING,
+    _resolve_llm_backend,
+    _lookup_pricing,
+    _estimate_tokens,
+)
 
 
 class FakeResponse:
@@ -136,3 +145,97 @@ def test_generation_failure_raises_llm_backend_error(monkeypatch):
     llm = LLMBackend(backend="ollama")
     with pytest.raises(LLMBackendError, match="generation failed"):
         llm.generate("prompt")
+
+
+# ---------------------------------------------------------------------------
+# Cost tracking tests
+# ---------------------------------------------------------------------------
+
+def test_estimate_tokens_approximate():
+    # Heuristic: ~4 chars per token, minimum 1.
+    assert _estimate_tokens("hello world") == max(1, len("hello world") // 4)
+    assert _estimate_tokens("") == 1
+    assert _estimate_tokens("abcdefghijklmnopqrstuvwxyz") == 6  # 26 // 4 == 6
+
+
+def test_lookup_pricing_known_model():
+    pricing = _lookup_pricing("gpt-4o")
+    assert pricing is not None
+    assert pricing["prompt"] == 2.50
+    assert pricing["completion"] == 10.00
+
+
+def test_lookup_pricing_with_provider_prefix():
+    pricing = _lookup_pricing("openai/gpt-4o")
+    assert pricing == MODEL_PRICING["gpt-4o"]
+
+
+def test_lookup_pricing_unknown_model_returns_none():
+    assert _lookup_pricing("nonexistent-model") is None
+
+
+def test_metrics_includes_cost_and_tokens_for_known_model(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    session = FakeSession({"choices": [{"message": {"content": "hi"}}]})
+    monkeypatch.setattr(requests, "Session", lambda: session)
+
+    llm = LLMBackend(backend="openai", model="gpt-4o")
+    result = llm.generate("prompt text here")
+
+    assert result == "hi"
+    metrics = llm.metrics()
+    assert "cost_usd" in metrics
+    assert metrics["cost_usd"] > 0
+    assert metrics["token_usage"]["prompt_tokens"] > 0
+    assert metrics["token_usage"]["completion_tokens"] > 0
+    assert metrics["pricing"] is not None
+
+
+def test_max_cost_usd_raises_budget_exceeded(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    session = FakeSession({"choices": [{"message": {"content": "hi"}}]})
+    monkeypatch.setattr(requests, "Session", lambda: session)
+
+    llm = LLMBackend(backend="openai", model="gpt-4o", max_cost_usd=0.000001)
+    # First call consumes a tiny fraction; second call should trip the limit.
+    llm.generate("first prompt to bump cost")
+    with pytest.raises(LLMBudgetExceeded, match="max_cost_usd"):
+        llm.generate("second prompt")
+
+
+# ---------------------------------------------------------------------------
+# Batch mode tests
+# ---------------------------------------------------------------------------
+
+def test_generate_batch_sequential_for_unsupported_backend(monkeypatch):
+    monkeypatch.setenv("MUTALAMBDA_OLLAMA_URL", "http://ollama.example/api/generate")
+    session = FakeSession({"response": "ok"})
+    monkeypatch.setattr(requests, "Session", lambda: session)
+
+    llm = LLMBackend(backend="ollama", model="test")
+    results = llm.generate_batch(["prompt1", "prompt2"])
+
+    assert results == ["ok", "ok"]
+    assert len(session.calls) == 2
+
+
+def test_generate_batch_empty_list_returns_empty():
+    llm = LLMBackend(backend="ollama", model="test")
+    assert llm.generate_batch([]) == []
+
+
+def test_generate_batch_circuit_open_raises(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    session = FakeSession({"choices": [{"message": {"content": "x"}}]})
+    monkeypatch.setattr(requests, "Session", lambda: session)
+
+    class FailingSession:
+        def post(self, *a, **k):
+            raise requests.RequestException("boom")
+
+    # Force circuit open.
+    llm = LLMBackend(backend="openai", model="gpt-4o", circuit_failure_threshold=1)
+    llm._consecutive_failures = 1
+    llm._circuit_opened_at = 9999999999
+    with pytest.raises(LLMCircuitOpen):
+        llm.generate_batch(["p1", "p2"])

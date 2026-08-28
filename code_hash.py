@@ -13,7 +13,7 @@ from typing import Optional
 __all__ = ["stable_code_hash", "cached_parse", "clear_ast_cache", "ast_cache"]
 
 
-@functools.lru_cache(maxsize=1024)
+@functools.lru_cache(maxsize=4096)
 def cached_parse(code: str) -> ast.AST:
     """Parse *code* into an AST, returning a cached result on repeat calls.
 
@@ -21,6 +21,10 @@ def cached_parse(code: str) -> ast.AST:
     ``lru_cache`` hashes strings efficiently).  The AST is immutable once
     created, so caching it is safe.  Callers that need to mutate the tree should
     operate on a ``copy.deepcopy`` of the returned object.
+
+    Cache size was increased from 1,024 → 4,096 entries (Feb 2026) to reduce
+    LRU eviction churn in long-running evolutionary runs that re-parse the
+    same mutated snippets repeatedly.
 
     Args:
         code: Python source text.

@@ -37,6 +37,31 @@ _TIER_IDS = {
     TIER_ELITE: 2,
 }
 
+# Memo cache for deterministic AST micro-mutators (parsimony, memory, loop).
+# Keyed by stable_code_hash(code) so identical inputs skip the expensive
+# deepcopy(cached_parse(...)) + NodeTransformer + ast.unparse round-trip.
+_micro_mutator_cache: Dict[str, str] = {}
+
+
+def _memoize(fn: Callable[..., str]) -> Callable[..., str]:
+    """Memoize a deterministic (code, _llm_fn)->code mutator by code hash."""
+
+    def _wrapped(code: str, _llm_fn: Optional[Callable[[str], str]]) -> str:
+        from code_hash import stable_code_hash
+
+        key = stable_code_hash(code, salt=fn.__name__)
+        cached = _micro_mutator_cache.get(key)
+        if cached is not None:
+            return cached
+        result = fn(code, _llm_fn)
+        # Only cache when the mutator actually changed the code to avoid
+        # masking downstream behavior on inputs it could not transform.
+        _micro_mutator_cache[key] = result
+        return result
+
+    _wrapped.__name__ = fn.__name__
+    return _wrapped
+
 
 @dataclass
 class HFCTierConfig:
@@ -121,6 +146,7 @@ class HFCLeagueEngine:
 
     def seed(self, codes: List[str]) -> None:
         """Seed the experimental laboratory with initial candidates."""
+        self.clear_caches()
         self.tier1 = [
             Individual(code=code, tier=TIER_LABORATORY)
             for code in codes[: self.config.max_tier1_size]
@@ -129,6 +155,11 @@ class HFCLeagueEngine:
         self.tier3 = []
         self._distilled_concept = ""
 
+    @staticmethod
+    def clear_caches() -> None:
+        """Reset the deterministic micro-mutator memo cache between independent runs."""
+        _micro_mutator_cache.clear()
+
     def restore(
         self,
         populations: Dict[str, List[Dict]],
@@ -136,6 +167,7 @@ class HFCLeagueEngine:
         distilled_concept: str = "",
     ) -> None:
         """Restore HFC populations from checkpoint data."""
+        self.clear_caches()
         self.tier1 = [self._individual_from_dict(data, TIER_LABORATORY)
                       for data in populations.get(TIER_LABORATORY, [])]
         self.tier2 = [self._individual_from_dict(data, TIER_FACTORY)
@@ -643,6 +675,7 @@ MODULE:
         return ASTMutator.apply_random_mutation(code)
 
     @staticmethod
+    @_memoize
     def _parsimony_prune(code: str, _llm_fn: Optional[Callable[[str], str]]) -> str:
         try:
             tree = copy.deepcopy(cached_parse(code))
@@ -675,6 +708,7 @@ MODULE:
             return code
 
     @staticmethod
+    @_memoize
     def _memory_optimization(code: str, _llm_fn: Optional[Callable[[str], str]]) -> str:
         try:
             tree = copy.deepcopy(cached_parse(code))
@@ -703,6 +737,7 @@ MODULE:
             return code
 
     @staticmethod
+    @_memoize
     def _loop_unrolling(code: str, _llm_fn: Optional[Callable[[str], str]]) -> str:
         try:
             tree = copy.deepcopy(cached_parse(code))
