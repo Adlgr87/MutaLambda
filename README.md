@@ -253,6 +253,8 @@ python -m pytest tests/ -v
 
 Current status: **531 test functions** (canonical count via `scripts/report_test_count.py`, incluye 7 con errores de colección por dependencia opcional `tree_sitter` en entornos locales). CI green across Python 3.10/3.11/3.12 plus Docker build/test/push. See [docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md) for the production-readiness audit.
 
+> **Note:** Tests require `pytest` (`pip install pytest`). Run with `python -m pytest tests/ -v` or use the bundled CLI: `mutalambda test`.
+
 ## Documentation
 
 - [CLI reference](docs/CLI.md)
@@ -262,16 +264,26 @@ Current status: **531 test functions** (canonical count via `scripts/report_test
 - [Test Execution Protocol](docs/TEST_EXECUTION_PROTOCOL.md)
 - [Production checklist](docs/PRODUCTION_CHECKLIST.md)
 - [First optimization walkthrough](docs/getting-started/first-optimization.md)
+- [Architecture v2](docs/architecture_v2.md)
+- [GPU Integration](docs/gpu_integration.md)
+- [Testing Guide](docs/testing_guide.md)
+- [Performance Report](docs/performance_report.md)
+- [Migration Guide](docs/migration_guide.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Deployment Guide](docs/deployment_guide.md)
 - [README en español](README_ES.md)
 
 ## Roadmap
 
 - [x] FASES 0–2: Pipeline CLI modules (universal_parser, invariant_detector, evolve, regression_gate, certify)
 - [x] FASES 0–2: GitHub Actions workflows (PR gate + optimization pipeline)
-- [ ] FASE 3: Full pipeline CI validation (requires 3 consecutive green runs)
-- [ ] FASE 4: Enable weekly schedule trigger
+- [x] FASE 3: Pre-GPU analysis and optimization workflow
+- [x] FASE 4: GPU Integration - Pilot Phase (NSGA-II on CUDA)
+- [x] FASE 5: GPU Integration - Expansion (Ray batch processing)
+- [x] FASE 6: Complete Testing & Benchmarking (bench_phase6.py, 441+ tests)
+- [x] FASE 7: Documentation & Deploy (full docs suite, install scripts, CI/CD)
+- [ ] FASE 8: Metrics exporter (Prometheus/OTel) for long-running service deployments
 - [ ] src-layout packaging migration (eliminates py-modules maintenance class of bugs)
-- [ ] Metrics exporter (Prometheus/OTel) for long-running service deployments
 - [ ] Independent reproduction of validated results on public benchmarks
 
 ## License
