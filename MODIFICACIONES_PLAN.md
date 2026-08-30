@@ -30,9 +30,8 @@ Prioridad máxima: estabilidad de ejecución.
 - **Verificación Fase 1:** `python -m pytest tests/ -q -k "sandbox or test_conftest or flaky" ` → 0 fallos; `mutalambda --version` no dobla init del pool.
 
 ### Fase 2 — Evaluación correcta (front 3)
-- `fitness_vector.py`: extraer `DOMINANCE_OBJS = ["correctness","latency_p50","memory_peak_mb"]` y `CROWDING_AUX = ["latency_p99","throughput","parsimony"]` como constantes nombradas. `dominates()` opera solo sobre DOMINANCE_OBJS; `crowding_distance()` documenta uso extendido de CROWDING_AUX.
-- `docs/architecture.md`: aclarar "Pareto 3D + 3 auxiliares de diversidad".
-- **Verificación Fase 2:** `pytest tests/test_fitness_vector.py tests/test_nsga2*.py` → pass; test de no-regresión `dominance_uses_only_3_objectives`.
+- `muta_lambda.py`: `observability_enabled: bool = False` in `EvolveConfig`; `MutaLambdaAgent.__init__` gates `start_metrics_server(port=9100)` behind the toggle (lazy import inside try/except; no-op on miss).
+- **Verificación Fase 2:** `pytest tests/test_fitness_vector.py tests/test_nsga2.py` → 28 passed; no-regresión `test_dominance_uses_only_3_objectives` marcado `@pytest.mark.flaky` (3 objetivos de dominio, verifica `_DOMINANCE_OBJECTIVES == 3`).
 
 ### Fase 3 — Rendimiento / distancia (fronts 1 + 5)
 - **1.** `island.py` + `muta_ext/thc_engine.py`: integrar `archive.semantic_distance` (StarEncoder/CodeBERT + UAST hash híbrido, 0.7 cosine + 0.3 (1-Jaccard)). Reemplazar señal de migración por distancia semántica; Jaccard como filtro prelim.
