@@ -88,7 +88,7 @@ regex_eff()
         ("json_loads", """
 import json
 def json_loads():
-    data = '{"key": "value", "num": 42}' * 1000
+    data = "[" + ",".join(['{"key": "value", "num": 42}'] * 1000) + "]"
     return json.loads(data)
 json_loads()
 """),
