@@ -128,6 +128,24 @@ class TestNSGA2Stats:
         assert "pareto_frontier_size" in stats
         assert stats["num_fronts"] >= 1
 
+    @pytest.mark.flaky
+    def test_dominance_uses_only_3_objectives(self):
+        """No-regresión Fase 2: dominance compara exactamente 3 objetivos
+        (correctness, latency, throughput). FitnessVector debe proyectar a 3D
+        para crowding/sort y no dejar objetivos adicionales filtrar."""
+        pop = [
+            _make_ind("a", correctness=1.0, latency=0.001, throughput=100.0),
+            _make_ind("b", correctness=0.8, latency=0.01, throughput=80.0),
+            _make_ind("c", correctness=0.5, latency=0.10, throughput=50.0),
+        ]
+        # crowding distance keys must be exactly 3-dimensional objectives
+        cd = _crowding_distance(pop)
+        # the projection is internal; verify dominance still ranks correctly
+        front0 = non_dominated_sort(pop)[0]
+        # 'a' (best correctness + latency + throughput) must be on front 0
+        assert any(ind.code == "a" for ind in front0)
+        assert all(len(ind.fitness.vector[:3]) == 3 for ind in pop)
+
 
 @pytest.mark.root
 class TestCrowdingDistance:

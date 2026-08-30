@@ -124,6 +124,8 @@ class EvolveConfig:
     use_process_pool: bool = False
     llm_backend: str = "ollama"
     llm_model: str = "llama3.2:3b"
+    observability_enabled: bool = True
+    observability_metrics_port: int = 9100
     llm_timeout_sec: float = 60.0
     llm_temperature: float = 0.2
     prompt_pop_size: int = 6
@@ -535,6 +537,16 @@ class MutaLambdaAgent:
                 self.archive = SolutionArchive()
             except ImportError:
                 logger.warning("FAISS/sentence-transformers not available; archive disabled.")
+
+        self._metrics_server: Optional[Any] = None
+        if getattr(config, "observability_enabled", True):
+            try:
+                from metrics_exporter import start_metrics_server  # noqa: PLC0415
+
+                port = int(getattr(config, "observability_metrics_port", 9100) or 9100)
+                self._metrics_server = start_metrics_server(port=port)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("metrics server unavailable: %s", exc)
 
         self._advanced_selection = None
         if config.advanced_selection_enabled:
