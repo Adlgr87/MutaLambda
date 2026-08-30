@@ -118,6 +118,9 @@ class HFCLeagueEngine:
         self._last_snapshot: Optional[HFCLeagueSnapshot] = None
         self._distilled_concept = ""
         self._micro_mutators = self._build_micro_mutators()
+        # Cache telemetry: factory clones skip evaluation, inheriting parent fitness.
+        self._cache_hits = 0
+        self._cache_misses = 0
 
     def seed(self, codes: List[str]) -> None:
         """Seed the experimental laboratory with initial candidates."""
@@ -230,12 +233,21 @@ class HFCLeagueEngine:
     def stats(self) -> Dict[str, object]:
         """Return compact telemetry for metrics/checkpoints."""
         snapshot = self.last_snapshot
+        total = self._cache_hits + self._cache_misses
+        hit_rate = self._cache_hits / total if total > 0 else 0.0
+        cache_telemetry = {
+            "cache_hits": self._cache_hits,
+            "cache_misses": self._cache_misses,
+            "cache_hit_rate": hit_rate,
+            "cache_total": total,
+        }
         if snapshot is None:
             return {
                 "tier_counts": self._tier_counts(),
                 "best_score": self.best_score,
                 "diversity": self.diversity,
                 "distilled_concept": self._distilled_concept,
+                "cache": cache_telemetry,
             }
         return {
             "tier_counts": snapshot.tier_counts,
@@ -244,6 +256,7 @@ class HFCLeagueEngine:
             "promoted": snapshot.promoted,
             "demoted": snapshot.demoted,
             "distilled_concept": snapshot.distilled_concept,
+            "cache": cache_telemetry,
         }
 
     def to_checkpoint_dict(self) -> Dict[str, object]:
@@ -269,12 +282,23 @@ class HFCLeagueEngine:
     def _evaluate(self, individuals: List[Individual], evaluator) -> None:
         if not individuals:
             return
+        before = evaluator.cache_stats() if hasattr(evaluator, "cache_stats") else None
         results: List[EvalResult] = evaluator.evaluate_batch([ind.code for ind in individuals])
         for ind, result in zip(individuals, results):
             ind.score = result.score
             ind.fitness = result.fitness
             correctness = self._correctness(ind.fitness)
             ind.passed = bool(result.passed and correctness >= self.config.promotion_correctness)
+        # PDF fix a (HFC telemetry): distinguish true cache hits from fresh
+        # evaluations using the EvaluationService counters rather than assuming
+        # every result is a miss.
+        after = evaluator.cache_stats() if hasattr(evaluator, "cache_stats") else None
+        if before is not None and after is not None:
+            self._cache_hits += after["hits"] - before["hits"]
+            self._cache_misses += after["misses"] - before["misses"]
+        else:
+            # Fallback: unknown cache state — count every result as a miss.
+            self._cache_misses += len(results)
 
     def _reproduce_laboratory(self, llm_fn: Callable[[str], str]) -> List[Individual]:
         if not self.tier1:
@@ -336,6 +360,8 @@ class HFCLeagueEngine:
                     passed=parent.passed,
                     record_lineage=False,
                 )
+                # Factory clones inherit parent fitness (cache hit — skip evaluation).
+                self._cache_hits += 1
                 offspring.append(clone)
         return offspring
 

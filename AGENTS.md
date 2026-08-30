@@ -7,10 +7,20 @@
 - Evaluation key caching — invariant `tests_hash` and `environment_hash` precomputed; **242.7× faster** on key generation
 - HFC evaluation volume optimization — factory clones skip re-evaluation, inherit parent fitness (~15-25% predicted)
 
+### Phase 6.5: HFC batch eval + cache telemetry (completed)
+- Single `evaluate_batch` call per generation in `EvaluationEngine` (no per-candidate overhead).
+- `_cache_hits`/`_cache_misses` counters on `EvaluationEngine.__post_init__`; `cache_stats()` accessor returns `{hits, misses, hit_rate, total}`.
+- `hfc_tiers._evaluate` reads hit/miss deltas from real evaluators (defensive `hasattr` guard for mocks); factory clones inherit parent fitness and skip evaluation.
+- Test key alignment note: cache-map keys must use raw `code` strings (not stripped) to match the engine's keying.
+
+### Phase 6.6: Archive-aware migration (completed)
+- `archive` parameter threaded through `MigrationBus.stage_all_migrations` → `stage_migration` → `_rank_by_destination_diversity` for novelty-aware migrant ordering via `SolutionArchive.novelty_score`.
+- Wired in `island_evolution.py` Phase C: staged via `island_evolution.island_evolution.run_once` (sourced from `islands[0].archive`).
+
 ### Pending / Future proposals (from SWE-Agent analysis)
-1. ProtocolWorkflow per-candidate overhead — skip gates for AST-only mutations (~10-20% predicted, Medium risk)
-2. Sandbox worker spawn overhead — persistent worker pool (~5-15% predicted, High risk)
-3. HFC cache hit-rate instrumentation — add hit/miss counters (already has `cache_stats()`, low risk, visibility-only)
+~~1. ProtocolWorkflow per-candidate overhead — skip gates for AST-only mutations (~10-20% predicted, Medium risk)~~ **COMPLETED**
+~~2. Sandbox worker spawn overhead — persistent worker pool (~5-15% predicted, High risk)~~ **COMPLETED**
+~~3. HFC cache hit-rate instrumentation — add hit/miss counters (already has `cache_stats()`, low risk, visibility-only)~~ **COMPLETED**
 
 ### Run commands
 ```bash
