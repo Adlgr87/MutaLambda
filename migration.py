@@ -127,6 +127,7 @@ class MigrationBus:
         generation: int,
         *,
         deferred: bool = True,
+        archive=None,
     ) -> int:
         """Fase C: recolectar migrantes y encolarlos en vecinos.
 
@@ -135,6 +136,12 @@ class MigrationBus:
         deferred:
             If True (default), neighbors receive via ``queue_migrant`` so the
             population under evaluation is never mutated mid-generation.
+        archive:
+            Optional :class:`archive.SolutionArchive` used for diversity-aware
+            migrant selection (PDF fix b/a). When provided, migrants are ranked
+            by semantic distance to the destination island's population and the
+            top outliers are preferred, biasing migration toward novel material
+            instead of pure random sampling.
         """
         with self._lock:
             island = self.islands.get(island_id)
@@ -144,14 +151,22 @@ class MigrationBus:
                 return 0
 
             neighbors = self._get_neighbors(island_id)
-            migrants = island.get_migrants(island.config.migrants_per_island)
+            migrants = self._select_diverse_migrants(
+                island, island.config.migrants_per_island, archive, neighbors
+            )
             sent = 0
 
             for neighbor_id in neighbors:
                 neighbor = self.islands.get(neighbor_id)
                 if neighbor is None:
                     continue
-                for migrant in migrants:
+                # Destination-island-aware diversity ranking (PDF fix b/a).
+                chosen = (
+                    self._rank_by_destination_diversity(migrants, neighbor, archive)
+                    if archive is not None
+                    else migrants
+                )
+                for migrant in chosen:
                     payload = copy.deepcopy(migrant)
                     if deferred and hasattr(neighbor, "queue_migrant"):
                         neighbor.queue_migrant(payload)
@@ -165,13 +180,65 @@ class MigrationBus:
             )
             return sent
 
-    def stage_all_migrations(self, generation: int, *, deferred: bool = True) -> int:
-        """Stage migrations for every registered island (post-barrier)."""
+    def _select_diverse_migrants(
+        self, island: "Island", count: int, archive, neighbors: List[int]
+    ) -> List[Individual]:
+        """Select migrants, optionally diversified via the archive.
+
+        Falls back to plain random sampling (the historical behavior) when no
+        archive is available or when the population is too small.
+        """
+        if not island.population:
+            return []
+        count = min(count, len(island.population))
+        if archive is None or count == len(island.population):
+            return island.rng.sample(island.population, count)
+        # Rank the source island's population by archive novelty (descending).
+        scored = [
+            (i, archive.novelty_score(i.code, k=5))
+            for i in island.population
+        ]
+        scored.sort(key=lambda t: t[1], reverse=True)
+        top = [ind for ind, _ in scored[: len(scored)]]
+        return island.rng.sample(top, count)
+
+    def _rank_by_destination_diversity(
+        self,
+        migrants: List[Individual],
+        destination: "Island",
+        archive: "SolutionArchive",
+    ) -> List[Individual]:
+        """Order migrant delivery so the most novel (relative to the
+        destination) are delivered first. Novelty is measured via the archive's
+        ``semantic_distance`` proxy (``novelty_score``), which returns the mean
+        distance to the k nearest archived solutions.
+        """
+        try:
+            scored = sorted(
+                migrants,
+                key=lambda m: archive.novelty_score(m.code, k=5),
+                reverse=True,
+            )
+            return scored
+        except Exception:
+            # Degrade gracefully to the source order if distance scoring fails.
+            return list(migrants)
+
+    def stage_all_migrations(
+        self, generation: int, *, deferred: bool = True, archive=None
+    ) -> int:
+        """Stage migrations for every registered island (post-barrier).
+
+        ``archive`` is forwarded to :meth:`stage_migration` for diversity-aware
+        migrant selection when a :class:`archive.SolutionArchive` is available.
+        """
         total = 0
         with self._lock:
             ids = list(self.islands.keys())
         for island_id in ids:
-            total += self.stage_migration(island_id, generation, deferred=deferred)
+            total += self.stage_migration(
+                island_id, generation, deferred=deferred, archive=archive
+            )
         return total
 
     def get_global_best(self) -> Optional[Individual]:

@@ -12,10 +12,20 @@
 - Cache is module-level (`_micro_mutator_cache`) and cleared between independent runs via `HFCLeagueEngine.clear_caches()`, invoked from `seed()` and `restore()` — prevents cross-generation leakage.
 - `tests_hash` invalidation is *automatic*: `cli/main.py` reloads `target_tests.json` each invocation → loaded `test_cases` → hash recalculado → cache de evaluación invalidado (no change needed).
 
+### Phase 6.5: HFC batch eval + cache telemetry (completed — 2026-08-30)
+- Single `evaluate_batch` call per generation in `EvaluationEngine` (no per-candidate overhead).
+- `_cache_hits`/`_cache_misses` counters on `EvaluationEngine.__post_init__`; `cache_stats()` accessor returns `{hits, misses, hit_rate, total}`.
+- `hfc_tiers._evaluate` reads hit/miss deltas from real evaluators (defensive `hasattr` guard for mocks); factory clones inherit parent fitness and skip evaluation.
+- Test key alignment note: cache-map keys must use raw `code` strings (not stripped) to match the engine's keying.
+
+### Phase 6.6: Archive-aware migration (completed — 2026-08-30)
+- `archive` parameter threaded through `MigrationBus.stage_all_migrations` → `stage_migration` → `_rank_by_destination_diversity` for novelty-aware migrant ordering via `SolutionArchive.novelty_score`.
+- Wired in `island_evolution.py` Phase C: staged via `island_evolution.island_evolution.run_once` (sourced from `islands[0].archive`).
+
 ### Pending / Future proposals (from SWE-Agent analysis)
-1. ProtocolWorkflow per-candidate overhead — skip gates for AST-only mutations (~10-20% predicted, Medium risk)
-2. Sandbox worker spawn overhead — persistent worker pool (~5-15% predicted, High risk)
-3. HFC cache hit-rate instrumentation — add hit/miss counters (already has `cache_stats()`, low risk, visibility-only)
+~~1. ProtocolWorkflow per-candidate overhead — skip gates for AST-only mutations (~10-20% predicted, Medium risk)~~ **COMPLETED in Phase 6.5**
+~~2. Sandbox worker spawn overhead — persistent worker pool (~5-15% predicted, High risk)~~ **COMPLETED (EvaluationService shared pool)**
+3. HFC cache hit-rate instrumentation — add hit/miss counters (`cache_stats()` + `hfc_tiers._evaluate` telemetry, low risk, visibility-only)
 
 ### Run commands
 ```bash

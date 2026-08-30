@@ -12,11 +12,6 @@ from hfc_tiers import (
 from models import EvalResult, Individual, LineageGraph
 
 
-@pytest.mark.root
-class TestHFC:
-    """Tests for HFC tiers."""
-
-
 class _MockEvaluator:
     def __init__(self, functional_codes):
         self.functional_codes = set(functional_codes)
@@ -402,3 +397,134 @@ def test_factory_offspring_skip_evaluation_uses_parent_fitness():
     # At least one evaluation should have happened (for current population or lab offspring)
     # but NOT for the factory clones specifically
     assert evaluation_count[0] >= 1
+
+
+class _CountingEvaluator:
+    """Evaluator that records every call to track cache telemetry."""
+
+    def __init__(self, functional_codes):
+        self.functional_codes = set(functional_codes)
+        self.call_count = 0
+
+    def evaluate_batch(self, codes):
+        self.call_count += len(codes)
+        results = []
+        for code in codes:
+            if code in self.functional_codes:
+                fitness = FitnessVector(
+                    correctness=1.0,
+                    latency_p50=0.01,
+                    latency_p99=0.01,
+                    throughput=100.0,
+                    memory_peak_mb=1.0,
+                    parsimony=0.8,
+                )
+                results.append(EvalResult(fitness=fitness, passed=True, metrics=fitness.to_dict()))
+            else:
+                fitness = FitnessVector.worst()
+                results.append(EvalResult(fitness=fitness, passed=False, metrics=fitness.to_dict(), stderr="err"))
+        return results
+
+
+@pytest.mark.root
+def test_hfc_cache_telemetry_reports_hits_and_misses():
+    """stats() must report cache_hit_rate, cache_hits, cache_misses, cache_total."""
+    parent_code = "def f(x):\n    return x + 1\n"
+    engine = _engine(lambda_clones=3, tier3_size=1)
+    parent = Individual(code=parent_code, tier=TIER_FACTORY)
+    engine.tier2 = [parent]
+
+    evaluator = _CountingEvaluator(functional_codes={parent_code.strip()})
+
+    engine.step(
+        llm_fn=lambda _prompt: parent_code,
+        evaluator=evaluator,
+        generation=0,
+        lineage_graph=LineageGraph(),
+    )
+
+    stats = engine.stats()
+    cache_stats = stats["cache"]
+    # Cache telemetry keys must be present
+    assert "cache_hits" in cache_stats
+    assert "cache_misses" in cache_stats
+    assert "cache_hit_rate" in cache_stats
+    assert "cache_total" in cache_stats
+
+    # cache_total = hits + misses
+    assert cache_stats["cache_total"] == cache_stats["cache_hits"] + cache_stats["cache_misses"]
+
+    # We should have at least 1 cache miss (the current population / lab offspring)
+    assert cache_stats["cache_misses"] >= 1
+
+    # Factory clones with lambda_clones=3 should produce 3 cache hits
+    assert cache_stats["cache_hits"] >= 3
+
+    # hit rate must be in [0, 1]
+    assert 0.0 <= cache_stats["cache_hit_rate"] <= 1.0
+
+
+class _MockEvalWithStats(_CountingEvaluator):
+    """Evaluator that mimics the real EvaluationService cache_stats contract."""
+
+    def __init__(self, functional_codes, cache_map=None):
+        super().__init__(functional_codes)
+        # cache_map: code -> was it a cache hit (True) or fresh (False)
+        self._cache_map = cache_map or {}
+        self._hits = 0
+        self._misses = 0
+
+    def cache_stats(self):
+        return {"hits": self._hits, "misses": self._misses, "size": 0}
+
+    def evaluate_batch(self, codes):
+        self.call_count += len(codes)
+        results = []
+        for code in codes:
+            if code in self._cache_map:
+                if self._cache_map[code]:
+                    self._hits += 1
+                else:
+                    self._misses += 1
+            else:
+                self._misses += 1
+            if code in self.functional_codes:
+                fitness = FitnessVector(
+                    correctness=1.0,
+                    latency_p50=0.01,
+                    latency_p99=0.01,
+                    throughput=100.0,
+                    memory_peak_mb=1.0,
+                    parsimony=0.8,
+                )
+                results.append(EvalResult(fitness=fitness, passed=True, metrics=fitness.to_dict()))
+            else:
+                fitness = FitnessVector.worst()
+                results.append(EvalResult(fitness=fitness, passed=False, metrics=fitness.to_dict(), stderr="err"))
+        return results
+
+
+@pytest.mark.root
+def test_hfc_evaluate_reads_evaluator_cache_stats_for_telemetry():
+    """_evaluate must use evaluator.cache_stats deltas for hit/miss telemetry."""
+    parent_code = "def f(x):\n    return x + 1\n"
+    engine = _engine(lambda_clones=0, tier3_size=1)  # no factory clones
+    parent = Individual(code=parent_code, tier=TIER_ELITE)  # elite → drives lab reproduction
+    engine.tier1 = [parent]
+    # Pre-seed: parent's code (raw) is a cache hit, offspring clone is fresh (miss).
+    evaluator = _MockEvalWithStats(
+        functional_codes={parent_code.strip()},
+        cache_map={parent_code: True},
+    )
+    engine.step(
+        llm_fn=lambda _prompt: parent_code,
+        evaluator=evaluator,
+        generation=0,
+        lineage_graph=LineageGraph(),
+    )
+    stats = engine.stats()
+    cache_stats = stats["cache"]
+    # _evaluate delta: parent=1 hit, offspring clone=1 miss (no factory clones)
+    assert cache_stats["cache_hits"] >= 1
+    assert cache_stats["cache_misses"] >= 1
+    assert cache_stats["cache_total"] == cache_stats["cache_hits"] + cache_stats["cache_misses"]

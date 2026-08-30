@@ -196,7 +196,13 @@ class IslandPool:
             if bus is not None and hasattr(bus, "stage_all_migrations"):
                 # Use pre-increment generation index for interval checks.
                 # Islands already bumped generation in step_local, so pass generation.
-                out.migrants_staged = bus.stage_all_migrations(generation, deferred=True)
+                # An optional SolutionArchive enables diversity-aware migrant selection
+                # (PDF fix b/a). It is sourced from the first island's archive if the
+                # island was wired with one; otherwise falls back to plain sampling.
+                archive = getattr(islands[0], "archive", None)
+                out.migrants_staged = bus.stage_all_migrations(
+                    generation, deferred=True, archive=archive
+                )
             else:
                 # Fallback: legacy per-island migrate
                 for island in islands:
