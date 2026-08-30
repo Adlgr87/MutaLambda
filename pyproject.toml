@@ -131,6 +131,7 @@ markers = [
     "v4: tests de nuevas funcionalidades v4.0",
     "go: tests de soporte Go",
     "ci: tests de integración CI/CD",
+    "flaky: inestable - requiere re-ejecución bajo ambiente estable",
 ]
 
 [tool.ruff]

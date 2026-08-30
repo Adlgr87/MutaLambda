@@ -11,7 +11,7 @@ import logging
 import statistics
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -31,7 +31,7 @@ class BenchmarkResult:
     memory_mb: float
     success: bool
     error: Optional[str] = None
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
     details: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -241,7 +241,7 @@ class BenchmarkRunner:
     def generate_report(self) -> Path:
         """Generate a comprehensive benchmark report."""
         report: Dict[str, Any] = {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(tz=timezone.utc).isoformat(),
             "config": asdict(self.config),
             "results": [r.to_dict() for r in self._results],
             "summary": self._compute_summary(),
@@ -295,7 +295,7 @@ class BenchmarkRunner:
         print("\n" + "=" * 60)
         print("MutaLambda Benchmark Report")
         print("=" * 60)
-        print(f"Generated: {datetime.utcnow().isoformat()}")
+        print(f"Generated: {datetime.now(tz=timezone.utc).isoformat()}")
         print(f"Config: gens={self.config.num_generations}, pop={self.config.population_size}")
         print(f"Repeats: {self.config.num_repeats}")
         print("-" * 60)

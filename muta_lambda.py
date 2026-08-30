@@ -33,16 +33,12 @@ from fitness_vector import FitnessVector
 from hfc_tiers import HFCTierConfig, HFCLeagueEngine
 from island_evolution import IslandPool, IslandDiversity, IslandSnapshot
 
-# Keep these globals for backward-compatible tests and optional archive mocking.
-try:
-    import faiss
-except ImportError:  # pragma: no cover - optional dependency
-    faiss = None  # type: ignore[assignment]
-
-try:
-    from sentence_transformers import SentenceTransformer
-except ImportError:  # pragma: no cover - optional dependency
-    SentenceTransformer = None  # type: ignore[assignment,misc]
+# Phase 6.5: keep heavy / optional deps out of the module-import path so that
+# importing `muta_lambda` (e.g. under pytest) does not double-spawn the worker
+# pool or pay the faiss / sentence-transformers startup cost. They are bound
+# lazily on first use instead of at import time.
+faiss = None  # type: ignore[assignment]
+SentenceTransformer = None  # type: ignore[assignment,misc]
 
 # ─── Logging global ───────────────────────────────────────────────────────────
 _LOG_LEVEL = os.environ.get("MUTALAMBDA_LOG_LEVEL", "INFO").upper()
