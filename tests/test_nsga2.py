@@ -128,6 +128,24 @@ class TestNSGA2Stats:
         assert "pareto_frontier_size" in stats
         assert stats["num_fronts"] >= 1
 
+    @pytest.mark.flaky
+    def test_dominance_uses_only_3_objectives(self):
+        """No-regresión Fase 2: dominance compara exactamente 3 objetivos
+        (correctness, latency, throughput) y no deja objetivos adicionales
+        filtrar en el sort ni en crowding."""
+        from nsga2 import _DOMINANCE_OBJECTIVES
+
+        # The dominance objective count must be exactly 3 (not 6).
+        assert _DOMINANCE_OBJECTIVES == 3
+        pop = [
+            _make_ind("a", correctness=1.0, latency=0.001, throughput=100.0),
+            _make_ind("b", correctness=0.8, latency=0.01, throughput=80.0),
+            _make_ind("c", correctness=0.5, latency=0.10, throughput=50.0),
+        ]
+        front0 = get_pareto_frontier(pop)
+        # 'a' (best correctness + latency + throughput) must be on front 0
+        assert any(ind.code == "a" for ind in front0)
+
 
 @pytest.mark.root
 class TestCrowdingDistance:

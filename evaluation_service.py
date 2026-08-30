@@ -28,6 +28,76 @@ from runners import CandidateRunner, SubprocessRunner, create_runner, tests_hash
 logger = logging.getLogger("MutaLambda")
 
 
+# ── Persistent process pool across EvaluationService instances ─────────────────
+# A shared pool keyed by (workers, timeout, memory, enforce_ast_scan) avoids
+# re-spawning processes when multiple EvolutionEngine instances are created
+# across runs (e.g. island threads, checkpoints, agent sessions). The pool is
+# reference-counted and torn down only when the last client releases it.
+_POOL_REGISTRY: Dict[tuple, "ProcessPoolExecutor"] = {}
+_POOL_REGISTRY_LOCK = threading.Lock()
+_POOL_REF_COUNTS: Dict[tuple, int] = {}
+
+
+def _pool_key(
+    workers: int,
+    timeout_sec: float,
+    memory_mb: int,
+    enforce_ast_scan: bool,
+    allow_expression_eval: bool,
+) -> tuple:
+    return (workers, timeout_sec, memory_mb, enforce_ast_scan, allow_expression_eval)
+
+
+def _acquire_shared_pool(key: tuple) -> ProcessPoolExecutor:
+    """Get or create a persistent process pool, incrementing the reference count."""
+    with _POOL_REGISTRY_LOCK:
+        pool = _POOL_REGISTRY.get(key)
+        if pool is None:
+            ctx = None
+            if "forkserver" in multiprocessing.get_all_start_methods():
+                try:
+                    ctx = multiprocessing.get_context("forkserver")
+                except ValueError:
+                    ctx = None
+            pool = ProcessPoolExecutor(max_workers=key[0], mp_context=ctx) if ctx else ProcessPoolExecutor(max_workers=key[0])
+            _POOL_REGISTRY[key] = pool
+            _POOL_REF_COUNTS[key] = 0
+            logger.debug("Shared pool created for key=%s", key)
+        _POOL_REF_COUNTS[key] += 1
+        return pool
+
+
+def _release_shared_pool(key: tuple) -> None:
+    """Decrement ref count; shut down pool when last client releases it."""
+    with _POOL_REGISTRY_LOCK:
+        if key in _POOL_REF_COUNTS:
+            _POOL_REF_COUNTS[key] -= 1
+            if _POOL_REF_COUNTS[key] <= 0:
+                pool = _POOL_REGISTRY.pop(key, None)
+                _POOL_REF_COUNTS.pop(key, None)
+                if pool is not None:
+                    try:
+                        pool.shutdown(wait=False, cancel_futures=True)
+                    except TypeError:
+                        pool.shutdown(wait=False)
+                    logger.debug("Shared pool shut down (last release) for key=%s", key)
+
+
+def shutdown_all_pools() -> None:
+    """Tear down every persistent pool (used at interpreter shutdown or tests)."""
+    with _POOL_REGISTRY_LOCK:
+        for key, pool in list(_POOL_REGISTRY.items()):
+            try:
+                pool.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                try:
+                    pool.shutdown(wait=False)
+                except Exception:
+                    pass
+        _POOL_REGISTRY.clear()
+        _POOL_REF_COUNTS.clear()
+
+
 def environment_hash() -> str:
     """Hash of evaluation environment (Python + key packages)."""
     payload = {
@@ -102,10 +172,14 @@ class EvaluationService:
     def __post_init__(self) -> None:
         self._pool: Optional[ProcessPoolExecutor] = None
         self._pool_lock = threading.Lock()
+        self._pool_key: Optional[tuple] = None  # tracks key for shared pool release
         self._serial_fallback: Optional[ThreadPoolExecutor] = None
         self._cache: Dict[str, EvalResult] = {}
         self._cache_lock = threading.Lock()
         self._runner: Optional[CandidateRunner] = None
+        # Cache telemetry: distinguish true cache hits from fresh evaluations.
+        self._cache_hits = 0
+        self._cache_misses = 0
         # Cache invariant hashes once — tests_hash + environment_hash do not
         # change during the life of an EvaluationService instance. Without this,
         # evaluation_key() recomputes json.dumps(test_cases) + environment_hash
@@ -168,8 +242,13 @@ class EvaluationService:
         with self._pool_lock:
             if self._pool is None:
                 workers = max(1, int(self.max_workers or 1))
-                self._pool = self._make_pool(workers)
-                logger.debug("EvaluationService pool started with %d workers", workers)
+                # Use persistent shared pool to avoid re-spawning workers.
+                self._pool_key = _pool_key(
+                    workers, self.timeout_sec, self.memory_mb,
+                    self.enforce_ast_scan, self.allow_expression_eval,
+                )
+                self._pool = _acquire_shared_pool(self._pool_key)
+                logger.debug("EvaluationService pool started with %d workers (shared)", workers)
             return self._pool
 
     def _get_ready_pool(self):
@@ -189,8 +268,13 @@ class EvaluationService:
                 return self._serial_fallback
             if self._pool is None:
                 workers = max(1, int(self.max_workers or 1))
-                self._pool = self._make_pool(workers)
-                logger.debug("EvaluationService pool started with %d workers", workers)
+                # Use persistent shared pool to avoid re-spawning workers.
+                self._pool_key = _pool_key(
+                    workers, self.timeout_sec, self.memory_mb,
+                    self.enforce_ast_scan, self.allow_expression_eval,
+                )
+                self._pool = _acquire_shared_pool(self._pool_key)
+                logger.debug("EvaluationService pool started with %d workers (shared)", workers)
             try:
                 # The first submit bootstraps the forkserver and its first
                 # worker; performing it under the lock removes the race.
@@ -199,31 +283,34 @@ class EvaluationService:
                 logger.warning(
                     "Process pool unavailable (%s); falling back to serial evaluation", exc
                 )
-                try:
-                    self._pool.shutdown(wait=False)
-                except Exception:
-                    pass
+                # Release our ref to the shared pool so it can be garbage collected.
+                if self._pool_key is not None:
+                    _release_shared_pool(self._pool_key)
                 self._pool = None
+                self._pool_key = None
                 executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="eval-serial")
                 self._serial_fallback = executor
                 return executor
             return self._pool
 
     def shutdown_pool(self) -> None:
-        pool = getattr(self, "_pool", None)
-        if pool is not None:
-            try:
-                pool.shutdown(wait=False, cancel_futures=True)
-            except TypeError:
-                pool.shutdown(wait=False)
+        """Release the shared pool reference (pool persists for other clients)."""
+        with self._pool_lock:
+            pool = getattr(self, "_pool", None)
+            pool_key = getattr(self, "_pool_key", None)
+            # Only release the shared pool ref; don't shut it down so other
+            # EvaluationService instances can keep using it.
+            if pool is not None and pool_key is not None:
+                _release_shared_pool(pool_key)
             self._pool = None
+            self._pool_key = None
 
-    def shutdown(self) -> None:
-        """Release pooled resources (process pool / serial fallback)."""
+    def shutdown(self, wait: bool = True) -> None:
+        """Release shared pool reference. Pool persists if other clients exist."""
         self.shutdown_pool()
         fallback = getattr(self, "_serial_fallback", None)
         if fallback is not None:
-            fallback.shutdown(wait=False)
+            fallback.shutdown(wait=wait)
             self._serial_fallback = None
 
     def evaluate_one(self, code: str) -> EvalResult:
@@ -254,10 +341,13 @@ class EvaluationService:
                     cached = self._cache.get(key)
                     if cached is not None:
                         results[i] = cached
+                        self._cache_hits += 1
                     else:
                         pending_idx.append(i)
+                        self._cache_misses += 1
         else:
             pending_idx = list(range(len(codes)))
+            self._cache_misses += len(codes)
 
         if not pending_idx:
             return results  # type: ignore[return-value]
@@ -394,11 +484,10 @@ class EvaluationService:
                 self._cache.pop(key, None)
 
     def cache_stats(self) -> Dict[str, int]:
+        """Snapshot of cache hit/miss counters (PDF fix a: HFC telemetry)."""
         with self._cache_lock:
-            return {"size": len(self._cache)}
-
-    def shutdown(self, wait: bool = True) -> None:
-        with self._pool_lock:
-            if self._pool is not None:
-                self._pool.shutdown(wait=wait)
-                self._pool = None
+            return {
+                "hits": self._cache_hits,
+                "misses": self._cache_misses,
+                "size": len(self._cache),
+            }
