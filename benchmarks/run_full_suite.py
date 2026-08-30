@@ -26,7 +26,7 @@ def get_git_info() -> dict:
     """Get git commit hash and status."""
     try:
         commit = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd="/home/adlg/MutaLambda"
+            ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1]
         ).decode().strip()[:12]
         return {"commit": commit}
     except Exception:
