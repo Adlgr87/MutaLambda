@@ -33,6 +33,8 @@ REPOPACK.md
 .DS_Store
 
 # generated reports
+reports/benchmark_report.json
+examples/target_benchmark.json
 status_report.json
 status_report.md
 checkpoints/
@@ -46,3 +48,6 @@ dist/
 
 # commercial planning (private, not part of the open distribution)
 MutaLambda_Commercial/
+
+# AionUi local skills (debug artifacts) — never commit
+.aionrs/
