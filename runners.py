@@ -776,13 +776,17 @@ class MicroVMRunner:
     memory_mb: int = 256
     allow_expression_eval: bool = False
     enforce_ast_scan: bool = True
+    require_bwrap: bool = False
 
     def __post_init__(self) -> None:
         if not shutil.which("bwrap"):
-            logger.warning(
+            msg = (
                 "MicroVMRunner requires 'bwrap' (bubblewrap). "
                 "Install with: apt-get install -y bubblewrap"
             )
+            if self.require_bwrap:
+                raise RuntimeError(msg)
+            logger.warning(msg)
 
     def _build_sandbox(self, python_bin: str, workdir: str) -> List[str]:
         """Build the bwrap command with namespace isolation.

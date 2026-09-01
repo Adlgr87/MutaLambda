@@ -158,12 +158,21 @@ def _non_dominated_sort_numpy(population: List[Individual]) -> List[ParetoFront]
     dominated_by = dominance_matrix.sum(axis=0).astype(np.int64)
 
     fronts: List[ParetoFront] = []
-    # front_indices: indices whose dominated_by count == 0 (Pareto frontier).
-    front_mask = dominated_by == 0
-    front_indices = np.where(front_mask)[0]
+    processed = np.zeros(n, dtype=bool)
 
-    while front_indices.size > 0:
-        front_inds = [population[i] for i in front_indices]
+    while True:
+        # Candidates for the current front: zero dominators and not yet
+        # placed in a previous front. The previous buggy version reassigned
+        # `front_indices` with a stale `front_mask`, which could (a) revisit
+        # already-emitted individuals on the frontier or (b) miss individuals
+        # whose count dropped to zero only after being non-zero previously.
+        # Using an explicit `processed` mask eliminates that class of bugs.
+        frontier = np.flatnonzero((dominated_by == 0) & ~processed)
+        if frontier.size == 0:
+            break
+
+        processed[frontier] = True
+        front_inds = [population[i] for i in frontier]
         crowding = _crowding_distance(front_inds)
         fronts.append(ParetoFront(
             rank=len(fronts),
@@ -171,20 +180,10 @@ def _non_dominated_sort_numpy(population: List[Individual]) -> List[ParetoFront]
             crowding=crowding,
         ))
 
-        # Decrement dominated_by for individuals dominated by this front.
-        # Mask of (rows in front_indices, cols dominated by them).
-        sub_matrix = dominance_matrix[front_indices]
-        decrements = sub_matrix.sum(axis=0)  # (N,)
-        dominated_by -= decrements
-        # New frontier: those that just dropped to 0 and weren't already cleared.
-        front_indices = np.where((dominated_by == 0) & ~front_mask)[0] if front_indices.size else np.where(dominated_by == 0)[0]
-        # Mark these so we don't revisit (the mask update below handles clearing).
-        front_mask = dominated_by == 0
-        # Avoid infinite loop: clear counts we've already consumed by
-        # capping negative values to 0 and only taking new zeros.
-        # Simpler approach: track a "seen" set.
-        if not fronts[-1].individuals:
-            break
+        # Decrement dominator counts for everyone this front dominates.
+        dominated_by -= dominance_matrix[frontier].sum(axis=0)
+        # Clamp negatives from double-counting; only zero matters going forward.
+        dominated_by = np.maximum(dominated_by, 0)
 
     return fronts
 

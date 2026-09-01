@@ -271,6 +271,17 @@ def generate_mutator(
     if not code.strip():
         raise MutatorGenerationError("Model returned empty output for mutator code.")
     validate_generated_mutator(code, language)
+
+    # Fase 3B: security gate — reject generated mutators that contain
+    # critical patterns (exec/eval, dangerous imports, etc.) before writing.
+    from mutation_filters import run_all_filters
+    filter_report = run_all_filters(code, profile="strict", enforce_syntax=True)
+    if filter_report.blocked:
+        issues = "; ".join(filter_report.issues[:5])
+        raise MutatorGenerationError(
+            f"Generated mutator failed security filter: {issues}"
+        )
+
     return GeneratedMutatorResult(
         code=code,
         provider=provider,

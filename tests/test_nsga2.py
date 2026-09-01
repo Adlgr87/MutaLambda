@@ -65,6 +65,42 @@ class TestNonDominatedSort:
         fronts = non_dominated_sort([a, b])
         assert len(fronts[0].individuals) == 2  # both in Pareto frontier
 
+    def test_numpy_pure_equivalence_multi_level(self):
+        """Fase 4A regression guard: numpy fast path must match the pure-Python
+        path exactly, including multi-level front assignment. The rewritten
+        `processed`-mask loop previously regressed front-rank ordering."""
+        from nsga2 import _non_dominated_sort_numpy, _NUMPY_FASTPATH_THRESHOLD
+        import nsga2 as _n
+
+        # Build a population large enough to exercise the numpy path, with a
+        # clear multi-level dominance chain so a regression in frontier
+        # extraction would change the front sizes.
+        pop = []
+        # chain: ind_0 dominates ind_1 dominates ... dominates ind_29
+        for i in range(30):
+            pop.append(_make_ind(f"ind_{i}", correctness=1.0 - i / 30,
+                                 latency=0.001 * (i + 1), throughput=1.0))
+        # add incomparable cluster
+        for _ in range(30):
+            pop.append(_make_ind("inc", correctness=0.5, latency=0.5, throughput=50.0))
+
+        pure = _n.non_dominated_sort.__wrapped__ if hasattr(_n.non_dominated_sort, "__wrapped__") else None
+        # Force pure-python path by temporarily lowering the threshold.
+        orig = _NUMPY_FASTPATH_THRESHOLD
+        try:
+            _n._NUMPY_FASTPATH_THRESHOLD = 999999
+            pure_fronts = non_dominated_sort(pop)
+            ranks_pure = [len(f.individuals) for f in pure_fronts]
+        finally:
+            _n._NUMPY_FASTPATH_THRESHOLD = orig
+
+        # numpy path
+        np_fronts = _non_dominated_sort_numpy(pop)
+        ranks_np = [len(f.individuals) for f in np_fronts]
+
+        assert ranks_pure == ranks_np
+        assert len(np_fronts) == len(pure_fronts)
+
 
 @pytest.mark.root
 class TestNSGA2Select:
