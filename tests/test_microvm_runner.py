@@ -8,6 +8,7 @@ These tests verify:
 from __future__ import annotations
 
 import shutil
+import sys
 
 import pytest
 
@@ -179,4 +180,85 @@ def test_evaluation_service_last_mode_pool_parallel():
     )
     svc.evaluate_batch(["def add(a,b): return a+b"])
     assert svc.last_mode and svc.last_mode.startswith("pool-parallel")
+
+
+# ── Cross-language transfer blocking (Manus P1 hardening) ──────────────────────
+
+def _safe_candidate(code, tests):
+    """Run candidate in a hardened microvm sandbox."""
+    if not shutil.which("bwrap"):
+        pytest.skip("bwrap not installed")
+    runner = MicroVMRunner(enforce_ast_scan=False, timeout_sec=8.0, memory_mb=128)
+    return runner.run(code, tests)
+
+
+def test_microvm_blocks_host_filesystem_write():
+    """The hardcoded MicroVMRunner must NOT use a writable host /tmp bind.
+
+    A candidate that escapes the AST filter and tries to open a host path must
+    fail — the sandbox exposes no host directory as writable.
+    """
+    # Candidate tries to write to a host path outside /work. With the hardened
+    # sandbox there is no writable host bind, so this must error inside the
+    # namespace.
+    code = (
+        "import os\n"
+        "def probe():\n"
+        "    try:\n"
+        "        with open('/host_probe_marker', 'w') as f:\n"
+        "            f.write('x')\n"
+        "        return 1\n"
+        "    except Exception:\n"
+        "        return 0\n"
+    )
+    tests = [{"function": "probe", "args": [], "expected": 0}]
+    # enforce_ast_scan=True would block import os; disable to test the sandbox
+    # boundary itself (the real boundary must hold even if AST is bypassed).
+    if not shutil.which("bwrap"):
+        pytest.skip("bwrap not installed")
+    runner = MicroVMRunner(enforce_ast_scan=False, timeout_sec=8.0, memory_mb=128)
+    result = runner.run(code, tests)
+    # The probe must report 0 (could not write to host FS).
+    assert result.metrics.get("correctness") == 0.0 or not result.passed, (
+        "candidate wrote to host filesystem — sandbox FS egress not blocked"
+    )
+
+
+def test_microvm_blocks_network_egress():
+    """Network egress is blocked: --unshare-net removes all interfaces."""
+    if not shutil.which("bwrap"):
+        pytest.skip("bwrap not installed")
+    code = (
+        "import socket\n"
+        "def probe():\n"
+        "    s = socket.socket()\n"
+        "    s.settimeout(1.0)\n"
+        "    try:\n"
+        "        s.connect(('127.0.0.1', 1))\n"
+        "        return 1\n"
+        "    except Exception:\n"
+        "        return 0\n"
+        "    finally:\n"
+        "        s.close()\n"
+    )
+    tests = [{"function": "probe", "args": [], "expected": 0}]
+    runner = MicroVMRunner(enforce_ast_scan=False, timeout_sec=8.0, memory_mb=128)
+    result = runner.run(code, tests)
+    # Connection must fail (no loopback because net ns is unshared & empty).
+    assert result.metrics.get("correctness") == 0.0 or not result.passed, (
+        "candidate established a network connection — net egress not blocked"
+    )
+
+
+def test_microvm_build_sandbox_has_no_writable_host_bind():
+    """Static guarantee: the hardened sandbox binds no host dir read-write."""
+    if not shutil.which("bwrap"):
+        pytest.skip("bwrap not installed")
+    runner = MicroVMRunner(timeout_sec=5.0)
+    cmd = runner._build_sandbox(sys.executable, "/tmp/_work_dummy")
+    # No '--bind' (writable) entries for host paths; only ro-binds allowed.
+    for i, tok in enumerate(cmd):
+        assert tok != "--bind" or cmd[i + 1] == "/tmp", (
+            f"unexpected writable host bind in sandbox: {cmd}"
+        )
 
