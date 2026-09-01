@@ -190,6 +190,8 @@ class EvaluationService:
             self.max_workers = 1
         elif self.max_workers is None:
             self.max_workers = min(4, multiprocessing.cpu_count())
+        # Effective parallelism mode for observability (Manus P1).
+        self.last_mode: Optional[str] = None
 
     # ── Compatibility with SandboxEvaluator interface ─────────────────────
     @property
@@ -322,6 +324,7 @@ class EvaluationService:
         if not codes:
             return []
         self._ensure_tests()
+        self.last_mode = None  # reset per-batch observability tag
 
         keys = [
             evaluation_key(
@@ -350,14 +353,21 @@ class EvaluationService:
             self._cache_misses += len(codes)
 
         if not pending_idx:
+            self.last_mode = "cache-only"
+            logger.debug(
+                "evaluate_batch: all %d cached (mode=cache-only, runner_mode=%s)",
+                len(codes), self.runner_mode,
+            )
             return results  # type: ignore[return-value]
 
         # Container/microvm: sequential via runner (pool worker is subprocess-only).
         if self.runner_mode not in {"subprocess", "local", "dev"}:
+            self.last_mode = f"{self.runner_mode}-serial"
             runner = self._get_runner()
             for i in pending_idx:
                 results[i] = runner.run(codes[i], self.test_cases)
         elif (self.max_workers or 1) <= 1 or os.getenv("MUTALAMBDA_E2E_SERIAL", "0") == "1":
+            self.last_mode = "subprocess-serial"
             runner = SubprocessRunner(
                 timeout_sec=self.timeout_sec,
                 memory_mb=self.memory_mb,
@@ -367,6 +377,7 @@ class EvaluationService:
             for i in pending_idx:
                 results[i] = runner.run(codes[i], self.test_cases)
         else:
+            self.last_mode = f"pool-parallel-{self.max_workers}"
             pool = self._get_ready_pool()
             args_list = [
                 (
