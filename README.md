@@ -206,6 +206,6 @@ MIT License - see [LICENSE](LICENSE) for details.
   title = {MutaLambda: Optimized Multi-Agent Evolutionary System},
   year = {2026},
   url = {https://github.com/Adlgr87/MutaLambda},
-  version = {2.0}
+  version = {4.0.0}
 }
 ```
