@@ -51,7 +51,8 @@ class TestGPUOptimizer:
 
         scores, stats = opt.evaluate_population_gpu(pop, fitness)
         assert len(scores) == 3
-        assert stats["acceleration"] == "none"
+        # torch present + GPU disabled → "cpu"; torch absent → "none"
+        assert stats["acceleration"] in ("none", "cpu")
         assert stats["method"] in ("cpu", "cpu_fallback")
 
     def test_evaluate_population_simple(self):
@@ -74,7 +75,9 @@ class TestGPUOptimizer:
         result = opt.nsga2_gpu(pop, fitness, n_generations=3, population_size=5)
         assert result["generations_completed"] == 3
         assert result["best_score"] < float("inf")
-        assert result["gpu_stats"]["acceleration"] == "none"
+        # When GPU is disabled, acceleration should reflect CPU fallback.
+        # If torch is available it reports "cpu"; if absent "none".
+        assert result["gpu_stats"]["acceleration"] in ("none", "cpu")
 
     def test_singleton(self):
         opt1 = get_gpu_optimizer()
