@@ -63,10 +63,43 @@ class TestPerformanceMonitor:
 
         monitor.stop()
 
+
     def test_singleton(self):
         m1 = get_monitor()
         m2 = get_monitor()
         assert m1 is m2
+
+    def test_sync_to_registry(self):
+        from metrics_exporter import (
+            get_registry,
+            reset_registry,
+        )
+        reset_registry()
+        monitor = PerformanceMonitor(
+            MonitorConfig(sampling_interval_sec=0.05)
+        )
+        monitor.start()
+        time.sleep(0.1)
+        monitor.record_evolution_step(
+            generation=7,
+            best_score=0.99,
+            duration_sec=1.0,
+            population_size=8,
+        )
+
+        reg = get_registry()
+        monitor.sync_to_registry(reg)
+        from metrics_exporter import Gauge
+
+        g: Gauge = reg._gauges.get("evolution_generation")  # noqa: SLF001
+        assert g is not None
+        assert g.value == 7.0
+
+        best = reg._gauges.get("evolution_best_score")  # noqa: SLF001
+        assert best is not None
+        assert best.value == 0.99
+
+        monitor.stop()
 
 
 class TestPerformanceMonitorWithMocks:

@@ -157,18 +157,20 @@ class CppEmitter:
             return [node.type_name]
         
         if isinstance(node, Opaque):
-            return [f"{indent_str}// Opaque: {node.original_text[:50]}"]
-        
+            raise NotImplementedError(
+                f"{self.__class__.__name__} does not support Opaque nodes"
+            )
+
         if isinstance(node, ParallelFor):
             var = " ".join(self._emit_node(node.var, indent))
             start_code = " ".join(self._emit_node(node.start, indent)) if node.start else "0"
             end_code = " ".join(self._emit_node(node.end, indent)) if node.end else "n"
-            
+
             body_lines = []
             for child in node.body:
                 body_lines.extend(self._emit_node(child, indent + 1))
             body_str = " ".join(body_lines) if body_lines else "{}"
-            
+
             if node.reduction:
                 return [
                     f"{indent_str}// Requires <numeric> and <execution>",
@@ -178,7 +180,9 @@ class CppEmitter:
             else:
                 return [f"{indent_str}// ParallelFor requires parallel algorithms support"]
 
-        return [f"{indent_str}// Unimplemented: {type(node).__name__}"]
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support node type {type(node).__name__}"
+        )
 
 
 def emit_from_uast(uast: CoreUAST) -> str:

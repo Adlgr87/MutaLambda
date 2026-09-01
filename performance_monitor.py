@@ -9,17 +9,18 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import time
 import threading
+import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Callable, Deque, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Deque, Dict, List, Optional
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from metrics_exporter import MetricsRegistry
 
 try:
     import psutil
@@ -89,7 +90,9 @@ class PerformanceMonitor:
 
         # Set up alert logging
         self._alert_logger = logging.getLogger("mutalambda.alerts")
-        self._alert_logger.setLevel(getattr(logging, self.config.log_level.upper(), logging.WARNING))
+        self._alert_logger.setLevel(
+            getattr(logging, self.config.log_level.upper(), logging.WARNING)
+        )
 
     def start(self) -> None:
         """Start the monitoring thread."""
@@ -98,9 +101,14 @@ class PerformanceMonitor:
 
         self._running = True
         self._start_time = time.perf_counter()
-        self._thread = threading.Thread(target=self._monitor_loop, daemon=True, name="perf-monitor")
+        self._thread = threading.Thread(
+            target=self._monitor_loop, daemon=True, name="perf-monitor"
+        )
         self._thread.start()
-        logger.info("Performance monitor started (interval=%.1fs)", self.config.sampling_interval_sec)
+        logger.info(
+            "Performance monitor started (interval=%.1fs)",
+            self.config.sampling_interval_sec,
+        )
 
     def stop(self) -> None:
         """Stop the monitoring thread."""
@@ -156,15 +164,19 @@ class PerformanceMonitor:
         gpu_util = 0.0
         gpu_mem = 0.0
         try:
-            from gpu_optimizer import GPUOptimizer  # noqa: PLC0415
+            from gpu_optimizer import GPUOptimizer
             mem = GPUOptimizer({}).get_memory_usage()
             gpu_mem = mem.get("gpu_memory_used_mb", 0.0)
             # GPU utilization requires nvidia-smi
             if _HAS_PSUTIL:
                 try:
-                    import subprocess  # noqa: PLC0415
+                    import subprocess
                     result = subprocess.run(
-                        ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
+                        [
+                            "nvidia-smi",
+                            "--query-gpu=utilization.gpu",
+                            "--format=csv,noheader,nounits",
+                        ],
                         capture_output=True, text=True, timeout=2,
                     )
                     if result.returncode == 0 and result.stdout.strip():
@@ -267,7 +279,11 @@ class PerformanceMonitor:
             },
             "evolution_duration": {
                 "mean": float(np.mean(durations)) if durations else None,
-                "trend": "improving" if len(durations) > 1 and durations[-1] < durations[0] else "stable",
+                "trend": (
+                    "improving"
+                    if len(durations) > 1 and durations[-1] < durations[0]
+                    else "stable"
+                ),
             },
             "alerts_triggered": len(self._alerts),
         }
@@ -299,9 +315,10 @@ class PerformanceMonitor:
 
     def export_prometheus(self) -> str:
         """Export current state in Prometheus format."""
-        trends = self.get_trends()
-        lines = ["# HELP mutalambda_cpu_percent Current CPU usage percentage",
-                  "# TYPE mutalambda_cpu_percent gauge"]
+        lines = [
+            "# HELP mutalambda_cpu_percent Current CPU usage percentage",
+            "# TYPE mutalambda_cpu_percent gauge",
+        ]
 
         latest = self.get_latest()
         if latest:
@@ -320,6 +337,60 @@ class PerformanceMonitor:
                     lines.append(f"mutalambda_evolution_best_score {score}")
 
         return "\n".join(lines)
+
+    # -- metrics_exporter bridge --
+    def sync_to_registry(
+        self,
+        registry: Optional[MetricsRegistry] = None,
+    ) -> None:
+        """
+        Sync latest sample state into the central metrics registry.
+
+        Call this from the evolution loop (e.g. after each generation) so
+        that ResourceSnapshot / BottleneckAlert state is surfaced via the
+        Prometheus /metrics endpoint and the OTel bridge.
+        """
+        from metrics_exporter import get_registry
+        if registry is None:
+            registry = get_registry()
+        latest = self.get_latest()
+        if latest is None:
+            return
+
+        registry.gauge("cpu_percent").set(latest.cpu_percent)
+        registry.gauge("memory_percent").set(latest.memory_percent)
+        registry.gauge(
+            "gpu_utilization"
+        ).set(latest.gpu_utilization)
+        registry.gauge(
+            "gpu_memory_used_mb"
+        ).set(latest.gpu_memory_used_mb)
+        registry.gauge(
+            "memory_used_mb"
+        ).set(latest.memory_used_mb)
+        registry.gauge(
+            "memory_total_mb"
+        ).set(latest.memory_total_mb)
+        registry.gauge(
+            "disk_read_mb"
+        ).set(latest.disk_read_mb)
+        registry.gauge(
+            "disk_write_mb"
+        ).set(latest.disk_write_mb)
+        registry.gauge(
+            "alerts_total"
+        ).set(float(len(self._alerts)))
+
+        gen = getattr(latest, "evolution_generation", None)
+        if gen is not None:
+            registry.gauge("evolution_generation").set(float(gen))
+            score = getattr(
+                latest, "evolution_best_score", None
+            )
+            if score is not None:
+                registry.gauge(
+                    "evolution_best_score"
+                ).set(score)
 
 
 # Singleton instance

@@ -109,6 +109,21 @@ class TestHistogram:
         assert "my_hist_bucket" in prom
         assert "my_hist_sum" in prom
         assert "my_hist_count" in prom
+        assert 'le="+Inf"' in prom
+
+    def test_to_prometheus_with_labels(self):
+        h = Histogram(
+            name="latency",
+            description="",
+            labels={"endpoint": "/api"},
+        )
+        h.observe(0.5)
+        prom = h.to_prometheus()
+        assert "latency_bucket{" in prom
+        assert "endpoint=\"/api\"" in prom
+        assert "le=\"+Inf\"" in prom
+        assert "latency_sum{" in prom
+        assert "latency_count{" in prom
 
 
 class TestMetricsRegistry:

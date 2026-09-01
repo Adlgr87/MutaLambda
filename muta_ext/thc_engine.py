@@ -19,6 +19,7 @@ class FragmentRecord:
     code: str
     donor_id: str
     donor_score: float
+    donor_language: str = "python"
     survival_gens: int = 0
 
 
@@ -74,6 +75,7 @@ class HorizontalTransferEngine:
             compatible = [
                 fragment for fragment in self.fragments.values()
                 if fragment.donor_id != receiver.id
+                and fragment.donor_language == getattr(receiver, "language", "python")
             ]
             if not compatible:
                 continue
@@ -86,6 +88,7 @@ class HorizontalTransferEngine:
                 code=hybrid_code,
                 parent_ids=[receiver.id, fragment.donor_id],
                 tier=getattr(receiver, "tier", "laboratory"),
+                language=getattr(receiver, "language", "python"),
             )
             setattr(hybrid, "imported_fragments", [fragment.name])
             setattr(hybrid, "creation_reason", "thc_transfer")

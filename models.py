@@ -49,6 +49,7 @@ class Individual:
     evaluation_key: str = ""
     evaluated_at: float = 0.0
     benchmark_samples: List[float] = field(default_factory=list)
+    language: str = "python"
 
     def __lt__(self, other: "Individual") -> bool:
         return self.score < other.score
