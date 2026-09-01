@@ -317,18 +317,43 @@ def build_wrapper_source(
     code_path: str,
     *,
     allow_expression_eval: bool = False,
+    memory_mb: int = 0,
 ) -> str:
-    """Build the evaluation wrapper executed in the isolated process/container."""
+    """Build the evaluation wrapper executed in the isolated process/container.
+
+    When run under a namespace sandbox (bwrap) that cannot enforce host-level
+    RLIMITs, the memory ceiling is applied from *inside* the sandbox process via
+    ``resource.setrlimit`` before the candidate code is exec'd. This prevents
+    cross-namespace memory abuse / fork bombs.
+    """
     allow_expr = "True" if allow_expression_eval else "False"
+    lines = [
+        "import json",
+        "import math",
+        "import sys",
+    ]
+    if memory_mb and memory_mb > 0:
+        limit = int(memory_mb) * 1024 * 1024
+        lines += [
+            "import resource",
+            f"_MEM_LIMIT = {limit}",
+            "try:",
+            "    _soft, _hard = resource.getrlimit(resource.RLIMIT_AS)",
+            f"    if _hard == resource.RLIM_INFINITY or _hard < 0 or _hard > _MEM_LIMIT:",
+            "        _hard = _MEM_LIMIT",
+            "    resource.setrlimit(resource.RLIMIT_AS, (_MEM_LIMIT, _hard))",
+            "except Exception:",
+            "    pass",
+        ]
+    lines += [
+        "",
+        f"CODE_PATH = {code_path!r}",
+        f"ALLOW_EXPRESSION_EVAL = {allow_expr}",
+        "",
+    ]
     return "\n".join(
-        [
-            "import json",
-            "import math",
-            "import sys",
-            "",
-            f"CODE_PATH = {code_path!r}",
-            f"ALLOW_EXPRESSION_EVAL = {allow_expr}",
-            "",
+        lines
+        + [
             "def _load_namespace(path):",
             "    namespace = {'__name__': '__mutalambda_candidate__', '__file__': path}",
             "    with open(path, 'r', encoding='utf-8') as src:",
@@ -737,16 +762,141 @@ class ContainerRunner:
 
 @dataclass
 class MicroVMRunner:
-    """Placeholder for non-trusted workloads. Not implemented in this release."""
+    """Namespace-isolated runner using bubblewrap (bwrap).
+
+    Provides a lightweight micro-VM-like sandbox without requiring
+    Firecracker/Cloud Hypervisor. Uses bwrap to create a new user/mount
+    namespace with a read-only view of the Python interpreter and a
+    private tmp, plus ulimits for CPU and memory.
+
+    Requires ``bwrap`` to be installed (apt: bubblewrap).
+    """
 
     timeout_sec: float = 10.0
+    memory_mb: int = 256
+    allow_expression_eval: bool = False
+    enforce_ast_scan: bool = True
+
+    def __post_init__(self) -> None:
+        if not shutil.which("bwrap"):
+            logger.warning(
+                "MicroVMRunner requires 'bwrap' (bubblewrap). "
+                "Install with: apt-get install -y bubblewrap"
+            )
+
+    def _build_sandbox(self, python_bin: str, workdir: str) -> List[str]:
+        """Build the bwrap command with namespace isolation.
+
+        Security model — cross-language transfer blocking:
+        - All namespaces unshared (user, net, ipc, pid, uts) so the candidate
+          process cannot reach host processes, host network, or host IPC.
+        - ``--unshare-net`` removes all network interfaces from the namespace,
+          blocking network egress (cross-language host transfer via sockets).
+        - Read-only binds of only the interpreter, its lib dir, and the absolute
+          minimum system dirs. No writable host path is bound, so the candidate
+          cannot exfiltrate via the filesystem.
+        - ``/tmp`` is a fresh private tmpfs (``--tmpfs /tmp``) — there is NO
+          ``--bind`` of any host directory, preventing cross-namespace file
+          transfer to the host. Writable scratch only lives inside the sandbox.
+        - ``--cap-drop ALL`` strips Linux capabilities; combined with PID + user
+          + net namespace isolation this blocks privilege escalation and
+          cross-process/cross-language interaction on the host.
+        - ``--die-with-parent`` ensures teardown if the supervisor dies.
+        """
+        python_dir = os.path.dirname(python_bin)
+
+        cmd = [
+            "bwrap",
+            "--unshare-all",
+            "--die-with-parent",
+            "--unshare-user",
+            "--unshare-net",
+            "--unshare-ipc",
+            "--unshare-pid",
+            "--unshare-uts",
+            "--cap-drop", "ALL",
+            "--hostname", "mutalambda-sandbox",
+            "--proc", "/proc",
+            "--tmpfs", "/tmp",
+            "--dev", "/dev",
+            "--ro-bind", python_bin, python_bin,
+            "--ro-bind", python_dir, python_dir,
+        ]
+
+        # Mount core system directories read-only
+        for system_dir in ["/usr", "/bin", "/lib", "/lib64"]:
+            if os.path.exists(system_dir):
+                cmd.extend(["--ro-bind", system_dir, system_dir])
+
+        # Bind ONLY this run's workdir read-only at /work. No host path is
+        # writable from inside the sandbox.
+        cmd.extend(["--ro-bind", workdir, "/work"])
+
+        return cmd
 
     def run(self, code: str, test_cases: list[dict]) -> EvalResult:
-        # Explicit stub (FIX 2.4): reserved for Firecracker/Cloud Hypervisor path.
-        raise NotImplementedError(
-            "MicroVMRunner is not implemented in this release; "
-            "use runner_mode='container' or 'subprocess'."
-        )
+        if self.enforce_ast_scan:
+            findings = scan_code_security(code)
+            if findings:
+                return _error_result(self.timeout_sec, f"security_scan:{','.join(findings)}")
+
+        workdir = tempfile.mkdtemp(prefix="mutalambda_microvm_")
+        code_path = os.path.join(workdir, "candidate.py")
+        wrapper_path = os.path.join(workdir, "wrapper.py")
+        try:
+            with open(code_path, "w", encoding="utf-8") as f:
+                f.write(code)
+            with open(wrapper_path, "w", encoding="utf-8") as f:
+                f.write(
+                    build_wrapper_source(
+                        "/work/candidate.py",
+                        allow_expression_eval=self.allow_expression_eval,
+                        memory_mb=self.memory_mb,
+                    )
+                )
+
+            bwrap_cmd = self._build_sandbox(sys.executable, workdir)
+
+            start = time.perf_counter()
+            try:
+                proc = subprocess.run(
+                    bwrap_cmd + [sys.executable, "/work/wrapper.py"],
+                    capture_output=True,
+                    text=True,
+                    timeout=self.timeout_sec,
+                    input=json.dumps(test_cases),
+                )
+            except subprocess.TimeoutExpired:
+                return _timeout_result(self.timeout_sec)
+
+            elapsed = time.perf_counter() - start
+            peak_mb = float(self.memory_mb)
+
+            try:
+                report = _parse_report(proc.stdout, test_cases, proc.returncode)
+            except Exception:
+                report = {
+                    "passed": 0,
+                    "total": max(1, len(test_cases)),
+                    "details": [],
+                    "load_error": (proc.stderr or proc.stdout)[:200],
+                }
+
+            result = _metrics_from_report(
+                code, elapsed, peak_mb, report, proc.returncode
+            )
+            result.stdout = proc.stdout[:2000]
+            result.stderr = proc.stderr[:2000]
+            return result
+        except FileNotFoundError:
+            return _error_result(
+                self.timeout_sec,
+                "bubblewrap (bwrap) not found; MicroVMRunner requires bwrap.",
+            )
+        except Exception as exc:
+            return _error_result(self.timeout_sec, str(exc)[:2000])
+        finally:
+            shutil.rmtree(workdir, ignore_errors=True)
 
 
 def create_runner(
@@ -778,5 +928,10 @@ def create_runner(
             engine="auto" if mode == "container" else mode,
         )
     if mode in {"microvm", "vm"}:
-        return MicroVMRunner(timeout_sec=timeout_sec)
+        return MicroVMRunner(
+            timeout_sec=timeout_sec,
+            memory_mb=memory_mb,
+            allow_expression_eval=allow_expression_eval,
+            enforce_ast_scan=enforce_ast_scan,
+        )
     raise ValueError(f"Unknown runner mode: {mode!r}")

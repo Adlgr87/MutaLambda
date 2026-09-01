@@ -1,23 +1,23 @@
 # MutaLambda — Optimized Multi-Agent Evolutionary System
 
-> **MutaLambda v2**: Sistema de optimización evolutiva multi-agente con integración GPU, pipeline CI/CD completo y 562+ tests.  
+> **MutaLambda v2**: Sistema de optimización evolutiva multi-agente con integración GPU, pipeline CI/CD completo y 641 tests.  
 > Un framework de alta performance para optimización de código asistida por IA con aceleración hardware.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://github.com/Adlgr87/MutaLambda/actions/workflows/mutalambda-optimization-pipeline.yml/badge.svg)](https://github.com/Adlgr87/MutaLambda/actions)
 [![Docker](https://github.com/Adlgr87/MutaLambda/actions/workflows/docker-image.yml/badge.svg)](https://github.com/Adlgr87/MutaLambda/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Coverage](https://img.shields.io/badge/coverage->85%25-green)]()
+[![Coverage](https://img.shields.io/badge/coverage-61%25-orange)]()
 [![GPU Ready](https://img.shields.io/badge/GPU-ready-orange)]()
-[![Status](https://img.shields.io/badge/status-production_ready-brightgreen)]()
+[![Status](https://img.shields.io/badge/status-beta-lightgrey)]()
 
 ## 🚀 Estado Actual
 
 | Métrica | Valor | Estado |
 |---------|-------|--------|
-| Tests | **562 passed** | ✅ CI Green |
-| Cobertura | **>85%** | ✅ Production-ready |
-| Fases completadas | **FASE 0–7 / 8** | ✅ Workflow cerrado |
+| Tests | **636 passed, 5 skipped** | ✅ 641 collected |
+| Cobertura | **61%** | 🔄 En progreso (FASE 8) |
+| Fases completadas | **FASE 0–7** | ✅ Workflow cerrado |
 | Fases pendientes | **FASE 8** (Prometheus/OTel metrics) | 🔄 En progreso |
 | Repositorio | [github.com/Adlgr87/MutaLambda](https://github.com/Adlgr87/MutaLambda) | Active |
 
@@ -96,9 +96,9 @@ Enfoque científico con trazabilidad completa:
 │  └── utils/                  — Logging, metrics, config         │
 ├─────────────────────────────────────────────────────────────────┤
 │  Infrastructure                                                 │
-│  ├── tests/                    — 562 tests (unit/integration)   │
+│  ├── tests/                    — 641 tests (unit/integration)   │
 │  ├── scripts/                  — deploy, install, monitoring    │
-│  ├── docs/                     — Full documentation (21 files)  │
+│  ├── docs/                     — Full documentation (22 files)  │
 │  └── PLANS/                    — Workflow documentation         │
 ├─────────────────────────────────────────────────────────────────┤
 │  GPU Acceleration (Optional)                                    │
@@ -147,21 +147,21 @@ pytest tests/e2e/ -v
 pytest tests/stress/ -v
 ```
 
-**Test Results**: `562 passed, 5 skipped` ✅
+**Test Results**: `636 passed, 5 skipped` ✅
 
 ## Workflows Completados
 
 | Fase | Descripción | Estado | Archivos clave |
 |------|-------------|--------|----------------|
 | FASE 0 | Análisis Inicial | ✅ | Coverage report, architecture analysis |
-| FASE 1 | Sistema de Pruebas | ✅ | 562 tests, CI pipelines |
+| FASE 1 | Sistema de Pruebas | ✅ | 641 tests, CI pipelines |
 | FASE 2 | Refactorización | ✅ | ASTMutator, migration pipeline |
 | FASE 3 | Análisis Pre-GPU | ✅ | optimization_workflow.md |
 | FASE 4 | GPU Pilot (NSGA-II) | ✅ | gpu_optimizer.py, ray_scheduler.py |
 | FASE 5 | GPU Expansión (Batch) | ✅ | Distributed batch processing |
-| FASE 6 | Benchmarking Completo | ✅ | bench_phase6.py, 562 tests |
-| FASE 7 | Documentación y Deploy | ✅ | 21 docs, install scripts, CI/CD |
-| FASE 8 | Metrics Exporter | 🔄 | Prometheus/OTel (pendiente) |
+| FASE 6 | Benchmarking Completo | ✅ | bench_phase6.py, 641 tests |
+| FASE 7 | Documentación y Deploy | ✅ | 22 docs, install scripts, CI/CD |
+| FASE 8 | Metrics Exporter | 🔄 | metrics_exporter.py (parcial) |
 
 ## Documentation
 
