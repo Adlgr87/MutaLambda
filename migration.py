@@ -6,9 +6,12 @@ import copy
 import logging
 import random
 import threading
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 from island import Island
+
+if TYPE_CHECKING:
+    from muta_lambda import SolutionArchive
 from models import Individual
 
 logger = logging.getLogger("MutaLambda")
@@ -206,7 +209,7 @@ class MigrationBus:
         self,
         migrants: List[Individual],
         destination: "Island",
-        archive: "SolutionArchive",
+        archive: SolutionArchive,
     ) -> List[Individual]:
         """Order migrant delivery so the most novel (relative to the
         destination) are delivered first. Novelty is measured via the archive's
