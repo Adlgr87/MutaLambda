@@ -96,6 +96,8 @@ py-modules = [
   "interpretability",
   "dashboard",
   "app",
+  "models",
+  "gpu_optimizer",
   "evaluation_service",
   "runners",
   "benchmarking",
