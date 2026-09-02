@@ -66,7 +66,6 @@ mutalambda = "mutalambda_cli:cli"
 [tool.setuptools]
 py-modules = [
   "mutalambda_cli",
-  "muta_lambda",
   "sandbox",
   "models",
   "fitness_vector",
@@ -116,7 +115,7 @@ py-modules = [
   "logging_setup",
   "constants",
 ]
-packages = ["cli", "muta_ext", "muta_ext.evaluation", "muta_ext.lineage", "muta_ext.mutation", "muta_ext.config", "muta_ext.diagnostics", "lsp"]
+packages = ["cli", "muta_ext", "muta_ext.evaluation", "muta_ext.lineage", "muta_ext.mutation", "muta_ext.config", "muta_ext.diagnostics", "lsp", "muta_lambda"]
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.md", "*.json"]

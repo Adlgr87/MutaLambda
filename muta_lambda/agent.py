@@ -1,20 +1,18 @@
-"""
-MutaLambda Agent — slim orchestrator after module extraction.
+"""MutaLambda evolutionary agent — extracted to its own module (Phase 2B).
 
-The large implementation has been split into focused modules:
-- [`llm_backend.py`](llm_backend.py:1) for LLM adapters
-- [`models.py`](models.py:1) for core dataclasses and LineageGraph
-- [`evolution_engine.py`](evolution_engine.py:1) for AST mutation and prompt contracts
-- [`island.py`](island.py:1) for Island evolution
-- [`migration.py`](migration.py:1) for MigrationBus
-- [`sandbox.py`](sandbox.py:1) for hard-limited subprocess evaluation
-- [`archive.py`](archive.py:1) for SolutionArchive
-- [`prompt_evolver.py`](prompt_evolver.py:1) for basic prompt evolution
+Contains :class:`MutaLambdaAgent` together with its helper methods. The class
+depends on the public API re-exported by the :mod:`muta_lambda` package
+(``EvolveConfig``, ``Individual``, ``Island``, ``SandboxEvaluator`` etc.) which
+are imported at module load time from the package ``__init__``.
+
+The heavy / optional dependencies (faiss, sentence-transformers, metrics
+exporter, muta_ext engines, checkpoint_manager, etc.) are imported lazily
+inside methods, exactly as they were in the original monolithic module, so
+importing this module stays cheap and free of side effects.
 """
 
 from __future__ import annotations
 
-import ast
 import copy
 import json
 import logging
@@ -23,380 +21,48 @@ from pathlib import Path
 import random
 import sys
 import time
-from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
 import numpy as np
 
-from fitness_vector import FitnessVector
-from hfc_tiers import HFCTierConfig, HFCLeagueEngine
-from island_evolution import IslandPool, IslandDiversity, IslandSnapshot
-
-# Phase 6.5: keep heavy / optional deps out of the module-import path so that
-# importing `muta_lambda` (e.g. under pytest) does not double-spawn the worker
-# pool or pay the faiss / sentence-transformers startup cost. They are bound
-# lazily on first use instead of at import time.
-faiss = None  # type: ignore[assignment]
-SentenceTransformer = None  # type: ignore[assignment,misc]
-
-# ─── Logging global ───────────────────────────────────────────────────────────
-_LOG_LEVEL = os.environ.get("MUTALAMBDA_LOG_LEVEL", "INFO").upper()
-logging.basicConfig(
-    level=getattr(logging, _LOG_LEVEL, logging.INFO),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%H:%M:%S",
-)
-logger = logging.getLogger("MutaLambda")
-
-PROJECT_NAME = "MutaLambda"
-
-# ─── Re-exported modules/classes for backward-compatible imports ─────────────
-from archive import SolutionArchive
-from evolution_engine import ASTMutator, CodeRegion, CoreEvolutionEngine
-from mutation_filters import run_all_filters, _filter_mutant, ProfileMode
-from island import Island
-from llm_backend import LLMBackend, _resolve_llm_backend
-from migration import MigrationBus
-from models import (
-    ArchivedSolution,
-    EvalResult,
+# Package-internal dependencies. These are defined in the package ``__init__``
+# *before* it imports this module, which avoids a circular-import problem:
+#   muta_lambda/__init__.py  ->  from muta_lambda.agent import MutaLambdaAgent
+#   muta_lambda/agent.py     ->  from muta_lambda import <symbols above>
+# works because by the time ``agent`` runs, ``__init__`` has already bound
+# every name referenced below.
+from muta_lambda import (
+    CHECKPOINT_SAVED,
+    GENERATION_COMPLETED,
+    GENERATION_STARTED,
+    RUN_COMPLETED,
+    RUN_STARTED,
+    ASTMutator,
+    CommandQueue,
+    EarlyStopMonitor,
+    EventBus,
+    EvolveConfig,
+    ExtensionContext,
+    ExtensionRegistry,
+    HFCLeagueEngine,
+    HFCTierConfig,
     Individual,
+    Island,
     IslandConfig,
+    IslandPool,
     LineageGraph,
     LineageNode,
     PromptGenome,
+    ProtocolTrace,
+    RNGSession,
+    SandboxEvaluator,
+    MigrationBus,
+    GenerationResult,
+    _filter_mutant,
+    _resolve_llm_backend,
+    logger,
 )
-from prompt_evolver import PromptEvolver
-from sandbox import SandboxEvaluator
-from extensions import ExtensionRegistry, ExtensionContext
-from rng_session import RNGSession
-from event_bus import (
-    EventBus,
-    CommandQueue,
-    GENERATION_STARTED,
-    GENERATION_COMPLETED,
-    CHECKPOINT_SAVED,
-    RUN_STARTED,
-    RUN_COMPLETED,
-    MIGRATION_APPLIED,
-)
-from workflow_protocol import ProtocolTrace
-
-
-@dataclass
-class EvolveConfig:
-    """Configuración global del agente."""
-
-    num_islands: int = 4
-    generations: int = 50
-    seed_codes: List[str] = field(default_factory=list)
-    topology: str = "ring"
-    population_size: int = 8
-    top_k: int = 3
-    migration_interval: int = 10
-    migrants_per_island: int = 2
-    archive_solutions: bool = True
-    prompt_evolution: bool = True
-    checkpoint_enabled: bool = True
-    checkpoint_interval: int = 10
-    checkpoint_dir: str = "checkpoints"
-    checkpoint_format: str = "auto"  # 'auto' (threshold-based), 'json', or 'msgpack'
-    early_stop_patience: int = 15
-    early_stop_delta: float = 0.001
-    novelty_alpha: float = 0.15
-    workflow_enabled: bool = True
-    workflow_max_retries: int = 1
-    workflow_correctness_threshold: float = 1.0
-    workflow_require_score_improvement: bool = False
-    workflow_enforce_security: bool = True
-    workflow_trace_limit: int = 200
-    convergent_boost_enabled: bool = True
-    convergent_boost_threshold: float = 0.85
-    convergent_boost_factor: float = 0.15
-    resurrection_enabled: bool = True
-    resurrection_threshold: int = 8
-    resurrection_max_attempts: int = 3
-    resurrection_min_score_ratio: float = 0.3
-    cross_branch_crossover_enabled: bool = True
-    cross_branch_crossover_prob: float = 0.05
-    cross_branch_min_distance: int = 3
-    use_process_pool: bool = False
-    llm_backend: str = "ollama"
-    llm_model: str = "llama3.2:3b"
-    observability_enabled: bool = True
-    observability_metrics_port: int = 9100
-    llm_timeout_sec: float = 60.0
-    llm_temperature: float = 0.2
-    prompt_pop_size: int = 6
-    prompt_elite_frac: float = 0.5
-    hfc_enabled: bool = False
-    hfc_tier1_size: int = 100
-    hfc_tier2_size: int = 50
-    hfc_tier3_size: int = 10
-    hfc_lambda_clones: int = 8
-    hfc_top_down_distillation: bool = True
-    hfc_top_down_interval: int = 5
-    hfc_promotion_correctness: float = 1.0
-    thc_enabled: bool = False
-    thc_max_transfers_per_generation: int = 1
-    thc_min_donor_score: float = 0.0
-    thc_validate_in_sandbox: bool = True
-    advanced_selection_enabled: bool = False
-    advanced_fitness_weight: float = 1.0
-    advanced_novelty_weight: float = 0.15
-    advanced_entropy_weight: float = 0.20
-    advanced_discovery_weight: float = 0.35
-    dialectic_enabled: bool = False
-    dialectic_critique_intensity: str = "medium"
-    spatial_enabled: bool = False
-    spatial_neighborhood: str = "moore"
-    pattern_memory_enabled: bool = False
-    allow_untested: bool = True
-    # UAST feature flags — disabled by default for safe opt-in
-    use_uast: bool = False
-    uast_supported_languages: List[str] = field(default_factory=lambda: ["python", "rust"])
-    uast_endpoint: str = ""
-    uast_timeout_sec: float = 30.0
-    uast_cache_enabled: bool = True
-    uast_cache_dir: str = ".uast_cache"
-    runner_mode: str = "subprocess"  # subprocess | container | microvm
-    allow_expression_eval: bool = False
-    enforce_ast_scan: bool = True
-    require_tests: bool = False  # CLI sets True unless --allow-untested
-    enforce_api_fingerprint: bool = False
-    enforce_differential: bool = False
-    benchmark_warmups: int = 0
-    benchmark_samples: int = 1
-    benchmark_operations_per_case: int = 1
-    privacy_allow_external_llm: bool = False
-    llm_max_retries: int = 3
-    llm_max_calls_per_generation: int = 0
-    llm_max_total_calls: int = 0
-    llm_replay_log: str = ""
-    master_seed: Optional[int] = None
-    operator_bandit_enabled: bool = True
-    operator_bandit_strategy: str = "ucb1"
-    fitness_normalize: bool = True
-    archive_dedupe_similarity: float = 0.98
-    autodoc_elites: bool = True
-    write_run_artifacts: bool = True
-    privacy_redact_secrets: bool = True
-    target_source_file: str = ""
-    target_entrypoint: str = ""
-    target_task: str = ""
-    target_tests_file: str = ""
-    target_benchmark_file: str = ""
-    target_api_policy: str = "strict"
-
-    @classmethod
-    def from_yaml(cls, path: str) -> "EvolveConfig":
-        """Load EvolveConfig from a validated YAML file.
-
-        Preferred path: unified Pydantic ``MutaLambdaConfig`` (CLI + core).
-        """
-        try:
-            from muta_config import MutaLambdaConfig
-
-            return MutaLambdaConfig.from_yaml(path).to_evolve_config()
-        except Exception as _mlc_exc:
-            # Legacy fallback keeps older call sites working if schema drifts.
-            import logging as _logging
-            _logging.getLogger("MutaLambda").debug(
-                "MutaLambdaConfig path failed (%s); using legacy from_yaml", _mlc_exc
-            )
-        from config_loader import load_yaml
-
-        cfg = load_yaml(path)
-
-        evo = cfg.get("evolution", {})
-        pop = cfg.get("population", {})
-        sand = cfg.get("sandbox", {})
-        arch = cfg.get("archive", {})
-        prompt = cfg.get("prompt_evolution", {})
-        chk = cfg.get("checkpoint", {})
-        log = cfg.get("logging", {})
-        llm = cfg.get("llm", {})
-        repro = cfg.get("reproducibility", {})
-        hfc = cfg.get("hfc", {})
-        thc = cfg.get("thc", {})
-        advanced = cfg.get("advanced_selection", {})
-        dialectic = cfg.get("dialectic", {})
-        spatial = cfg.get("spatial", {})
-        patterns = cfg.get("pattern_memory", {})
-        privacy = cfg.get("privacy", {})
-        target = cfg.get("target", {})
-
-        config = cls(
-            num_islands=evo.get("num_islands", 4),
-            generations=evo.get("generations", 50),
-            topology=evo.get("topology", "ring"),
-            population_size=pop.get("size", 8),
-            top_k=pop.get("top_k", 3),
-            migration_interval=pop.get("migration_interval", 10),
-            migrants_per_island=pop.get("migrants_per_island", 2),
-            archive_solutions=arch.get("enabled", True),
-            prompt_evolution=prompt.get("enabled", True),
-            checkpoint_enabled=chk.get("enabled", True),
-            checkpoint_interval=chk.get("interval", 10),
-            checkpoint_dir=chk.get("dir", "checkpoints"),
-            checkpoint_format=chk.get("format", "auto"),
-            early_stop_patience=evo.get("early_stop_patience", 15),
-            early_stop_delta=evo.get("early_stop_delta", 0.001),
-            novelty_alpha=evo.get("novelty_alpha", 0.15),
-            workflow_enabled=cfg.get("workflow", {}).get("enabled", True),
-            workflow_max_retries=cfg.get("workflow", {}).get("max_retries", 1),
-            workflow_correctness_threshold=cfg.get("workflow", {}).get("correctness_threshold", 1.0),
-            workflow_require_score_improvement=cfg.get("workflow", {}).get("require_score_improvement", False),
-            workflow_enforce_security=cfg.get("workflow", {}).get("enforce_security", True),
-            workflow_trace_limit=cfg.get("workflow", {}).get("trace_limit", 200),
-            convergent_boost_enabled=evo.get("convergent_boost", {}).get("enabled", True),
-            convergent_boost_threshold=evo.get("convergent_boost", {}).get("threshold", 0.85),
-            convergent_boost_factor=evo.get("convergent_boost", {}).get("factor", 0.15),
-            resurrection_enabled=evo.get("resurrection", {}).get("enabled", True),
-            resurrection_threshold=evo.get("resurrection", {}).get("threshold", 8),
-            resurrection_max_attempts=evo.get("resurrection", {}).get("max_attempts", 3),
-            resurrection_min_score_ratio=evo.get("resurrection", {}).get("min_score_ratio", 0.3),
-            cross_branch_crossover_enabled=evo.get("cross_branch_crossover", {}).get("enabled", True),
-            cross_branch_crossover_prob=evo.get("cross_branch_crossover", {}).get("prob", 0.05),
-            cross_branch_min_distance=evo.get("cross_branch_crossover", {}).get("min_distance", 3),
-            use_process_pool=evo.get("use_process_pool", False),
-            llm_backend=llm.get("backend", "ollama"),
-            llm_model=llm.get("model", "llama3.2:3b"),
-            llm_timeout_sec=llm.get("timeout_sec", 60.0),
-            llm_temperature=llm.get("temperature", 0.2),
-            prompt_pop_size=prompt.get("pop_size", 6),
-            prompt_elite_frac=prompt.get("elite_frac", 0.5),
-            hfc_enabled=hfc.get("enabled", False),
-            hfc_tier1_size=hfc.get("tier1_size", 100),
-            hfc_tier2_size=hfc.get("tier2_size", 50),
-            hfc_tier3_size=hfc.get("tier3_size", 10),
-            hfc_lambda_clones=hfc.get("lambda_clones", 8),
-            hfc_top_down_distillation=hfc.get("top_down_distillation", True),
-            hfc_top_down_interval=hfc.get("top_down_interval", 5),
-            hfc_promotion_correctness=hfc.get("promotion_correctness", 1.0),
-            thc_enabled=thc.get("enabled", False),
-            thc_max_transfers_per_generation=thc.get("max_transfers_per_generation", 1),
-            thc_min_donor_score=thc.get("min_donor_score", 0.0),
-            thc_validate_in_sandbox=thc.get("validate_in_sandbox", True),
-            advanced_selection_enabled=advanced.get("enabled", False),
-            advanced_fitness_weight=advanced.get("fitness_weight", 1.0),
-            advanced_novelty_weight=advanced.get("novelty_weight", 0.15),
-            advanced_entropy_weight=advanced.get("entropy_weight", 0.20),
-            advanced_discovery_weight=advanced.get("discovery_weight", 0.35),
-            dialectic_enabled=dialectic.get("enabled", False),
-            dialectic_critique_intensity=dialectic.get("critique_intensity", "medium"),
-            spatial_enabled=spatial.get("enabled", False),
-            spatial_neighborhood=spatial.get("neighborhood", "moore"),
-            pattern_memory_enabled=patterns.get("enabled", False),
-            enforce_api_fingerprint=cfg.get("workflow", {}).get("enforce_api_fingerprint",
-                cfg.get("target", {}).get("enforce_api_fingerprint", False)),
-            enforce_differential=cfg.get("workflow", {}).get("enforce_differential",
-                cfg.get("target", {}).get("enforce_differential", False)),
-            benchmark_warmups=cfg.get("benchmark", {}).get("warmups", 0),
-            benchmark_samples=cfg.get("benchmark", {}).get("samples", 1),
-            benchmark_operations_per_case=cfg.get("benchmark", {}).get("operations_per_case", 1),
-            allow_untested=cfg.get("allow_untested", True),
-            runner_mode=sand.get("runner", sand.get("mode", "subprocess")),
-            allow_expression_eval=sand.get("allow_expression_eval", False),
-            enforce_ast_scan=sand.get("enforce_ast_scan", True),
-            privacy_allow_external_llm=privacy.get("allow_external_llm", False),
-            privacy_redact_secrets=privacy.get("redact_secrets", True),
-            target_source_file=target.get("source_file", ""),
-            target_entrypoint=target.get("entrypoint", ""),
-            target_task=target.get("task", ""),
-            target_tests_file=target.get("tests_file", ""),
-            target_benchmark_file=target.get("benchmark_file", ""),
-            target_api_policy=target.get("api_policy", "strict"),
-            use_uast=cfg.get("uast", {}).get("use_uast", False),
-            uast_supported_languages=cfg.get("uast", {}).get(
-                "supported_languages", ["python", "rust"]
-            ),
-            uast_endpoint=cfg.get("uast", {}).get("uast_endpoint", ""),
-            uast_timeout_sec=cfg.get("uast", {}).get("uast_timeout_sec", 30.0),
-            uast_cache_enabled=cfg.get("uast", {}).get("cache_enabled", True),
-            uast_cache_dir=cfg.get("uast", {}).get("cache_dir", ".uast_cache"),
-        )
-
-        config.sandbox_timeout = sand.get("timeout_sec", 10.0)
-        config.sandbox_workers = sand.get("max_workers", 4)
-
-        log_level = log.get("level", "INFO")
-        logging.getLogger("MutaLambda").setLevel(log_level)
-
-        seed = repro.get("seed")
-        if seed is not None:
-            random.seed(seed)
-            np.random.seed(seed)
-
-        return config
-
-
-class EarlyStopMonitor:
-    """Detector de convergencia por ventana de mejora relativa."""
-
-    def __init__(self, patience: int = 15, delta: float = 0.001):
-        self.patience = patience
-        self.delta = delta
-        self._best: float = float("-inf")
-        self._no_improve: int = 0
-
-    def update(self, score: float) -> bool:
-        """Retorna True si se detecta convergencia."""
-        if self._best == float("-inf"):
-            self._best = score
-            self._no_improve = 0
-            return False
-
-        improvement = score - self._best
-        rel_improvement = improvement / (abs(self._best) + 1e-9)
-
-        if rel_improvement > self.delta:
-            self._best = score
-            self._no_improve = 0
-        else:
-            self._no_improve += 1
-
-        return self._no_improve >= self.patience
-
-    @property
-    def stagnant_generations(self) -> int:
-        return self._no_improve
-
-
-
-@dataclass
-class GenerationResult:
-    """Resultado de una generación (API incremental CLI/dashboard/core)."""
-
-    generation: int
-    best: Optional[Individual] = None
-    snapshots: List[IslandSnapshot] = field(default_factory=list)
-    should_stop: bool = False
-    combined_best_score: float = float("-inf")
-
-
-
-
-class MutaLambdaSession:
-    """Context manager for construct → run → shutdown lifecycle (ML-E02)."""
-
-    def __init__(self, agent: "MutaLambdaAgent"):
-        self.agent = agent
-
-    def __enter__(self) -> "MutaLambdaAgent":
-        return self.agent
-
-    def __exit__(self, exc_type, exc, tb) -> None:
-        try:
-            self.agent.shutdown()
-        except Exception:
-            pass
-        return False
-
-    def run(self, task: str = "", **kwargs):
-        return self.agent.run(task=task, **kwargs)
-
 
 class MutaLambdaAgent:
     """Orquestador principal del ciclo evolutivo MutaLambda."""
@@ -1384,222 +1050,3 @@ class MutaLambdaAgent:
         }
 
 
-def run_full_test_suite() -> bool:
-    """Suite integrada mínima para el CLI --test."""
-    import traceback
-
-    passed: List[str] = []
-    failed: List[Tuple[str, str]] = []
-
-    def test(name: str, fn: Callable[[], None]) -> None:
-        try:
-            fn()
-            passed.append(name)
-            print(f"  [PASS] {name}")
-        except Exception as exc:
-            tb = traceback.format_exc().splitlines()[-1]
-            failed.append((name, tb))
-            print(f"  [FAIL] {name} — {tb}")
-
-    def t_ast_mutations_valid():
-        code = "def f(x):\n    total = 0\n    for i in range(x):\n        total += i\n    return total\n"
-        for _ in range(200):
-            ast.parse(ASTMutator.apply_random_mutation(code))
-
-    def t_llm_mutation_accepts_valid_code():
-        engine = CoreEvolutionEngine()
-        result = engine.mutate_with_llm(
-            code="def f(x):\n    return x + 1\n",
-            score=1.0,
-            error_info="",
-            llm_fn=lambda _prompt: "def f(x):\n    return x * 2\n",
-        )
-        ast.parse(result)
-
-    def t_diversity_not_placeholder():
-        from island_evolution import IslandPool
-
-        pool = IslandPool()
-        fake_islands = []
-        for idx in range(2):
-            fake = type("FakeIsland", (), {"population": []})()
-            fake.population = [Individual(code=f"def f{idx}(): return {idx}")]
-            fake_islands.append(fake)
-        # Two islands with different code should have diversity > 0.0
-        # (old placeholder returned 1.0, new implementation returns 1.0 - jaccard)
-        diversity = pool.get_cross_island_diversity(fake_islands)
-        assert 0.0 < diversity < 1.0, f"Expected diversity in (0,1), got {diversity}"
-
-    print("\n" + "=" * 60)
-    print("SUITE DE TESTS — MutaLambda Agent (modular)")
-    print("=" * 60)
-    test("ast_mutations_valid", t_ast_mutations_valid)
-    test("llm_mutation_accepts_valid_code", t_llm_mutation_accepts_valid_code)
-    test("cross_island_diversity_not_placeholder", t_diversity_not_placeholder)
-
-    print("\n" + "-" * 60)
-    total = len(passed) + len(failed)
-    print(f"Resultado: {len(passed)}/{total} tests pasaron")
-    if failed:
-        print("\nFallidos:")
-        for name, err in failed:
-            print(f"  ✗ {name}: {err}")
-    print("=" * 60 + "\n")
-    return len(failed) == 0
-
-
-def _demo_llm_fn(prompt: str) -> str:
-    """LLM simulado para demostración: aplica micro-mutaciones al código."""
-    lines = prompt.split("\n")
-    code_lines = [
-        l for l in lines
-        if l.strip() and not l.startswith(("You are", "Task:", "Improve", "Return", "Instructions:"))
-    ]
-    code = "\n".join(code_lines).strip()
-    if not code:
-        return "def solution():\n    return 42"
-    mutated = ASTMutator.apply_random_mutation(code)
-    return mutated
-
-
-def main() -> None:
-    """Demo/CLI: ejecuta MutaLambda con un LLM simulado o corre los tests."""
-    import argparse
-
-    parser = argparse.ArgumentParser(description="MutaLambda Agent modular")
-    parser.add_argument("--islands", type=int, default=3)
-    parser.add_argument("--generations", type=int, default=20)
-    parser.add_argument("--pop-size", type=int, default=6)
-    parser.add_argument("--topology", default="ring",
-                        choices=["ring", "fully_connected", "random", "mesh"])
-    parser.add_argument("--novelty-alpha", type=float, default=0.15,
-                        help="Peso del bonus de novedad en el score (0.0–1.0)")
-    parser.add_argument("--early-stop-patience", type=int, default=15)
-    parser.add_argument("--log-level", default="INFO",
-                        choices=["DEBUG", "INFO", "WARNING", "ERROR"])
-    parser.add_argument("--test", action="store_true",
-                        help="Ejecutar suite de tests integrada y salir")
-    parser.add_argument("--config", type=str, default=None,
-                        help="Ruta a archivo YAML de configuración")
-    parser.add_argument("--resume", type=str, default=None,
-                        help="Ruta a checkpoint para reanudar evolución")
-    parser.add_argument("--dashboard", action="store_true",
-                        help="Activar dashboard de consola HITL")
-    parser.add_argument("--hint", type=str, default=None,
-                        help="Inyectar código como hint experto en una isla")
-    parser.add_argument("--hfc-enabled", action="store_true",
-                        help="Activar evolución por ligas HFC")
-    parser.add_argument("--hfc-lambda-clones", type=int, default=8,
-                        help="Clones bacterianos por individuo Tier2")
-    # MutaLambda 2.0 Progressive Pipeline
-    parser.add_argument("--optimize", type=str, default=None,
-                        help="Path to Python script to optimize (progressive pipeline)")
-    parser.add_argument("--mode", type=str, default="auto",
-                        choices=["auto", "fast", "deep"],
-                        help="Optimization mode (default: auto)")
-    parser.add_argument("--advanced-diagnostics", action="store_true",
-                        help="Enable advanced metrics (P99, throughput, parsimony)")
-    parser.add_argument("--min-improvement", type=float, default=0.15,
-                        help="Minimum improvement threshold (default: 0.15)")
-
-    args = parser.parse_args()
-
-    logging.getLogger("MutaLambda").setLevel(args.log_level)
-
-    if args.test:
-        ok = run_full_test_suite()
-        sys.exit(0 if ok else 1)
-
-    if args.config:
-        config = EvolveConfig.from_yaml(args.config)
-        from config_loader import load_yaml
-        agent_kwargs = {"config": config}
-    else:
-        seed = (
-            "def compute_sum(n):\n"
-            "    total = 0\n"
-            "    for i in range(n):\n"
-            "        total += i\n"
-            "    return total\n"
-        )
-
-        config = EvolveConfig(
-            num_islands=args.islands,
-            generations=args.generations,
-            seed_codes=[seed],
-            topology=args.topology,
-            population_size=args.pop_size,
-            top_k=max(2, args.pop_size // 3),
-            archive_solutions=False,
-            prompt_evolution=False,
-            novelty_alpha=args.novelty_alpha,
-            early_stop_patience=args.early_stop_patience,
-            hfc_enabled=args.hfc_enabled,
-            hfc_lambda_clones=args.hfc_lambda_clones,
-        )
-        config.sandbox_timeout = 5.0
-        config.sandbox_workers = 4
-        agent_kwargs = {"config": config}
-
-
-    # MutaLambda 2.0 Progressive Pipeline
-    if args.optimize:
-        from progressive_pipeline import ProgressivePipeline
-        from pathlib import Path
-
-        script_path = Path(args.optimize)
-        if not script_path.exists():
-            print(f"Error: File not found: {script_path}")
-            sys.exit(1)
-
-        code = script_path.read_text()
-        print(f"\n🧬 MutaLambda 2.0 — Progressive Optimization Pipeline")
-        print(f"   Target: {script_path}")
-        print(f"   Mode: {args.mode}")
-        print(f"   Advanced Diagnostics: {args.advanced_diagnostics}")
-        print()
-
-        pipeline = ProgressivePipeline(
-            llm_fn=_demo_llm_fn,
-            min_improvement=args.min_improvement,
-        )
-
-        result = pipeline.run(code, mode=args.mode)
-        print(result.summary())
-
-        if result.success and result.optimized_code:
-            print("\n" + "=" * 60)
-            print("OPTIMIZED CODE:")
-            print("=" * 60)
-            print(result.optimized_code)
-
-        sys.exit(0 if result.success else 1)
-
-    if args.resume:
-        from checkpoint_manager import resume_agent
-
-        agent = resume_agent(
-            args.resume, config,
-            test_cases=[],
-            llm_fn=_demo_llm_fn,
-        )
-        best = agent.run(task="Continue evolution from checkpoint")
-    else:
-        agent = MutaLambdaAgent(
-            config=config,
-            llm_fn=_demo_llm_fn,
-            test_cases=[],
-            timeout_sec=getattr(config, 'sandbox_timeout', 5.0),
-        )
-        best = agent.run(task="Optimize a sum function for correctness and speed")
-
-    print("\n" + "=" * 60)
-    print("BEST SOLUTION FOUND:")
-    print("=" * 60)
-    print(best.code)
-    print(f"\nScore: {best.score:.4f}")
-    print("\nMetrics:", json.dumps(agent.get_metrics(), indent=2, default=str))
-
-
-if __name__ == "__main__":
-    main()
