@@ -89,9 +89,30 @@ class MutaLambdaLSPServer:
         self._thread = threading.Thread(target=self._run_server, daemon=True)
         self._thread.start()
 
+    def stop(self):
+        """Stop the LSP server and release the stdin-reading worker thread."""
+        self._running = False
+        if self._thread is not None:
+            try:
+                self._thread.join(timeout=2)
+            except Exception:
+                pass
+
     def _run_server(self):
-        """Main server loop reading from stdin."""
+        """Main server loop reading from stdin.
+
+        Uses select() with a short timeout so the loop can re-check
+        ``self._running`` periodically, allowing ``stop()`` to cleanly
+        release the thread without depending on stdin being closed.
+        """
+        import select
         while self._running:
+            try:
+                ready, _, _ = select.select([sys.stdin], [], [], 0.1)
+            except (ValueError, OSError):
+                break
+            if not ready:
+                continue
             line = sys.stdin.readline()
             if not line:
                 break

@@ -42,6 +42,7 @@ class TestLSPServer:
         server.start()
         assert server._running is True
         assert server._thread is not None
+        server.stop()
 
     def test_ext_to_language_mapping(self):
         """Test extension to language mapping."""
