@@ -60,6 +60,7 @@ from muta_lambda import (
     MigrationBus,
     GenerationResult,
     ProfileMode,
+    SolutionArchive,
     _filter_mutant,
     _resolve_llm_backend,
     logger,

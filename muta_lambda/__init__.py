@@ -52,7 +52,7 @@ logger = logging.getLogger("MutaLambda")
 PROJECT_NAME = "MutaLambda"
 
 # ─── Re-exported modules/classes for backward-compatible imports ─────────────
-from archive import SolutionArchive
+from muta_lambda.archive import SolutionArchive
 from evolution_engine import ASTMutator, CodeRegion, CoreEvolutionEngine
 from mutation_filters import run_all_filters, _filter_mutant, ProfileMode
 from island import Island
