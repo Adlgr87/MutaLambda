@@ -59,6 +59,7 @@ from muta_lambda import (
     SandboxEvaluator,
     MigrationBus,
     GenerationResult,
+    ProfileMode,
     _filter_mutant,
     _resolve_llm_backend,
     logger,
