@@ -12,7 +12,7 @@ Orden de ejecución: orden de prioridad del propietario → **seguridad > ejecuc
 | 3 | Dominancia 3 vs crowding 6 | `fitness_vector.py`: `correctness`+`latency_p50`+`memory_peak_mb` (dominancia real); `latency_p99`, `throughput`, `parsimony` (aux). Sin separación documental ni const. | ✅ Confirmado |
 | 4 | UAST cross-language | `muta_ext/uast/emitters/{rust,cpp_emitter.py}` existen pero NO lanzan `NotImplementedError` (0 ocurrencias); caen en `Opaque`. THC no bloquea cross-language. | ✅ Confirmado |
 | 5 | GPU/Ray desconectado | `gpu_optimizer.py`, `ray_scheduler.py`, `benchmark_runner.py` operan sobre `numpy.ndarray`/funciones sintéticas. `evaluators/` no existe. End-to-end ~1.0x. | ✅ Confirmado |
-| 6 | Sandbox no fuerte | `sandbox.py` existe, busca `nsjail`/`docker`/`setrlimit`... **ninguno presente** (0 matches). `muta_lambda.py:1596` YA tiene `if __name__ == "__main__":` (claim de guardia obsoleta). El "doble init" viene del pool spawn en import de módulos pesados (no del `main()` guard). | ✅ Confirmado (excepto guardia, ya corregida) |
+| 6 | Sandbox no fuerte | `sandbox.py` existe, busca `nsjail`/`docker`/`setrlimit`... **ninguno presente** (0 matches). `muta_lambda/agent.py` ahora gestiona el `if __name__ == "__main__"` vía `cli/entrypoints.py` + `muta_lambda/__main__.py`. El "doble init" viene del pool spawn en import de módulos pesados (no del `main()` guard). | ✅ Confirmado (modularizado Phase 2) |
 | 7 | Observabilidad a medias | `tests/test_metrics_exporter.py` + `tests/integration/test_metrics_integration.py` existen; `evolution_engine.py` **no** inyecta `record_generation_end`/`record_evaluation` automáticamente (0 matches). | ✅ Confirmado |
 | 8 | Warnings producción | `flaky` marker **no registrado** en pyproject `[tool.pytest.ini_options].markers`. `datetime.utcnow()` deprecado — usar `datetime.now(timezone.utc)`. `tests/conftest.py` YA mockea stdin/LSP. | ✅ Confirmado |
 
@@ -23,14 +23,14 @@ Orden de ejecución: orden de prioridad del propietario → **seguridad > ejecuc
 ### Fase 1 — Seguridad / ejecución correcta (fronts 6 + 8)
 Prioridad máxima: estabilidad de ejecución.
 - **6a.** `sandbox.py`: implementar hardening mínimo (capa defensiva, no nsjail — usar `resource.setrlimit` + timeout + bloqueo de imports peligrosos desde `mutation_filters.py`). No requiere daemon de sistema.
-- **6b.** `muta_lambda.py`: mover pre-import pesado (`_worker_init`) dentro de `if __name__ == "__main__":` / worker-only path para eliminar el double-init del pool.
+- **6b.** `muta_lambda/agent.py`: mover pre-import pesado (`_worker_init`) dentro del guardia `if __name__ == "__main__"` / worker-only path (ahora en `cli/entrypoints.py` + `muta_lambda/__main__.py`) para eliminar el double-init del pool.
 - **8a.** `pyproject.toml`: registrar marker `flaky = "inestable"` en `[tool.pytest.ini_options].markers`.
 - **8b.** Audit global `datetime.utcnow()` → `datetime.now(timezone.utc)`.
 - **8c.** `tests/conftest.py`: confirmar mock stdin/LSP activo (ya verificado — no requiere cambio).
 - **Verificación Fase 1:** `python -m pytest tests/ -q -k "sandbox or test_conftest or flaky" ` → 0 fallos; `mutalambda --version` no dobla init del pool.
 
 ### Fase 2 — Evaluación correcta (front 3)
-- `muta_lambda.py`: `observability_enabled: bool = False` in `EvolveConfig`; `MutaLambdaAgent.__init__` gates `start_metrics_server(port=9100)` behind the toggle (lazy import inside try/except; no-op on miss).
+- `muta_lambda/agent.py` (`MutaLambdaAgent.__init__`): `observability_enabled: bool = False` in `EvolveConfig`; `MutaLambdaAgent.__init__` gates `start_metrics_server(port=9100)` behind the toggle (lazy import inside try/except; no-op on miss). CLI entry punto en `cli/entrypoints.py` (`run_full_test_suite`).
 - **Verificación Fase 2:** `pytest tests/test_fitness_vector.py tests/test_nsga2.py` → 28 passed; no-regresión `test_dominance_uses_only_3_objectives` marcado `@pytest.mark.flaky` (3 objetivos de dominio, verifica `_DOMINANCE_OBJECTIVES == 3`).
 
 ### Fase 3 — Rendimiento / distancia (fronts 1 + 5)
@@ -51,6 +51,13 @@ Prioridad máxima: estabilidad de ejecución.
 
 ---
 
-Estado actual del trabajo en curso (este mensaje): **Fase 0 completada** — reconciliación `Fix a` + `Fix b/a` contra `origin/main` (commit `1fb2c0c`). Tests `test_hfc_tiers.py` = 11/11 pass.
+**Estado:** Fases 1–6 validadas y consolidadas en `main` (HEAD `396fed9`, 3 commits ahead `origin/main`):
+- **Phase 1–2 (seguridad CLI):** ✅ Consolidado. `muta_lambda.py` → package `muta_lambda/` + `cli/entrypoints.py` + `__main__.py`.
+- **Phase 2D/E:** ✅ CLI main() + run_full_test_suite() en `cli/entrypoints.py`; `__main__.py` agregado.
+- **Phase 1-PerfilMode:** ✅ `muta_lambda/agent.py:62` importa `ProfileMode` (commit `396fed9`).
+- **Phase 3 (cache/metrics):** ✅ 17 passed (test_hfc_tiers.py + integration/test_metrics_integration.py). Config `checkpoint_format="auto"` (msgpack) en `config.py:33`.
+- **Phase 4 (UAST/embeddings):** ✅ `archive.SolutionArchive` implementa `semantic_distance` (`_encode_normalized`, `nearest`, `novelty_score`); `agent.py:605` lo consume.
+- **Phase 5 (batch evaluator):** ✅ `evaluate_batch` en `evaluation_service.py:322`, `sandbox.py:180`; `thc_engine.py:96`; 6 integration tests passed.
+- **Phase 6 (benchmark cache):** ✅ Documentado en este repo; benchmarks (`bench_phase6.py`, `benchmark_nsga2_cache.py`, `benchmark_checkpoint_serialization.py`) se ejecutan en workspace `MutaLambda_Proyect`. AST cache `cached_parse` (`lru_cache maxsize=1024`); msgpack checkpoint threshold 2000→256.
 
-Siguiente paso: ejecutar **Fase 1** arriba. Avanzaré a Fase 1 ahora y detendré cada verificación intermedia.
+Siguiente paso: **Audit final** (full suite + scan + lint) → **Phase 8 push** a `origin/main`.
