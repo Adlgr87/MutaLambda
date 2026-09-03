@@ -39,6 +39,11 @@ status_report.json
 status_report.md
 checkpoints/
 
+# benchmark run artifacts (regenerated, do not commit)
+benchmarks/results_*.json
+benchmarks/output/
+*.benchmarks.json
+
 # build artifacts
 build/
 dist/

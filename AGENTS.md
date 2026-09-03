@@ -22,6 +22,13 @@
 - `archive` parameter threaded through `MigrationBus.stage_all_migrations` → `stage_migration` → `_rank_by_destination_diversity` for novelty-aware migrant ordering via `SolutionArchive.novelty_score`.
 - Wired in `island_evolution.py` Phase C: staged via `island_evolution.island_evolution.run_once` (sourced from `islands[0].archive`).
 
+### Market-comparison benchmarks (completed — 2026-09-02)
+- Harness: `benchmarks/market_comparison_harness.py` (OpenAI-compatible backends Agnes AI + Poolside; OpenRouter scaffolding present, secondary — requiere key/headers no disponibles en env).
+- Fixed typo `POOLSDARD_API_KEY` → `POOLSIDE_API_KEY` in `TOOL_REGISTRY` for `poolside-laguna`.
+- Validated Agnes AI / Flash 2.0: ratio 0.56–0.77 (1.8x speedup), 66.7–100 % correct según tasks; reproducible.
+- Validated Poolside / Laguna XS 2.1 (direct request + harness): funciona, ratio ~0.31–0.69, pero API lenta/inconsistente (5–45s+ por request; >120s ocasional) → no recomendable para runs repeatables de >1 task dentro de timeouts estándar. base_url correcto: `https://inference.poolside.ai/v1/chat/completions`.
+- Infraestructura benchmarks intacta: `effibench_harness.py`, `effibench_loader.py`, `run_full_suite.py`, `targets/*`. Smoke tests en `SMOKY_TESTS.md`.
+
 ### Pending / Future proposals (from SWE-Agent analysis)
 ~~1. ProtocolWorkflow per-candidate overhead — skip gates for AST-only mutations (~10-20% predicted, Medium risk)~~ **COMPLETED in Phase 6.5**
 ~~2. Sandbox worker spawn overhead — persistent worker pool (~5-15% predicted, High risk)~~ **COMPLETED (EvaluationService shared pool)**
