@@ -1,6 +1,6 @@
 # MutaLambda — Optimized Multi-Agent Evolutionary System
 
-> **MutaLambda v2**: Sistema de optimización evolutiva multi-agente con integración GPU, pipeline CI/CD completo y 641 tests.  
+> **MutaLambda v5.0.0**: Sistema de optimización evolutiva multi-agente con integración GPU, pipeline CI/CD completo, benchmarking científico y 663 tests validados.
 > Un framework de alta performance para optimización de código asistida por IA con aceleración hardware.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -9,17 +9,20 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Coverage](https://img.shields.io/badge/coverage-61%25-orange)]()
 [![GPU Ready](https://img.shields.io/badge/GPU-ready-orange)]()
+[![Tag](https://img.shields.io/badge/tag-v5.0.0--phase7--8-blue)]()
 [![Status](https://img.shields.io/badge/status-beta-lightgrey)]()
+[![Benchmarks](https://img.shields.io/badge/benchmarks-EffiBench%20%7C%20Market%20Comparison-blue)]()
 
 ## 🚀 Estado Actual
 
-| Métrica | Valor | Estado |
-|---------|-------|--------|
-| Tests | **636 passed, 5 skipped** | ✅ 641 collected |
-| Cobertura | **61%** | 🔄 En progreso (FASE 8) |
-| Fases completadas | **FASE 0–7** | ✅ Workflow cerrado |
-| Fases pendientes | **FASE 8** (Prometheus/OTel metrics) | 🔄 En progreso |
-| Repositorio | [github.com/Adlgr87/MutaLambda](https://github.com/Adlgr87/MutaLambda) | Active |
+| Métrica | Valor | Estado | Última verificación |
+|---------|-------|--------|---------------------|
+| Tests | **663 passed, 6 skipped** | ✅ 669 collected | 2026-09-02 |
+| Cobertura | **61%** | 🔄 En progreso (FASE 8) | 2026-09-02 |
+| Versión git | **v5.0.0-phase7-8** | ✅ Tag oficial | 2026-08-23 |
+| Fases completadas | **FASE 0–7** | ✅ Workflow cerrado | 2026-08-23 |
+| Fases pendientes | **FASE 8** (Prometheus/OTel metrics) | 🔄 En progreso | — |
+| Repositorio | [github.com/Adlgr87/MutaLambda](https://github.com/Adlgr87/MutaLambda) | Active | — |
 
 ## Áreas Vanguardistas
 
@@ -108,6 +111,13 @@ Enfoque científico con trazabilidad completa:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+## 🔐 Seguridad y Configuración
+
+- **API keys**: se pasan via variables de entorno, nunca hardcodeadas en el repo. `benchmarks/market_comparison_harness.py` consume `OPENROUTER_API_KEY`, `AGNES_API_KEY`, `POOLSIDE_API_KEY`, `GITHUB_TOKEN` (Copilot), `GITLAB_TOKEN` (CodeWhisperer) según el tool configurado en `TOOL_REGISTRY`.
+- **.gitignore**: incluye patrones `benchmarks/results_*.json` y `benchmarks/output/` para no commitear artefactos de runs ni tokens logs.
+- **Auditoría de secretos**: validada con gitleaks (workflow `secret-scan`) → GREEN en rama principal y en el commit de typo-fix `5062a65`.
+- Ver detalle en [AGENTS.md](AGENTS.md) → sección `## MutaLambda_github` (cierre comercial + security audit, PR #86 merged).
+
 ## Quick Start
 
 ```bash
@@ -147,21 +157,60 @@ pytest tests/e2e/ -v
 pytest tests/stress/ -v
 ```
 
-**Test Results**: `636 passed, 5 skipped` ✅
+**Test Results**: `663 passed, 6 skipped` ✅ (669 collected, 2026-09-02)
+
+## 📊 Benchmarking Científico
+
+MutaLambda valida su rendimiento contra benchmarks públicos reconocidos y realiza comparativas de mercado.
+
+### EffiBench Harness (TIER 1)
+Pipeline reproducible con el dataset EffiBench (1000 tasks; 891 convertibles a Python).
+- **Dataset**: `/tmp/effibench_train.parquet` (pyarrow)
+- **Smoke tests (sin API keys)**:
+  ```bash
+  MUTALAMBDA_UNSAFE_LOCAL=1 python benchmarks/effibench_harness.py --smoke --tasks 20 --baseline-only   # correctness + timing
+  MUTALAMBDA_UNSAFE_LOCAL=1 python benchmarks/effibench_harness.py --smoke --tasks 10                   # identity mode (ratio = 1.0)
+  ```
+- **LLM mode (con Ollama / OpenRouter)**:
+  ```bash
+  MUTALAMBDA_UNSAFE_LOCAL=1 python benchmarks/effibench_harness.py --smoke --tasks 8 --llm --samples 3 --warmups 1
+  ```
+- **Métricas**: `ratio_to_canonical` (1.0 = baseline canónico), `%Opt`, `mean_speedup`, `correctness_rate`. Candidate gated por `correctness == 1.0` antes de contar speedup (`benchmarks/SMOKY_TESTS.md`).
+- **Status**: ✅ SMOKE PASS validado. Reporte: `benchmarks/results_effibench.json` (gitignored).
+
+### Market Comparison Harness
+Integra providers LLM OpenAI-compatible (Agnes AI, Poolside) y herramientas de mercado (Copilot, CodeWhisperer) para comparar MutaLambda head-to-head.
+- **Smoke (sin keys)**:
+  ```bash
+  MUTALAMBDA_UNSAFE_LOCAL=1 python benchmarks/market_comparison_harness.py --smoke --tasks 5 --tools mutalambda copilot codewhisperer
+  ```
+- **Con OpenRouter** (requiere `OPENROUTER_API_KEY`):
+  ```bash
+  export OPENROUTER_API_KEY="sk-or-v1-..."
+  python benchmarks/market_comparison_harness.py --tasks 20 --tools mutalambda openrouter-gpt4o openrouter-claude copilot
+  ```
+- **Providers OpenAI-compatible verificados**:
+  - `agnes-ai` (Flash 2.0): reproducible, ratio 1.3–1.8x speedup, 100% correctness en validación.
+  - `poolside-laguna` (Laguna XS 2.1): funciona pero API lenta (5–45s+/request, spikes >120s) — no recomendado para runs multi-task repetibles.
+  - `openrouter-*` (gpt4o, claude, dots3): base_url corregido a `https://openrouter.ai/api`; configuración completa pero pendiente de validación live por falta de key.
+- **Reproducibility nota**: la métrica `ratio_to_canonical` no es determinista entre runs del mismo provider/seed (ej. Agnes ratio 0.56–0.77 para el mismo task) — varianza introducida por el LLM, no por el engine. El harness sí es reproducible: mismas tasks, mismos comandos.
+- **Reporte**: `benchmarks/results_market_comparison.json` (gitignored). Ver `benchmarks/SMOKY_TESTS.md` para validación completa y `benchmarks/BENCHMARK_STRATEGY.md` para la metodología.
+
+> 📌 Los artefactos `*_results.json` están en `.gitignore` (se regeneran en cada run).
 
 ## Workflows Completados
 
-| Fase | Descripción | Estado | Archivos clave |
-|------|-------------|--------|----------------|
-| FASE 0 | Análisis Inicial | ✅ | Coverage report, architecture analysis |
-| FASE 1 | Sistema de Pruebas | ✅ | 641 tests, CI pipelines |
-| FASE 2 | Refactorización | ✅ | ASTMutator, migration pipeline |
-| FASE 3 | Análisis Pre-GPU | ✅ | optimization_workflow.md |
-| FASE 4 | GPU Pilot (NSGA-II) | ✅ | gpu_optimizer.py, ray_scheduler.py |
-| FASE 5 | GPU Expansión (Batch) | ✅ | Distributed batch processing |
-| FASE 6 | Benchmarking Completo | ✅ | bench_phase6.py, 641 tests |
-| FASE 7 | Documentación y Deploy | ✅ | 22 docs, install scripts, CI/CD |
-| FASE 8 | Metrics Exporter | 🔄 | metrics_exporter.py (parcial) |
+| Fase | Descripción | Estado | Archivos clave | Tests |
+|------|-------------|--------|----------------|-------|
+| FASE 0 | Análisis Inicial | ✅ | Coverage report, architecture analysis | — |
+| FASE 1 | Sistema de Pruebas | ✅ | 641 tests, CI pipelines → 663/669 | 663 passed, 6 skipped |
+| FASE 2 | Refactorización | ✅ | ASTMutator, migration pipeline | — |
+| FASE 3 | Análisis Pre-GPU | ✅ | optimization_workflow.md | — |
+| FASE 4 | GPU Pilot (NSGA-II) | ✅ | gpu_optimizer.py, ray_scheduler.py | — |
+| FASE 5 | GPU Expansión (Batch) | ✅ | Distributed batch processing | — |
+| FASE 6 | Benchmarking Científico | ✅ | bench_phase6.py, cached_parse, msgpack | — |
+| FASE 7 | Documentación y Deploy | ✅ | 22 docs, install scripts, CI/CD | — |
+| FASE 8 | Metrics Exporter (OTel/Prometheus) | 🔄 En progreso | metrics_exporter.py (parcial) | — |
 
 ## Documentation
 
@@ -184,9 +233,10 @@ pytest tests/stress/ -v
 ## Roadmap
 
 - [x] FASES 0–7: Pipeline completo con GPU, benchmarking y documentación
+- [x] FASE 6: Benchmarking científico (EffiBench smoke + identity validation)
 - [ ] FASE 8: Metrics exporter (Prometheus/OTel) para despliegues en producción
 - [ ] src-layout packaging migration
-- [ ] Reproducción independiente de resultados validados en benchmarks públicos
+- [x] Market-comparison harness: Agnes AI + Poolside integrados (2026-09-02)
 - [ ] Soporte para más lenguajes (Java, Kotlin, Swift)
 - [ ] Integración con plataformas de MLOps (MLflow, Weights & Biases)
 
@@ -206,6 +256,6 @@ MIT License - see [LICENSE](LICENSE) for details.
   title = {MutaLambda: Optimized Multi-Agent Evolutionary System},
   year = {2026},
   url = {https://github.com/Adlgr87/MutaLambda},
-  version = {4.0.0}
+  version = {5.0.0}
 }
 ```
