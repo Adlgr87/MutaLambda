@@ -1,29 +1,22 @@
 # Core runtime dependencies for MutaLambda.
+# Single source of truth for extras: see pyproject.toml [project.optional-dependencies].
+msgpack
 numpy
 pydantic>=2
 pyyaml
 requests
-faiss-cpu
-sentence-transformers
-pdfplumber
-pandas
-openpyxl
-Pillow
+
+# Core extras (install one or more):
+#   pip install -e .[core]          # numpy, pydantic, etc. (this file)
+#   pip install -e .[uast]          # faiss-cpu, sentence-transformers
+#   pip install -e .[archive]       # pdfplumber, pandas, openpyxl, Pillow
+#   pip install -e .[cli]           # click, rich
+#   pip install -e .[dashboard]
+#   pip install -e .[scientific]    # scipy
+#   pip install -e .[test]          # pytest, pytest-asyncio, etc.
 
 # Test suite.
 pytest>=7.0
 
-# Optional legacy Inferless/HuggingFace adapter.
-# Install only if you use the old HF/Torch integration path.
-# huggingface_hub
-# transformers
-# torch
-
 # Formal verification support for property_testing.py.
 z3-solver
-
-# Optional document-processing utilities from legacy workflows.
-# pdfplumber
-# pandas
-# openpyxl
-# pillow

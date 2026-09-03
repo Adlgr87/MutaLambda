@@ -21,7 +21,6 @@ dependencies = [
 [project.optional-dependencies]
 core = [
   "numpy",
-  "msgpack",
   "pydantic>=2",
   "pyyaml",
   "requests",
