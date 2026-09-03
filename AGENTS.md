@@ -25,6 +25,19 @@
 ### Market-comparison benchmarks (completed — 2026-09-02)
 - Harness: `benchmarks/market_comparison_harness.py` (OpenAI-compatible backends Agnes AI + Poolside; OpenRouter scaffolding present, secondary — requiere key/headers no disponibles en env).
 - Fixed typo `POOLSDARD_API_KEY` → `POOLSIDE_API_KEY` in `TOOL_REGISTRY` for `poolside-laguna`.
+
+### Fair market comparison (workflow abierto — 2026-09-03)
+- **Fuente de verdad:** `PLANS/MARKET_COMPARISON_WORKFLOW.md` (fases 0–7 con gates).
+  Normativa: `benchmarks/FAIRNESS_PROTOCOL.md` · Panorama: `docs/MARKET_COMPARISON_ANALYSIS.md`.
+- Sub-agente: `.agents/benchmark-comparator.md`.
+- Deuda conocida del harness actual: la fila `mutalambda` no ejecuta el optimizador
+  (usa `task.seed_code()`), y Copilot/CodeWhisperer son stubs con ratio inventado —
+  se corrige en FASE 1 del workflow. No citar los leaderboards previos como
+  evidencia de mercado.
+- Competidores reales definidos: ShinkaEvolve (`pip install shinka-evolve`),
+  OpenEvolve, PyGGI 2.0, EoH, referencias Numba/Cython, LLM one-shot etiquetado,
+  y pymoo/DEAP a nivel motor. AlphaEvolve/ThetaEvolve solo como `published/*`.
+
 - Validated Agnes AI / Flash 2.0: ratio 0.56–0.77 (1.8x speedup), 66.7–100 % correct según tasks; reproducible.
 - Validated Poolside / Laguna XS 2.1 (direct request + harness): funciona, ratio ~0.31–0.69, pero API lenta/inconsistente (5–45s+ por request; >120s ocasional) → no recomendable para runs repeatables de >1 task dentro de timeouts estándar. base_url correcto: `https://inference.poolside.ai/v1/chat/completions`.
 - Infraestructura benchmarks intacta: `effibench_harness.py`, `effibench_loader.py`, `run_full_suite.py`, `targets/*`. Smoke tests en `SMOKY_TESTS.md`.
