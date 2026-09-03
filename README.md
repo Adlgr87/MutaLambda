@@ -11,7 +11,7 @@
 [![GPU Ready](https://img.shields.io/badge/GPU-ready-orange)]()
 [![Tag](https://img.shields.io/badge/tag-v5.0.0--phase7--8-blue)]()
 [![Status](https://img.shields.io/badge/status-beta-lightgrey)]()
-[![Benchmarks](https://img.shields.io/badge/benchmarks-EffiBench%20%7C%20Market%20Comparison-blue)]()
+[![Benchmarks](https://img.shields.io/badge/benchmarks-EffiBench-blue)]()
 
 ## 🚀 Estado Actual
 
@@ -113,7 +113,7 @@ Enfoque científico con trazabilidad completa:
 
 ## 🔐 Seguridad y Configuración
 
-- **API keys**: se pasan via variables de entorno, nunca hardcodeadas en el repo. `benchmarks/market_comparison_harness.py` consume `OPENROUTER_API_KEY`, `AGNES_API_KEY`, `POOLSIDE_API_KEY`, `GITHUB_TOKEN` (Copilot), `GITLAB_TOKEN` (CodeWhisperer) según el tool configurado en `TOOL_REGISTRY`.
+- **API keys**: se pasan via variables de entorno, nunca hardcodeadas en el repo. `llm_backend.py` consume `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY` (`MUTALAMBDA_OPENROUTER_URL`) o `MISTRAL_API_KEY` según el backend configurado.
 - **.gitignore**: incluye patrones `benchmarks/results_*.json` y `benchmarks/output/` para no commitear artefactos de runs ni tokens logs.
 - **Auditoría de secretos**: validada con gitleaks (workflow `secret-scan`) → GREEN en rama principal y en el commit de typo-fix `5062a65`.
 - Ver detalle en [AGENTS.md](AGENTS.md) → sección `## MutaLambda_github` (cierre comercial + security audit, PR #86 merged).
@@ -161,7 +161,7 @@ pytest tests/stress/ -v
 
 ## 📊 Benchmarking Científico
 
-MutaLambda valida su rendimiento contra benchmarks públicos reconocidos y realiza comparativas de mercado.
+MutaLambda valida su rendimiento contra benchmarks públicos reconocidos.
 
 ### EffiBench Harness (TIER 1)
 Pipeline reproducible con el dataset EffiBench (1000 tasks; 891 convertibles a Python).
@@ -177,24 +177,6 @@ Pipeline reproducible con el dataset EffiBench (1000 tasks; 891 convertibles a P
   ```
 - **Métricas**: `ratio_to_canonical` (1.0 = baseline canónico), `%Opt`, `mean_speedup`, `correctness_rate`. Candidate gated por `correctness == 1.0` antes de contar speedup (`benchmarks/SMOKY_TESTS.md`).
 - **Status**: ✅ SMOKE PASS validado. Reporte: `benchmarks/results_effibench.json` (gitignored).
-
-### Market Comparison Harness
-Integra providers LLM OpenAI-compatible (Agnes AI, Poolside) y herramientas de mercado (Copilot, CodeWhisperer) para comparar MutaLambda head-to-head.
-- **Smoke (sin keys)**:
-  ```bash
-  MUTALAMBDA_UNSAFE_LOCAL=1 python benchmarks/market_comparison_harness.py --smoke --tasks 5 --tools mutalambda copilot codewhisperer
-  ```
-- **Con OpenRouter** (requiere `OPENROUTER_API_KEY`):
-  ```bash
-  export OPENROUTER_API_KEY="sk-or-v1-..."
-  python benchmarks/market_comparison_harness.py --tasks 20 --tools mutalambda openrouter-gpt4o openrouter-claude copilot
-  ```
-- **Providers OpenAI-compatible verificados**:
-  - `agnes-ai` (Flash 2.0): reproducible, ratio 1.3–1.8x speedup, 100% correctness en validación.
-  - `poolside-laguna` (Laguna XS 2.1): funciona pero API lenta (5–45s+/request, spikes >120s) — no recomendado para runs multi-task repetibles.
-  - `openrouter-*` (gpt4o, claude, dots3): base_url corregido a `https://openrouter.ai/api`; configuración completa pero pendiente de validación live por falta de key.
-- **Reproducibility nota**: la métrica `ratio_to_canonical` no es determinista entre runs del mismo provider/seed (ej. Agnes ratio 0.56–0.77 para el mismo task) — varianza introducida por el LLM, no por el engine. El harness sí es reproducible: mismas tasks, mismos comandos.
-- **Reporte**: `benchmarks/results_market_comparison.json` (gitignored). Ver `benchmarks/SMOKY_TESTS.md` para validación completa y `benchmarks/BENCHMARK_STRATEGY.md` para la metodología.
 
 > 📌 Los artefactos `*_results.json` están en `.gitignore` (se regeneran en cada run).
 
@@ -236,7 +218,7 @@ Integra providers LLM OpenAI-compatible (Agnes AI, Poolside) y herramientas de m
 - [x] FASE 6: Benchmarking científico (EffiBench smoke + identity validation)
 - [ ] FASE 8: Metrics exporter (Prometheus/OTel) para despliegues en producción
 - [ ] src-layout packaging migration
-- [x] Market-comparison harness: Agnes AI + Poolside integrados (2026-09-02)
+- [ ] Fair market comparison: benchmarks vs ShinkaEvolve/OpenEvolve/PyGGI con presupuesto idéntico (ver playbook local)
 - [ ] Soporte para más lenguajes (Java, Kotlin, Swift)
 - [ ] Integración con plataformas de MLOps (MLflow, Weights & Biases)
 

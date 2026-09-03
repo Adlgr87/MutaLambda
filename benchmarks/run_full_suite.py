@@ -34,9 +34,19 @@ def get_git_info() -> dict:
 
 
 def get_cache_stats() -> dict:
-    """Get FAISS cache hit-rate statistics."""
-    # This would come from actual cache instrumentation
-    return {"hit_rate": 0.996, "n_entries": 1250, "mean_latency_ms": 0.3}
+    """Fitness-cache stats if a stats file from a live run exists, else empty.
+
+    Never fabricate numbers: wire this to ``EvaluationEngine.cache_stats()``
+    output (e.g. dumped by the harness during a run) when available.
+    """
+    stats_path = Path("benchmarks/results_cache_stats.json")
+    if stats_path.exists():
+        try:
+            with open(stats_path) as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
 
 
 def aggregate_results() -> dict:
@@ -70,12 +80,6 @@ def aggregate_results() -> dict:
     if effi_path.exists():
         with open(effi_path) as f:
             results["tiers"]["effibench"] = json.load(f)
-
-    # Tier 1+2: EffiBench LLM (OpenRouter integration)
-    openrouter_path = Path("benchmarks/results_llm_openrouter.json")
-    if openrouter_path.exists():
-        with open(openrouter_path) as f:
-            results["tiers"]["effibench_openrouter"] = json.load(f)
 
     # Tier 3: EoH suite
     eoh_path = Path("benchmarks/results_eoh.json")
@@ -149,7 +153,9 @@ def print_report(results: dict):
     
     meta = results["metadata"]
     print(f"\nGit: {meta['git']['commit']}")
-    print(f"Cache hit-rate: {meta['cache_stats']['hit_rate']:.1%}")
+    cache_stats = meta.get("cache_stats") or {}
+    if cache_stats.get("hit_rate") is not None:
+        print(f"Cache hit-rate: {cache_stats['hit_rate']:.1%}")
     print(f"Docker: {meta['docker_image']}")
     
     for tier_name, tier_data in results.get("tiers", {}).items():
@@ -174,16 +180,6 @@ def print_report(results: dict):
             print("\n  Optimized kernels:")
             for r in tier_data.get("optimized", []):
                 print(f"    {r['name']:<25} P50={r['p50_ms']:.2f}ms")
-
-        elif tier_name == "effibench_openrouter":
-            print("  OpenRouter (Dots3-Note-Preview):")
-            s = tier_data.get("summary", {})
-            print(f"    Tasks: {s.get('n_tasks', 0)}, Valid: {s.get('n_valid_comparisons', 0)}")
-            print(f"    opt_pct: {s.get('opt_pct', 0)}%, Mean speedup: {s.get('mean_speedup_when_improved', 0):.2f}x")
-            print(f"    Correctness: {s.get('llm_correctness_rate', 0):.1%}")
-            for r in tier_data.get("results", []):
-                if r.get("ratio_to_canonical") is not None:
-                    print(f"    [{r.get('problem_idx','?')}] {r['task_name'][:35]:35} ratio={r['ratio_to_canonical']} speedup={r.get('speedup',0):.2f}x")
 
         elif tier_name == "eoh":
             print("  Evolution of Heuristics:")
