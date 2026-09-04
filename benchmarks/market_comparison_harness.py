@@ -290,10 +290,15 @@ def print_leaderboard(tool_results: list[dict]) -> None:
     print(f"{'Tool':<35} {'Tasks':>6} {'Valid':>6} {'MedRatio':>9} {'MeanSpeed':>10} {'Opt%':>6} {'Corr%':>6}")
     print("-" * 80)
 
-    # Sort by median ratio
+    # Sort by median ratio. Stubs are pipeline checks, not market evidence:
+    # they return the canonical solution and must never enter a leaderboard.
     ranked = []
+    excluded = []
     for tr in tool_results:
         s = tr.get("summary", {})
+        if any(r.get("status") == "stub" for r in tr.get("results", [])):
+            excluded.append(tr["display"])
+            continue
         if s.get("median_ratio_to_canonical") is not None:
             ranked.append((s["median_ratio_to_canonical"], tr))
 
@@ -305,6 +310,8 @@ def print_leaderboard(tool_results: list[dict]) -> None:
         opt = s.get("opt_pct") or 0
         print(f"{tr['display']:<35} {s['n_tasks']:>6} {s['n_valid_comparisons']:>6} "
               f"{s['median_ratio_to_canonical']:>9.4f} {mean_sp:>10.4f}x {opt:>5.1f}% {corr:>5.1%}")
+    if excluded:
+        print("Excluded from ranking (stub/not a live measurement): " + ", ".join(excluded))
     print()
 
 

@@ -228,6 +228,7 @@ Integra providers LLM OpenAI-compatible (Agnes AI, Poolside) y herramientas de m
 - [GPU Integration](docs/gpu_integration.md)
 - [Testing Guide](docs/testing_guide.md)
 - [Performance Report](docs/performance_report.md)
+- [Plan de benchmarks publicables](docs/BENCHMARK_PUBLICATION_PLAN.md)
 - [Migration Guide](docs/migration_guide.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Deployment Guide](docs/deployment_guide.md)

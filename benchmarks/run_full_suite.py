@@ -23,20 +23,24 @@ import os
 
 
 def get_git_info() -> dict:
-    """Get git commit hash and status."""
+    """Get the commit from the repository containing this script."""
     try:
+        root = Path(__file__).resolve().parents[1]
         commit = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd="/home/adlg/MutaLambda"
+            ["git", "rev-parse", "HEAD"], cwd=root
         ).decode().strip()[:12]
         return {"commit": commit}
-    except Exception:
+    except (OSError, subprocess.CalledProcessError):
         return {"commit": "unknown"}
 
 
 def get_cache_stats() -> dict:
-    """Get FAISS cache hit-rate statistics."""
-    # This would come from actual cache instrumentation
-    return {"hit_rate": 0.996, "n_entries": 1250, "mean_latency_ms": 0.3}
+    """Return measured cache statistics, or an explicit unavailable marker.
+
+    A made-up hit rate is worse than a missing metric in a scientific report.
+    Individual benchmark harnesses can inject their real instrumentation here.
+    """
+    return {"available": False, "note": "cache instrumentation not attached to this run"}
 
 
 def aggregate_results() -> dict:
@@ -149,7 +153,11 @@ def print_report(results: dict):
     
     meta = results["metadata"]
     print(f"\nGit: {meta['git']['commit']}")
-    print(f"Cache hit-rate: {meta['cache_stats']['hit_rate']:.1%}")
+    cache = meta.get("cache_stats", {})
+    if cache.get("available"):
+        print(f"Cache hit-rate: {cache['hit_rate']:.1%}")
+    else:
+        print("Cache hit-rate: unavailable (no instrumentation attached)")
     print(f"Docker: {meta['docker_image']}")
     
     for tier_name, tier_data in results.get("tiers", {}).items():
