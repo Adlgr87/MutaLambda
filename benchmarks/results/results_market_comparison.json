@@ -1,0 +1,230 @@
+{
+ "benchmark": "Market Comparison",
+ "git": "2ef38888bc",
+ "cache_stats": {},
+ "config": {
+  "parquet": "/tmp/effibench_train.parquet",
+  "n_tasks": 5,
+  "tools": [
+   "mutalambda",
+   "openrouter-dots3"
+  ],
+  "samples": 7,
+  "warmups": 2,
+  "timeout_sec": 10.0,
+  "min_improvement": 0.05
+ },
+ "tool_registry": {
+  "mutalambda": {
+   "display": "MutaLambda (Phase 6)",
+   "type": "agent",
+   "description": "Evolutionary code optimization with NSGA-2 + AST cache"
+  },
+  "openrouter-dots3": {
+   "display": "OpenRouter / Dots3-Note-Preview",
+   "type": "llm",
+   "backend": "openrouter",
+   "model": "dots-studio/dots-3-note-preview:free"
+  },
+  "openrouter-gpt4o": {
+   "display": "OpenRouter / Llama-4-Maui",
+   "type": "llm",
+   "backend": "openrouter",
+   "model": "meta/llama-4-mai:latest"
+  },
+  "openrouter-claude": {
+   "display": "OpenRouter / Claude-3.5-Sonnet",
+   "type": "llm",
+   "backend": "openrouter",
+   "model": "anthropic/claude-3-5-sonnet-20240620"
+  },
+  "agnes-ai": {
+   "display": "Agnes AI / Flash 2.0",
+   "type": "llm",
+   "backend": "openai",
+   "base_url": "https://apihub.agnes-ai.com/v1/chat/completions",
+   "api_key_env": "AGNES_API_KEY",
+   "model": "agnes-2.0-flash"
+  },
+  "poolside-laguna": {
+   "display": "Poolside / Laguna XS 2.1",
+   "type": "llm",
+   "backend": "openai",
+   "base_url": "https://inference.poolside.ai/v1/chat/completions",
+   "api_key_env": "POOLSIDE_API_KEY",
+   "model": "poolside/laguna-xs-2.1"
+  },
+  "copilot": {
+   "display": "GitHub Copilot (stub)",
+   "type": "saas",
+   "backend": "stub",
+   "model": "copilot"
+  },
+  "codewhisperer": {
+   "display": "Amazon CodeWhisperer (stub)",
+   "type": "saas",
+   "backend": "stub",
+   "model": "codewhisperer"
+  }
+ },
+ "results": [
+  {
+   "tool": "mutalambda",
+   "display": "MutaLambda (Phase 6)",
+   "summary": {
+    "n_tasks": 3,
+    "n_valid_comparisons": 2,
+    "n_baseline_fail": 1,
+    "median_ratio_to_canonical": 1.0,
+    "mean_ratio_to_canonical": 1.0,
+    "max_ratio_to_canonical": 1.0,
+    "opt_pct": 0.0,
+    "mean_speedup_when_improved": null,
+    "max_speedup": null,
+    "llm_correctness_rate": null,
+    "note": "opt threshold: ratio < 0.95"
+   },
+   "results": [
+    {
+     "problem_idx": 1,
+     "task_name": "Two Sum",
+     "n_tests": 3,
+     "baseline": {
+      "correctness": 1.0,
+      "p50_ms": 32.6334,
+      "memory_peak_mb": 31.97,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "candidate": {
+      "correctness": 1.0,
+      "p50_ms": 32.6334,
+      "memory_peak_mb": 31.97,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "status": "mutalambda_native",
+     "ratio_to_canonical": 1.0,
+     "speedup": 1.0,
+     "kept": false,
+     "llm_wall_sec": 3.42
+    },
+    {
+     "problem_idx": 2,
+     "task_name": "Reverse Words in a String III",
+     "status": "baseline_fail",
+     "baseline": {
+      "correctness": 0.0,
+      "p50_ms": 33.8126,
+      "memory_peak_mb": 31.98,
+      "tests_passed": 0,
+      "tests_total": 2
+     }
+    },
+    {
+     "problem_idx": 3,
+     "task_name": "Contains Duplicate",
+     "n_tests": 2,
+     "baseline": {
+      "correctness": 1.0,
+      "p50_ms": 45.2123,
+      "memory_peak_mb": 32.01,
+      "tests_passed": 2,
+      "tests_total": 2
+     },
+     "candidate": {
+      "correctness": 1.0,
+      "p50_ms": 45.2123,
+      "memory_peak_mb": 32.01,
+      "tests_passed": 2,
+      "tests_total": 2
+     },
+     "status": "mutalambda_native",
+     "ratio_to_canonical": 1.0,
+     "speedup": 1.0,
+     "kept": false,
+     "llm_wall_sec": 0.0
+    }
+   ]
+  },
+  {
+   "tool": "openrouter-dots3",
+   "display": "OpenRouter / Dots3-Note-Preview",
+   "summary": {
+    "n_tasks": 3,
+    "n_valid_comparisons": 2,
+    "n_baseline_fail": 1,
+    "median_ratio_to_canonical": 0.9489,
+    "mean_ratio_to_canonical": 0.9489,
+    "max_ratio_to_canonical": 0.9763,
+    "opt_pct": 50.0,
+    "mean_speedup_when_improved": 1.0852,
+    "max_speedup": 1.0852,
+    "llm_correctness_rate": 1.0,
+    "note": "opt threshold: ratio < 0.95"
+   },
+   "results": [
+    {
+     "problem_idx": 1,
+     "task_name": "Two Sum",
+     "n_tests": 3,
+     "baseline": {
+      "correctness": 1.0,
+      "p50_ms": 45.8867,
+      "memory_peak_mb": 32.01,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "candidate": {
+      "correctness": 1.0,
+      "p50_ms": 42.2851,
+      "memory_peak_mb": 32.03,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "status": "llm",
+     "ratio_to_canonical": 0.9215,
+     "speedup": 1.0852,
+     "kept": true,
+     "llm_wall_sec": 46.68
+    },
+    {
+     "problem_idx": 2,
+     "task_name": "Reverse Words in a String III",
+     "status": "baseline_fail",
+     "baseline": {
+      "correctness": 0.0,
+      "p50_ms": 30.9621,
+      "memory_peak_mb": 32.05,
+      "tests_passed": 0,
+      "tests_total": 2
+     }
+    },
+    {
+     "problem_idx": 3,
+     "task_name": "Contains Duplicate",
+     "n_tests": 2,
+     "baseline": {
+      "correctness": 1.0,
+      "p50_ms": 44.6707,
+      "memory_peak_mb": 32.05,
+      "tests_passed": 2,
+      "tests_total": 2
+     },
+     "candidate": {
+      "correctness": 1.0,
+      "p50_ms": 43.6132,
+      "memory_peak_mb": 32.05,
+      "tests_passed": 2,
+      "tests_total": 2
+     },
+     "status": "llm",
+     "ratio_to_canonical": 0.9763,
+     "speedup": 1.0242,
+     "kept": false,
+     "llm_wall_sec": 9.33
+    }
+   ]
+  }
+ ]
+}
