@@ -149,11 +149,11 @@ def test_microvm_runner_multiple_test_cases():
     assert result.metrics["correctness"] == 1.0
 
 
-# ── EvaluationService integration (Manus P1 observability) ──────────────────────
+# ── EvaluationService integration observability ──────────────────────
 
 
 def test_evaluation_service_last_mode_microvm_serial():
-    """Manus P1: EvaluationService.last_mode reflects the active runner/serial mode."""
+    """EvaluationService.last_mode reflects the active runner/serial mode."""
     from evaluation_service import EvaluationService
 
     svc = EvaluationService(
@@ -171,7 +171,7 @@ def test_evaluation_service_last_mode_microvm_serial():
 
 
 def test_evaluation_service_last_mode_cache_only():
-    """Manus P1: when all results are cached, last_mode='cache-only'."""
+    """when all results are cached, last_mode='cache-only'."""
     from evaluation_service import EvaluationService
 
     svc = EvaluationService(
@@ -188,7 +188,7 @@ def test_evaluation_service_last_mode_cache_only():
 
 
 def test_evaluation_service_last_mode_pool_parallel():
-    """Manus P1: subprocess mode with multiple workers sets parallel mode tag."""
+    """subprocess mode with multiple workers sets parallel mode tag."""
     from evaluation_service import EvaluationService
 
     svc = EvaluationService(
@@ -202,7 +202,7 @@ def test_evaluation_service_last_mode_pool_parallel():
     assert svc.last_mode and svc.last_mode.startswith("pool-parallel")
 
 
-# ── Cross-language transfer blocking (Manus P1 hardening) ──────────────────────
+# ── Cross-language transfer blocking hardening ──────────────────────
 
 
 def _safe_candidate(code, tests):

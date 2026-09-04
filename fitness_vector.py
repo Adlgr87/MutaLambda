@@ -15,6 +15,11 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional
 
 
+# The 3 objectives used in dominance comparison.
+# Auxiliary metrics (latency_p99, throughput, parsimony) are tracked but excluded from dominance.
+_DOMINANCE_OBJECTIVES = ("correctness", "latency_p50", "memory_peak_mb")
+_AUXILIARY_METRICS = ("latency_p99", "throughput", "parsimony")
+
 # Default weights for weighted-sum scalarisation.
 # With 3 objectives, selective pressure remains strong.
 DEFAULT_WEIGHTS: Dict[str, float] = {
@@ -82,7 +87,11 @@ class FitnessVector:
     def dominates(self, other: "FitnessVector") -> bool:
         """Return True if *self* Pareto-dominates *other*.
 
-        Latency and memory are negated so "greater is better" holds.
+        Compares over the 3 dominance objectives in ``_DOMINANCE_OBJECTIVES``:
+        ``correctness``, ``latency_p50``, and ``memory_peak_mb``.
+        Auxiliary metrics (``latency_p99``, ``throughput``, ``parsimony``)
+        are tracked on the FitnessVector but **excluded** from dominance
+        comparison. Latency and memory are negated so "greater is better" holds.
         """
         self_vals = (self.correctness, -self.latency_p50, -self.memory_peak_mb)
         other_vals = (other.correctness, -other.latency_p50, -other.memory_peak_mb)

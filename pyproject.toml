@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mutalambda"
-version = "4.0.0"
+version = "5.0.0"
 description = "Evolutionary multi-island code optimization framework"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -71,7 +71,7 @@ py-modules = [
   "island",
   "island_evolution",
   "migration",
-  "archive",
+
   "llm_backend",
   "evolution_engine",
   "mutation_filters",
@@ -93,7 +93,7 @@ py-modules = [
   "hfc_tiers",
   "interpretability",
   "dashboard",
-  "app",
+
   "models",
   "gpu_optimizer",
   "evaluation_service",
@@ -137,3 +137,13 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py39"
+
+[tool.coverage.run]
+source = ["muta_lambda", "cli", "muta_ext"]
+omit = ["tests/*", ".venv/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+]

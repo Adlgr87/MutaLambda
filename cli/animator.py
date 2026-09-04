@@ -39,8 +39,13 @@ class RetroAnimator:
         if self.style != 'none':
             print("\033[2J\033[H", end="")
     
-    def print_banner(self, title: str, subtitle: str = ""):
-        """Print retro-style banner"""
+    def print_banner(self, title: str = "MutaLambda", subtitle: str = "Evolutionary Code Optimizer"):
+        """Print the MutaLambda retro banner.
+
+        ``title``/``subtitle`` may be overridden by callers; when omitted,
+        sensible defaults are used so the method is callable with no args
+        (e.g. from ``mutalambda run``).
+        """
         if self.style == 'none':
             return
         

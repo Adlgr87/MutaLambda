@@ -178,12 +178,16 @@ def print_report(results: dict):
         elif tier_name == "effibench_openrouter":
             print("  OpenRouter (Dots3-Note-Preview):")
             s = tier_data.get("summary", {})
+            mean_speedup = s.get('mean_speedup_when_improved') or 0
+            correctness = s.get('llm_correctness_rate') or 0
+            opt_pct = s.get('opt_pct') or 0
             print(f"    Tasks: {s.get('n_tasks', 0)}, Valid: {s.get('n_valid_comparisons', 0)}")
-            print(f"    opt_pct: {s.get('opt_pct', 0)}%, Mean speedup: {s.get('mean_speedup_when_improved', 0):.2f}x")
-            print(f"    Correctness: {s.get('llm_correctness_rate', 0):.1%}")
+            print(f"    opt_pct: {opt_pct}%, Mean speedup: {mean_speedup:.2f}x")
+            print(f"    Correctness: {correctness:.1%}")
             for r in tier_data.get("results", []):
                 if r.get("ratio_to_canonical") is not None:
-                    print(f"    [{r.get('problem_idx','?')}] {r['task_name'][:35]:35} ratio={r['ratio_to_canonical']} speedup={r.get('speedup',0):.2f}x")
+                    speedup = r.get('speedup', 0) or 0
+                    print(f"    [{r.get('problem_idx','?')}] {r['task_name'][:35]:35} ratio={r['ratio_to_canonical']} speedup={speedup:.2f}x")
 
         elif tier_name == "eoh":
             print("  Evolution of Heuristics:")

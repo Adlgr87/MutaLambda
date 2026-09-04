@@ -48,3 +48,22 @@ All runs report:
 - Search Insert Position: p50=680.69ms, mem=36.4MB (outlier)
 
 Tag: `v0.1-effibench-smoke` (commit `3a5f80c`)
+
+## Market Comparison Harness
+
+### Smoke Test (stub backends, no API keys required)
+```bash
+MUTALAMBDA_UNSAFE_LOCAL=1 python benchmarks/market_comparison_harness.py --smoke --tasks 5 --tools mutalambda copilot codewhisperer
+# Expected: SMOKE PASS, leaderboard with all 3 tools
+```
+
+### With OpenRouter API Key
+```bash
+export OPENROUTER_API_KEY="sk-or-v1-..."
+python benchmarks/market_comparison_harness.py --tasks 20 --tools mutalambda openrouter-gpt4o openrouter-claude copilot
+# Expected: leaderboard comparing MutaLambda, GPT-4o, Claude, Copilot
+```
+
+### Output
+- `benchmarks/results_market_comparison.json` — full report with per-task results
+- Leaderboard sorted by median ratio_to_canonical (lower = faster)

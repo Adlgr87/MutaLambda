@@ -190,7 +190,7 @@ class EvaluationService:
             self.max_workers = 1
         elif self.max_workers is None:
             self.max_workers = min(4, multiprocessing.cpu_count())
-        # Effective parallelism mode for observability (Manus P1).
+        # Effective parallelism mode for observability observability.
         self.last_mode: Optional[str] = None
 
     # ── Compatibility with SandboxEvaluator interface ─────────────────────

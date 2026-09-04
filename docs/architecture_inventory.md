@@ -6,23 +6,24 @@
 
 | Metric               | Value |
 |----------------------|------:|
-| Source files         | 210 |
-| Lines of Python      | 46,787 |
+| Source files         | 256 |
+| Lines of Python      | 52,571 |
 | Top-level classes    | 452 |
-| Top-level functions  | 576 |
-| Packages / dirs      | 32 |
+| Top-level functions  | 715 |
+| Packages / dirs      | 34 |
 
 ## Modules by Package
 
 | Package | #Modules |
 |---|---:|
-| `(root)` | 59 |
+| `(root)` | 56 |
 | `bench_public` | 1 |
-| `cli` | 5 |
-| `examples` | 4 |
+| `benchmarks` | 13 |
+| `benchmarks/targets` | 31 |
+| `cli` | 6 |
+| `examples` | 3 |
 | `examples/massive` | 1 |
 | `examples/scientific` | 2 |
-| `legacy` | 2 |
 | `lsp` | 1 |
 | `muta_ext` | 11 |
 | `muta_ext/config` | 2 |
@@ -40,7 +41,8 @@
 | `muta_ext/uast/mutators/generated` | 1 |
 | `muta_ext/uast/mutators/scientific` | 6 |
 | `muta_ext/uast/validators` | 1 |
-| `scripts` | 4 |
+| `muta_lambda` | 6 |
+| `scripts` | 5 |
 | `tests` | 44 |
 | `tests/benchmarks` | 1 |
 | `tests/integration` | 1 |
@@ -54,19 +56,62 @@
 | Module | Path | #Classes | #Functions | #Lines |
 |---|---|---:|---:|---:|
 | api_fingerprint | `api_fingerprint.py` | 4 | 4 | 236 |
-| app | `app.py` | 0 | 0 | 12 |
-| archive | `archive.py` | 1 | 2 | 323 |
 | ast_math_verifier | `ast_math_verifier.py` | 5 | 0 | 329 |
 | bench_phase6 | `bench_phase6.py` | 0 | 9 | 339 |
 | he_convert | `bench_public/he_convert.py` | 1 | 5 | 273 |
 | benchmark_runner | `benchmark_runner.py` | 3 | 1 | 374 |
 | benchmarking | `benchmarking.py` | 2 | 2 | 152 |
+| check_regression | `benchmarks/check_regression.py` | 0 | 3 | 87 |
+| d6_baseline_runner | `benchmarks/d6_baseline_runner.py` | 0 | 9 | 265 |
+| effibench_harness | `benchmarks/effibench_harness.py` | 0 | 6 | 256 |
+| effibench_loader | `benchmarks/effibench_loader.py` | 1 | 5 | 182 |
+| effibench_plus | `benchmarks/effibench_plus.py` | 2 | 4 | 391 |
+| eoh_suite | `benchmarks/eoh_suite.py` | 2 | 15 | 589 |
+| harness | `benchmarks/harness.py` | 2 | 36 | 886 |
+| market_comparison_harness | `benchmarks/market_comparison_harness.py` | 0 | 9 | 406 |
+| pie_harness | `benchmarks/pie_harness.py` | 1 | 6 | 717 |
+| pyperformance_poly | `benchmarks/pyperformance_poly.py` | 1 | 7 | 328 |
+| rosetta_code | `benchmarks/rosetta_code.py` | 1 | 4 | 315 |
+| run_full_suite | `benchmarks/run_full_suite.py` | 0 | 5 | 221 |
+| __init__ | `benchmarks/targets/__init__.py` | 0 | 0 | 11 |
+| t1_compute_sum | `benchmarks/targets/t1_compute_sum.py` | 0 | 0 | 21 |
+| t1_count_vowels | `benchmarks/targets/t1_count_vowels.py` | 0 | 0 | 18 |
+| t1_digit_sum | `benchmarks/targets/t1_digit_sum.py` | 0 | 0 | 18 |
+| t1_fibonacci | `benchmarks/targets/t1_fibonacci.py` | 0 | 0 | 21 |
+| t1_list_dedup | `benchmarks/targets/t1_list_dedup.py` | 0 | 0 | 19 |
+| t1_matrix_multiply | `benchmarks/targets/t1_matrix_multiply.py` | 0 | 1 | 33 |
+| t1_nested_loops | `benchmarks/targets/t1_nested_loops.py` | 0 | 0 | 17 |
+| t1_pascals_triangle | `benchmarks/targets/t1_pascals_triangle.py` | 0 | 0 | 21 |
+| t1_primes_sieve | `benchmarks/targets/t1_primes_sieve.py` | 0 | 0 | 23 |
+| t1_reverse_list | `benchmarks/targets/t1_reverse_list.py` | 0 | 0 | 16 |
+| t1_string_concat | `benchmarks/targets/t1_string_concat.py` | 0 | 0 | 16 |
+| t2_conv2d_naive | `benchmarks/targets/t2_conv2d_naive.py` | 0 | 1 | 41 |
+| t2_euclidean_distances | `benchmarks/targets/t2_euclidean_distances.py` | 0 | 0 | 26 |
+| t2_hamming_distance | `benchmarks/targets/t2_hamming_distance.py` | 0 | 0 | 19 |
+| t2_histogram | `benchmarks/targets/t2_histogram.py` | 0 | 1 | 29 |
+| t2_kmeans_step | `benchmarks/targets/t2_kmeans_step.py` | 0 | 1 | 40 |
+| t2_look_and_say | `benchmarks/targets/t2_look_and_say.py` | 0 | 0 | 24 |
+| t2_matrix_trace | `benchmarks/targets/t2_matrix_trace.py` | 0 | 0 | 18 |
+| t2_montecarlo_pi | `benchmarks/targets/t2_montecarlo_pi.py` | 0 | 1 | 29 |
+| t2_radix_sort | `benchmarks/targets/t2_radix_sort.py` | 0 | 0 | 37 |
+| t3_confusion_matrix | `benchmarks/targets/t3_confusion_matrix.py` | 0 | 1 | 24 |
+| t3_connected_components | `benchmarks/targets/t3_connected_components.py` | 0 | 0 | 31 |
+| t3_fft_iterative | `benchmarks/targets/t3_fft_iterative.py` | 0 | 2 | 67 |
+| t3_gradient_descent | `benchmarks/targets/t3_gradient_descent.py` | 0 | 0 | 18 |
+| t3_matrix_inverse | `benchmarks/targets/t3_matrix_inverse.py` | 0 | 1 | 41 |
+| t3_page_rank | `benchmarks/targets/t3_page_rank.py` | 0 | 1 | 49 |
+| t4_bilinear_interp | `benchmarks/targets/t4_bilinear_interp.py` | 0 | 1 | 38 |
+| t4_mandelbrot | `benchmarks/targets/t4_mandelbrot.py` | 0 | 1 | 39 |
+| t4_newton_raphson | `benchmarks/targets/t4_newton_raphson.py` | 0 | 0 | 23 |
+| t4_normalize_minmax | `benchmarks/targets/t4_normalize_minmax.py` | 0 | 1 | 42 |
+| verification | `benchmarks/verification.py` | 1 | 8 | 352 |
 | certify | `certify.py` | 2 | 8 | 281 |
 | checkpoint_manager | `checkpoint_manager.py` | 1 | 7 | 603 |
 | __init__ | `cli/__init__.py` | 0 | 0 | 22 |
-| animator | `cli/animator.py` | 1 | 0 | 281 |
+| animator | `cli/animator.py` | 1 | 0 | 286 |
 | checkpoint_manager | `cli/checkpoint_manager.py` | 1 | 0 | 212 |
 | config_manager | `cli/config_manager.py` | 1 | 0 | 596 |
+| entrypoints | `cli/entrypoints.py` | 0 | 3 | 314 |
 | main | `cli/main.py` | 2 | 0 | 998 |
 | code_hash | `code_hash.py` | 0 | 5 | 88 |
 | comparison | `comparison.py` | 0 | 2 | 50 |
@@ -82,7 +127,6 @@
 | evolution_engine | `evolution_engine.py` | 3 | 2 | 565 |
 | evolve | `evolve.py` | 3 | 10 | 539 |
 | cython_example | `examples/cython_example.py` | 0 | 1 | 9 |
-| llm_backend | `examples/llm_backend.py` | 0 | 1 | 12 |
 | group_cohesion_target | `examples/massive/group_cohesion_target.py` | 0 | 1 | 35 |
 | numpy_simple | `examples/numpy_simple.py` | 0 | 1 | 20 |
 | massive_kernel | `examples/scientific/massive_kernel.py` | 0 | 7 | 58 |
@@ -98,11 +142,9 @@
 | invariant_detector | `invariant_detector.py` | 5 | 12 | 494 |
 | island | `island.py` | 1 | 0 | 859 |
 | island_evolution | `island_evolution.py` | 5 | 0 | 318 |
-| document_intelligence | `legacy/document_intelligence.py` | 12 | 3 | 689 |
-| inferless_wrapper | `legacy/inferless_wrapper.py` | 1 | 0 | 35 |
 | llm_backend | `llm_backend.py` | 5 | 7 | 625 |
 | logging_setup | `logging_setup.py` | 0 | 2 | 63 |
-| server | `lsp/server.py` | 8 | 1 | 296 |
+| server | `lsp/server.py` | 8 | 1 | 317 |
 | massive_adapter | `massive_adapter.py` | 2 | 0 | 248 |
 | metrics_exporter | `metrics_exporter.py` | 6 | 9 | 640 |
 | migration | `migration.py` | 1 | 0 | 255 |
@@ -163,7 +205,7 @@
 | __init__ | `muta_ext/uast/mutators/__init__.py` | 0 | 1 | 15 |
 | base_mutator | `muta_ext/uast/mutators/base_mutator.py` | 6 | 0 | 333 |
 | __init__ | `muta_ext/uast/mutators/generated/__init__.py` | 0 | 1 | 21 |
-| llm_generator | `muta_ext/uast/mutators/llm_generator.py` | 4 | 8 | 285 |
+| llm_generator | `muta_ext/uast/mutators/llm_generator.py` | 4 | 8 | 296 |
 | parallel_for_mutator | `muta_ext/uast/mutators/parallel_for_mutator.py` | 1 | 4 | 282 |
 | __init__ | `muta_ext/uast/mutators/scientific/__init__.py` | 0 | 0 | 25 |
 | base_mutator | `muta_ext/uast/mutators/scientific/base_mutator.py` | 3 | 0 | 126 |
@@ -173,10 +215,15 @@
 | vectorization | `muta_ext/uast/mutators/scientific/vectorization.py` | 1 | 0 | 88 |
 | __init__ | `muta_ext/uast/validators/__init__.py` | 1 | 0 | 65 |
 | workflow | `muta_ext/uast/workflow.py` | 1 | 1 | 94 |
-| muta_lambda | `muta_lambda.py` | 5 | 3 | 1,605 |
+| __init__ | `muta_lambda/__init__.py` | 0 | 0 | 146 |
+| __main__ | `muta_lambda/__main__.py` | 0 | 0 | 6 |
+| agent | `muta_lambda/agent.py` | 1 | 0 | 1,054 |
+| archive | `muta_lambda/archive.py` | 1 | 2 | 323 |
+| config | `muta_lambda/config.py` | 3 | 0 | 312 |
+| session | `muta_lambda/session.py` | 1 | 0 | 36 |
 | mutalambda_cli | `mutalambda_cli.py` | 0 | 32 | 781 |
 | mutation_filters | `mutation_filters.py` | 2 | 12 | 282 |
-| nsga2 | `nsga2.py` | 1 | 8 | 357 |
+| nsga2 | `nsga2.py` | 1 | 8 | 356 |
 | numpy_optimizer | `numpy_optimizer.py` | 6 | 5 | 517 |
 | operator_bandit | `operator_bandit.py` | 2 | 1 | 136 |
 | performance_monitor | `performance_monitor.py` | 4 | 2 | 437 |
@@ -188,16 +235,17 @@
 | regression_gate | `regression_gate.py` | 2 | 7 | 336 |
 | rng_session | `rng_session.py` | 1 | 1 | 54 |
 | run_artifacts | `run_artifacts.py` | 0 | 2 | 173 |
-| runners | `runners.py` | 6 | 10 | 937 |
+| runners | `runners.py` | 6 | 10 | 941 |
 | sandbox | `sandbox.py` | 1 | 1 | 186 |
 | benchmark_checkpoint_serialization | `scripts/benchmark_checkpoint_serialization.py` | 0 | 2 | 148 |
 | benchmark_nsga2_cache | `scripts/benchmark_nsga2_cache.py` | 0 | 3 | 101 |
+| gen_inventory | `scripts/gen_inventory.py` | 2 | 12 | 282 |
 | generate_status_report | `scripts/generate_status_report.py` | 0 | 5 | 121 |
 | swe_agent_profiler | `scripts/swe_agent_profiler.py` | 1 | 8 | 462 |
 | test_synthesizer | `test_synthesizer.py` | 4 | 0 | 255 |
 | __init__ | `tests/__init__.py` | 0 | 0 | 0 |
 | test_evolution_upgrade_benchmark_matrix | `tests/benchmarks/test_evolution_upgrade_benchmark_matrix.py` | 0 | 2 | 36 |
-| conftest | `tests/conftest.py` | 0 | 3 | 30 |
+| conftest | `tests/conftest.py` | 0 | 4 | 73 |
 | e2e_tests | `tests/e2e_tests.py` | 1 | 6 | 287 |
 | helpers | `tests/helpers.py` | 0 | 1 | 31 |
 | test_metrics_integration | `tests/integration/test_metrics_integration.py` | 1 | 0 | 146 |
@@ -222,16 +270,16 @@
 | test_explainable_optimizer | `tests/test_explainable_optimizer.py` | 4 | 0 | 243 |
 | test_fitness_vector | `tests/test_fitness_vector.py` | 1 | 0 | 127 |
 | test_go_support | `tests/test_go_support.py` | 3 | 0 | 223 |
-| test_gpu_optimizer | `tests/test_gpu_optimizer.py` | 2 | 0 | 87 |
+| test_gpu_optimizer | `tests/test_gpu_optimizer.py` | 2 | 0 | 90 |
 | test_hfc_tiers | `tests/test_hfc_tiers.py` | 3 | 12 | 530 |
 | test_integration_regressions | `tests/test_integration_regressions.py` | 2 | 3 | 110 |
 | test_lineage | `tests/test_lineage.py` | 1 | 15 | 273 |
 | test_lineage_compression | `tests/test_lineage_compression.py` | 0 | 3 | 97 |
 | test_llm_backend | `tests/test_llm_backend.py` | 2 | 16 | 241 |
-| test_lsp_server | `tests/test_lsp_server.py` | 3 | 0 | 248 |
+| test_lsp_server | `tests/test_lsp_server.py` | 3 | 0 | 249 |
 | test_metrics_exporter | `tests/test_metrics_exporter.py` | 8 | 0 | 304 |
 | test_microvm_runner | `tests/test_microvm_runner.py` | 0 | 18 | 284 |
-| test_nsga2 | `tests/test_nsga2.py` | 6 | 1 | 169 |
+| test_nsga2 | `tests/test_nsga2.py` | 6 | 1 | 205 |
 | test_numpy_optimizer | `tests/test_numpy_optimizer.py` | 6 | 1 | 192 |
 | test_part_b | `tests/test_part_b.py` | 5 | 0 | 231 |
 | test_performance_monitor | `tests/test_performance_monitor.py` | 2 | 0 | 126 |
@@ -271,17 +319,32 @@ The following public classes and functions are the primary extension points:
 | Module | Public Classes | Public Functions |
 |---|---|---|
 | `api_fingerprint.py` | FunctionFingerprint, ClassFingerprint, APIFingerprint, APICompatibilityResult | _is_public, extract_api_fingerprint, compare_api, fingerprint_from_callable |
-| `archive.py` | SolutionArchive | _get_faiss, _get_sentence_transformer |
 | `ast_math_verifier.py` | VerificationResult, SymbolicExtractor, AlgebraicVerifier, SemanticVerifier, ASTMathVerifier | — |
 | `bench_phase6.py` | — | mock_llm_fn, make_config, run_evolution_once, bench_end_to_end, bench_parse_cache, make_checkpoint_data, bench_checkpoint, bench_checkpoint_serialization, main |
 | `bench_public/he_convert.py` | _Checker | _literal, _all_literals, _is_floaty, extract_cases, main |
 | `benchmark_runner.py` | BenchmarkResult, BenchmarkConfig, BenchmarkRunner | run_phase6_benchmark |
 | `benchmarking.py` | BenchmarkConfig, BenchmarkResult | run_callable_benchmark, percentiles_from_samples |
+| `benchmarks/check_regression.py` | — | load_results, check_regression, main |
+| `benchmarks/d6_baseline_runner.py` | — | _load_target, _arg_factory, _baseline_samples, _candidate_samples, _strip_fences, _llm_1shot, _llm_best_of_5, run_target, main |
+| `benchmarks/effibench_harness.py` | — | make_service, eval_code, extract_code, run_task, summarize, main |
+| `benchmarks/effibench_loader.py` | EffiBenchTask | _convert_asserts, load_tasks, to_test_cases, write_task_files, coverage_report |
+| `benchmarks/effibench_plus.py` | InvariantCheck, SciTask | get_scientific_invariants, attach_invariants, run_effibench_plus_baseline, run_mutalambda_scientific |
+| `benchmarks/eoh_suite.py` | EoHTask, _ASTMutator | circle_packing_rect_greedy, circle_packing_circ_greedy, circle_packing_random, bin_packing_first_fit, bin_packing_best_fit, knapsack_dp, knapsack_relaxed, tsp_nearest_neighbor, dist, tsp_2opt, _ast_mutate, _fitness_circle_packing, _fitness_bin_packing, run_comparison_with_mutalambda, run_eoh_suite |
+| `benchmarks/harness.py` | VariantStat, TargetResult | median_iqr, mann_whitney_p, cliffs_delta, holm_bonferroni, time_callable, time_function_code, _build_arg_factory, _build_arg_factory_from_strategy, _mutate_code, _is_valid_python, _extract_function, _llm_backend, _llm_direct, _llm_best_of_5, _compile_numba, _run_mypyc_compile, _run_real_mutalambda, get_git_sha, _pkg_version, _cpu_info, _env_info, _which, _json_default, _to_stat, _stat_dict, _make_diff, _verify, _bench_alt, _bench_callable, _compile_function, bench_one_target, _load_targets, _aggregate_holm, _write_summary, _run_bench_target, main |
+| `benchmarks/market_comparison_harness.py` | — | make_llm_generate, copilot_stub, codewhisperer_stub, load_comparison_tasks, run_tool, print_leaderboard, main, get_git_info, get_cache_stats |
+| `benchmarks/pie_harness.py` | PIETask | compile_cpp, run_cpp_binary, build_full_program, benchmark_task, run_pie_harness, main |
+| `benchmarks/pyperformance_poly.py` | PyBenchResult | run_python_code, get_pyperformance_benchmarks, get_polybench_kernels, get_multicore_parallel, run_baseline_pyperformance, run_optimized_pyperformance, run_suite |
+| `benchmarks/rosetta_code.py` | RosettaTask | benchmark_python, benchmark_cpp, benchmark_rust, run_cross_language_benchmark |
+| `benchmarks/run_full_suite.py` | — | get_git_info, get_cache_stats, aggregate_results, generate_summary, print_report |
+| `benchmarks/targets/t1_matrix_multiply.py` | — | arg_factory |
+| `benchmarks/targets/t3_fft_iterative.py` | — | _ref_fft, arg_factory |
+| `benchmarks/verification.py` | VerificationResult | _load_function, _infer_arg_generators, _seq_like, _is_number, _signature_args, _approx_equal, _same_exception_type, verify_candidate |
 | `certify.py` | Certificate, CertificateBuilder | _stable_hash, _hash_file, _hash_json, _hash_invariants, _hash_config, _compute_hmac, build_arg_parser, main |
 | `checkpoint_manager.py` | CheckpointData | save_full_checkpoint, _serialise_checkpoint, _to_json_safe, _msgpack_default, _restore_state, load_checkpoint, resume_agent |
 | `cli/animator.py` | RetroAnimator | — |
 | `cli/checkpoint_manager.py` | CheckpointManager | — |
 | `cli/config_manager.py` | ConfigManager | — |
+| `cli/entrypoints.py` | — | run_full_test_suite, _demo_llm_fn, main |
 | `cli/main.py` | MutaLambdaCLI, InteractiveREPL | — |
 | `code_hash.py` | — | cached_parse, clear_ast_cache, stable_code_hash, cache_stats, report_cache_stats |
 | `comparison.py` | — | register_predicate, compare_values |
@@ -296,7 +359,6 @@ The following public classes and functions are the primary extension points:
 | `evolution_engine.py` | ASTMutator, CodeRegion, CoreEvolutionEngine | ast_crossover, component_evolve |
 | `evolve.py` | EvolveConfig, GenerationResult, EvolveResult | _load_uast_source, _make_offline_evaluator, _offline_llm_fn, run_evolution, _write_checkpoint, _write_inline_checkpoint, _write_artifacts, _gpu_profile_warning, build_arg_parser, main |
 | `examples/cython_example.py` | — | sum_squares |
-| `examples/llm_backend.py` | — | find_max |
 | `examples/massive/group_cohesion_target.py` | — | calculate_group_cohesion |
 | `examples/numpy_simple.py` | — | compute_stats |
 | `examples/scientific/massive_kernel.py` | — | compute_kinetic_energy, compute_potential_energy, compute_total_energy, update_positions, update_velocities, energy_step, run_simulation |
@@ -312,8 +374,6 @@ The following public classes and functions are the primary extension points:
 | `invariant_detector.py` | PhysicalConstant, MathematicalIdentity, NumericalTolerance, CryptoPattern, InvariantsLock | _walk_values, _as_text, _collect_scalars, detect_invariants, _detect_constants, _numeric_tokens, _matches_constant, _detect_identities, _detect_tolerances, _detect_crypto, build_arg_parser, main |
 | `island.py` | Island | — |
 | `island_evolution.py` | IslandSnapshot, IslandFailure, IslandDiversity, GenerationBarriersResult, IslandPool | — |
-| `legacy/document_intelligence.py` | ExtractedTimeSeries, ExtractedNetworkInfo, ExtractedDemographics, MASSIVEExtractedConfig, DocumentContext, _PDFParser, _JSONParser, _CSVParser, _XLSXParser, _ImageParser, _TextParser, DocumentIntelligence | _try_import, _detect_time_series_from_df, _detect_time_series_from_dict |
-| `legacy/inferless_wrapper.py` | InferlessPythonModel | — |
 | `llm_backend.py` | LLMBackendError, LLMBudgetExceeded, LLMCircuitOpen, StructuredLLMResponse, LLMBackend | _normalize_model_key, _estimate_tokens, _lookup_pricing, _env, parse_structured_response, prompt_hash, _resolve_llm_backend |
 | `logging_setup.py` | — | get_logger, setup_logging |
 | `lsp/server.py` | LSPMethod, Position, Range, Diagnostic, CodeAction, InlayHint, LSPMessage, MutaLambdaLSPServer | main |
@@ -377,7 +437,10 @@ The following public classes and functions are the primary extension points:
 | `muta_ext/uast/mutators/scientific/vectorization.py` | SafeVectorizationMutator | — |
 | `muta_ext/uast/validators/__init__.py` | UASTValidator | — |
 | `muta_ext/uast/workflow.py` | UASTWorkflow | process_with_uast |
-| `muta_lambda.py` | EvolveConfig, EarlyStopMonitor, GenerationResult, MutaLambdaSession, MutaLambdaAgent | run_full_test_suite, _demo_llm_fn, main |
+| `muta_lambda/agent.py` | MutaLambdaAgent | — |
+| `muta_lambda/archive.py` | SolutionArchive | _get_faiss, _get_sentence_transformer |
+| `muta_lambda/config.py` | EvolveConfig, EarlyStopMonitor, GenerationResult | — |
+| `muta_lambda/session.py` | MutaLambdaSession | — |
 | `mutalambda_cli.py` | — | cli, run, resume, config, config_create, config_validate, config_show, stats, evaluate, mutate, mutate_prompt, mutate_operators, mutate_hyperparams, interactive, generate_mutator_cmd, checkpoints, migrate_checkpoints, init, doctor, _run_with_preset, quick, production, scientific, numpy_mode, recommend, _detect_code_type_cli, dashboard, compare, explain_run, examples, _guess_type, tutorial |
 | `mutation_filters.py` | FitnessReport, ProfileMode | _make_report, _severity_rank, check_empty_code, check_syntax, check_max_length, check_no_critical_patterns, check_warning_patterns, check_info_patterns, check_ast_depth, check_import_cycles, run_all_filters, _filter_mutant |
 | `nsga2.py` | ParetoFront | non_dominated_sort, _non_dominated_sort_numpy, nsga2_select, nsga2_tournament_select, _get_fitness, _crowding_distance, get_pareto_frontier, get_nsga2_stats |
@@ -396,11 +459,12 @@ The following public classes and functions are the primary extension points:
 | `sandbox.py` | SandboxEvaluator | apply_resource_limits |
 | `scripts/benchmark_checkpoint_serialization.py` | — | create_large_population, benchmark_json_vs_msgpack |
 | `scripts/benchmark_nsga2_cache.py` | — | create_test_population, benchmark_sort, main |
+| `scripts/gen_inventory.py` | ModuleInfo, InventoryReport | _run_git, _list_python_files, _parse_module, _count_lines, _is_public, _package_of, build_inventory, _render_summary, _render_package_matrix, _render_module_table, render_markdown, main |
 | `scripts/generate_status_report.py` | — | _run, git_commit, optional_deps, run_pytest, main |
 | `scripts/swe_agent_profiler.py` | ProfileResult | profile_nsga2, profile_sandbox, profile_checkpoint_manager, profile_evolution_engine, run_profiling, display_results, main, generate_recommendations |
 | `test_synthesizer.py` | TestSpec, TypeInferenceEngine, TestSynthesizer, ExistingTestScanner | — |
 | `tests/benchmarks/test_evolution_upgrade_benchmark_matrix.py` | — | test_benchmark_matrix_contains_required_variants, test_global_metrics_are_declared |
-| `tests/conftest.py` | — | perfect_fitness, worst_fitness, sample_individual |
+| `tests/conftest.py` | — | _reset_global_state, perfect_fitness, worst_fitness, sample_individual |
 | `tests/e2e_tests.py` | SampleTestSpec | _extract_first_function_name, build_test_cases_from_spec, build_test_cases_sum, make_llm_stub, run_e2e, main |
 | `tests/helpers.py` | — | make_individual |
 | `tests/integration/test_metrics_integration.py` | TestMetricsIntegration | — |

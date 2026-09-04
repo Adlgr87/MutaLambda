@@ -1,6 +1,6 @@
 # MutaLambda — Optimized Multi-Agent Evolutionary System
 
-> **MutaLambda v5.0.0**: Sistema de optimización evolutiva multi-agente con integración GPU, pipeline CI/CD completo, benchmarking científico y 663 tests validados.
+> **MutaLambda v5.0.0**: Sistema de optimización evolutiva multi-agente con integración GPU, pipeline CI/CD completo, benchmarking científico y 664 tests validados.
 > Un framework de alta performance para optimización de código asistida por IA con aceleración hardware.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -17,7 +17,7 @@
 
 | Métrica | Valor | Estado | Última verificación |
 |---------|-------|--------|---------------------|
-| Tests | **663 passed, 6 skipped** | ✅ 669 collected | 2026-09-02 |
+| Tests | **664 passed, 6 skipped** | ✅ 670 collected | 2026-09-02 |
 | Cobertura | **61%** | 🔄 En progreso (FASE 8) | 2026-09-02 |
 | Versión git | **v5.0.0-phase7-8** | ✅ Tag oficial | 2026-08-23 |
 | Fases completadas | **FASE 0–7** | ✅ Workflow cerrado | 2026-08-23 |
@@ -41,11 +41,14 @@ Integración completa de NSGA-II en CUDA via PyTorch con escalado distribuido me
 - **ray_scheduler.py**: Batch processing distribuido en cluster
 - **Auto fallback**: Detecta GPU disponible y degradea gracefully a CPU
 
-### 3. 🛡️ UAST-Based Code Intelligence
-Parser universal que construye Unified Abstract Syntax Trees para análisis semántico cross-language:
-- Soporte nativo: Python, TypeScript, Rust, Go, C/C++
-- Mutation engine basado en AST con 4 estrategias de mutación
+### 3. 🛡️ Code Intelligence
+
+**Important**: MutaLambda uses **language-specific AST parsers** (Python's `ast` module, etc.), **not** a universal UAST parser. The "UAST" terminology in this section is aspirational and should not be cited as a verified property.
+
+Parser infrastructure with multi-language AST support for semantic code mutations:
+- Python AST-based mutation engine with 4 estrategias de mutación
 - Invariant detection para code quality assurance
+- Semantic-aware mutation strategies (not just text-based)
 
 ### 4. 📊 Benchmarking Científico (FASE 6)
 Pipeline de benchmarking extendido con:
@@ -157,7 +160,7 @@ pytest tests/e2e/ -v
 pytest tests/stress/ -v
 ```
 
-**Test Results**: `663 passed, 6 skipped` ✅ (669 collected, 2026-09-02)
+**Test Results**: `664 passed, 6 skipped` ✅ (670 collected, 2026-09-02)
 
 ## 📊 Benchmarking Científico
 
@@ -203,7 +206,7 @@ Integra providers LLM OpenAI-compatible (Agnes AI, Poolside) y herramientas de m
 | Fase | Descripción | Estado | Archivos clave | Tests |
 |------|-------------|--------|----------------|-------|
 | FASE 0 | Análisis Inicial | ✅ | Coverage report, architecture analysis | — |
-| FASE 1 | Sistema de Pruebas | ✅ | 641 tests, CI pipelines → 663/669 | 663 passed, 6 skipped |
+| FASE 1 | Sistema de Pruebas | ✅ | 641 tests, CI pipelines → 664/670 | 664 passed, 6 skipped |
 | FASE 2 | Refactorización | ✅ | ASTMutator, migration pipeline | — |
 | FASE 3 | Análisis Pre-GPU | ✅ | optimization_workflow.md | — |
 | FASE 4 | GPU Pilot (NSGA-II) | ✅ | gpu_optimizer.py, ray_scheduler.py | — |
