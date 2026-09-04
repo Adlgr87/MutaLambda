@@ -1,0 +1,270 @@
+{
+ "benchmark": "Market Comparison",
+ "git": "2ef38888bc",
+ "cache_stats": {},
+ "config": {
+  "parquet": "/tmp/effibench_train.parquet",
+  "n_tasks": 3,
+  "tools": [
+   "mutalambda",
+   "copilot",
+   "codewhisperer"
+  ],
+  "samples": 7,
+  "warmups": 2,
+  "timeout_sec": 10.0,
+  "min_improvement": 0.05
+ },
+ "tool_registry": {
+  "mutalambda": {
+   "display": "MutaLambda (Phase 6)",
+   "type": "agent",
+   "description": "Evolutionary code optimization with NSGA-2 + AST cache"
+  },
+  "openrouter-dots3": {
+   "display": "OpenRouter / Dots3-Note-Preview",
+   "type": "llm",
+   "backend": "openrouter",
+   "model": "dots-studio/dots-3-note-preview:free"
+  },
+  "openrouter-gpt4o": {
+   "display": "OpenRouter / Llama-4-Maui",
+   "type": "llm",
+   "backend": "openrouter",
+   "model": "meta/llama-4-mai:latest"
+  },
+  "openrouter-claude": {
+   "display": "OpenRouter / Claude-3.5-Sonnet",
+   "type": "llm",
+   "backend": "openrouter",
+   "model": "anthropic/claude-3-5-sonnet-20240620"
+  },
+  "agnes-ai": {
+   "display": "Agnes AI / Flash 2.0",
+   "type": "llm",
+   "backend": "openai",
+   "base_url": "https://apihub.agnes-ai.com/v1/chat/completions",
+   "api_key_env": "AGNES_API_KEY",
+   "model": "agnes-2.0-flash"
+  },
+  "poolside-laguna": {
+   "display": "Poolside / Laguna XS 2.1",
+   "type": "llm",
+   "backend": "openai",
+   "base_url": "https://inference.poolside.ai/v1/chat/completions",
+   "api_key_env": "POOLSIDE_API_KEY",
+   "model": "poolside/laguna-xs-2.1"
+  },
+  "copilot": {
+   "display": "GitHub Copilot (stub)",
+   "type": "saas",
+   "backend": "stub",
+   "model": "copilot"
+  },
+  "codewhisperer": {
+   "display": "Amazon CodeWhisperer (stub)",
+   "type": "saas",
+   "backend": "stub",
+   "model": "codewhisperer"
+  }
+ },
+ "results": [
+  {
+   "tool": "mutalambda",
+   "display": "MutaLambda (Phase 6)",
+   "summary": {
+    "n_tasks": 2,
+    "n_valid_comparisons": 2,
+    "n_baseline_fail": 0,
+    "median_ratio_to_canonical": 1.0,
+    "mean_ratio_to_canonical": 1.0,
+    "max_ratio_to_canonical": 1.0,
+    "opt_pct": 0.0,
+    "mean_speedup_when_improved": null,
+    "max_speedup": null,
+    "llm_correctness_rate": null,
+    "note": "opt threshold: ratio < 0.95"
+   },
+   "results": [
+    {
+     "problem_idx": 1,
+     "task_name": "Two Sum",
+     "n_tests": 3,
+     "baseline": {
+      "correctness": 1.0,
+      "p50_ms": 28.5493,
+      "memory_peak_mb": 32.01,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "candidate": {
+      "correctness": 1.0,
+      "p50_ms": 28.5493,
+      "memory_peak_mb": 32.01,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "status": "mutalambda_native",
+     "ratio_to_canonical": 1.0,
+     "speedup": 1.0,
+     "kept": false,
+     "llm_wall_sec": 2.86
+    },
+    {
+     "problem_idx": 2,
+     "task_name": "Contains Duplicate",
+     "n_tests": 3,
+     "baseline": {
+      "correctness": 1.0,
+      "p50_ms": 35.7318,
+      "memory_peak_mb": 32.05,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "candidate": {
+      "correctness": 1.0,
+      "p50_ms": 35.7318,
+      "memory_peak_mb": 32.05,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "status": "mutalambda_native",
+     "ratio_to_canonical": 1.0,
+     "speedup": 1.0,
+     "kept": false,
+     "llm_wall_sec": 0.0
+    }
+   ]
+  },
+  {
+   "tool": "copilot",
+   "display": "GitHub Copilot (stub)",
+   "summary": {
+    "n_tasks": 2,
+    "n_valid_comparisons": 2,
+    "n_baseline_fail": 0,
+    "median_ratio_to_canonical": 0.9845,
+    "mean_ratio_to_canonical": 0.9845,
+    "max_ratio_to_canonical": 1.0364,
+    "opt_pct": 50.0,
+    "mean_speedup_when_improved": 1.0724,
+    "max_speedup": 1.0724,
+    "llm_correctness_rate": null,
+    "note": "opt threshold: ratio < 0.95"
+   },
+   "results": [
+    {
+     "problem_idx": 1,
+     "task_name": "Two Sum",
+     "n_tests": 3,
+     "baseline": {
+      "correctness": 1.0,
+      "p50_ms": 40.3119,
+      "memory_peak_mb": 32.05,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "candidate": {
+      "correctness": 1.0,
+      "p50_ms": 37.5902,
+      "memory_peak_mb": 32.06,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "status": "stub",
+     "ratio_to_canonical": 0.9325,
+     "speedup": 1.0724,
+     "kept": true
+    },
+    {
+     "problem_idx": 2,
+     "task_name": "Contains Duplicate",
+     "n_tests": 3,
+     "baseline": {
+      "correctness": 1.0,
+      "p50_ms": 35.021,
+      "memory_peak_mb": 32.08,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "candidate": {
+      "correctness": 1.0,
+      "p50_ms": 36.2954,
+      "memory_peak_mb": 32.08,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "status": "stub",
+     "ratio_to_canonical": 1.0364,
+     "speedup": 0.9649,
+     "kept": false
+    }
+   ]
+  },
+  {
+   "tool": "codewhisperer",
+   "display": "Amazon CodeWhisperer (stub)",
+   "summary": {
+    "n_tasks": 2,
+    "n_valid_comparisons": 2,
+    "n_baseline_fail": 0,
+    "median_ratio_to_canonical": 0.907,
+    "mean_ratio_to_canonical": 0.907,
+    "max_ratio_to_canonical": 0.9166,
+    "opt_pct": 100.0,
+    "mean_speedup_when_improved": 1.1026,
+    "max_speedup": 1.1142,
+    "llm_correctness_rate": null,
+    "note": "opt threshold: ratio < 0.95"
+   },
+   "results": [
+    {
+     "problem_idx": 1,
+     "task_name": "Two Sum",
+     "n_tests": 3,
+     "baseline": {
+      "correctness": 1.0,
+      "p50_ms": 37.5091,
+      "memory_peak_mb": 32.08,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "candidate": {
+      "correctness": 1.0,
+      "p50_ms": 34.3816,
+      "memory_peak_mb": 32.08,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "status": "stub",
+     "ratio_to_canonical": 0.9166,
+     "speedup": 1.091,
+     "kept": true
+    },
+    {
+     "problem_idx": 2,
+     "task_name": "Contains Duplicate",
+     "n_tests": 3,
+     "baseline": {
+      "correctness": 1.0,
+      "p50_ms": 39.0237,
+      "memory_peak_mb": 32.08,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "candidate": {
+      "correctness": 1.0,
+      "p50_ms": 35.0232,
+      "memory_peak_mb": 32.08,
+      "tests_passed": 3,
+      "tests_total": 3
+     },
+     "status": "stub",
+     "ratio_to_canonical": 0.8975,
+     "speedup": 1.1142,
+     "kept": true
+    }
+   ]
+  }
+ ]
+}
