@@ -74,17 +74,26 @@ optimization:
 
   # ── FASE 2 ─────────────────────────────────────────────────────────────
   # O4/AmdahlHeadroomFilter + O6 (3 niveles) + A4 (subset de tests).
+  # `enabled` es el paraguas: con `false` el motor es idéntico a pre-Fase-2
+  # (regla 6). Con `true` se activa la escalera:
+  #   N1 nanopass in-memory (<1ms) → N2 subset mínimo (in-proc/subproc) →
+  #   N3 solo el top `sandbox_top_pct`% a Docker sandbox + Ray (opcional).
+  # Los sub-flags individualmente apagan cada palanca sin tocar las demás.
   profiling_filter:
     enabled: false
-    profile_seconds: 10        # profiling bajo carga ~10s
-    min_cpu_pct: 0.5           # excluye funciones con <0.5% de CPU
+    profile_seconds: 10        # O4: profiling bajo carga ~10s
+    min_cpu_pct: 0.5           # O4: excluye funciones con <0.5% de CPU
     nanopass_check:
-      enabled: false           # O6 N1: chequeo UAST Nanopass en memoria (<1ms)
+      enabled: true            # O6 N1: chequeo UAST Nanopass en memoria (<1ms)
     test_subset:
-      enabled: false           # O6 N2 + A4: subset mínimo por cobertura
-      by_coverage: true
-      max_tests: 0             # 0 = auto (cubrir 100% de líneas del target)
+      enabled: true            # O6 N2 + A4: subset mínimo por cobertura
+      by_coverage: true        # A4: crecimiento guiado por cobertura (trace)
+      max_tests: 0             # 0 = auto (set cover sobre funciones)
     sandbox_top_pct: 20.0      # O6 N3: solo ~20% top va a Docker + Ray
+    api_policy: strict         # N1: strict | relaxed (fingerprint de API)
+    uast2_enabled: false       # N1: chequeo semántico UAST-core (v2)
+    ray_profile:
+      enabled: false           # N3: distribuir evaluaciones con Ray
 
   # ── FASE 3 ─────────────────────────────────────────────────────────────
   # O5: EconomicHeadroomGate — early stop cuando el ΔH por generación no

@@ -418,6 +418,17 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
     else:
         evaluator = _make_offline_evaluator(config.profile, config.seed)
 
+    # ── FASE 2 (O6/A4): tiered evaluation ladder, flag-gated ──────────────
+    # profiling_filter.enabled (config/optimization.yaml) ⇒ N1 nanopass
+    # (<1 ms) → N2 minimal test subset → N3 top-20 % sandbox.  Zero
+    # behaviour change when the flag is off.
+    try:
+        from tiered_evaluator import TieredOfflineEvaluator, tiering_active
+        if tiering_active():
+            evaluator = TieredOfflineEvaluator(source, evaluator)
+    except Exception:
+        pass  # the ladder must never take the pipeline down
+
     if not config.resume_from:
         # Build a seed population of mutated variants of the original source.
         seed_codes = [source]

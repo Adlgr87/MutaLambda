@@ -139,7 +139,17 @@ optimization:
     json_schema_output:{ enabled: false }     # A1: op_type/location/unified_diff/rationale
     batching:         { enabled: false, batch_size: 5 }  # A3: N mutaciones por llamada
     bandit:           { enabled: false }      # A3: reward = Δfitness/tokens (UCB)
-  # Fase 2/3: profiling_filter, economic_gate, pareto_archive (desactivadas)
+  profiling_filter:                          # FASE 2 (escalera de evaluación)
+    enabled:          false                  # paraguas: off = comportamiento pre-Fase-2
+    profile_seconds:  10                     # O4: profiling bajo carga ~10 s
+    min_cpu_pct:      0.5                    # O4: excluye funciones con <0.5% CPU
+    nanopass_check:   { enabled: true }      # O6 N1: guard UAST en memoria (<1 ms)
+    test_subset:      { enabled: true, by_coverage: true, max_tests: 0 }  # O6 N2 + A4
+    sandbox_top_pct:  20.0                   # O6 N3: solo top ~20% → Docker + Ray
+    api_policy:       strict
+    uast2_enabled:    false
+    ray_profile:      { enabled: false }
+  # Fase 3: economic_gate, bandit_reward_usd, pareto_archive (desactivadas)
 ```
 
 - **Ledger de costo** (`cost_ledger.py`): interceptado centralmente en el
@@ -148,6 +158,21 @@ optimization:
   **−95.5%**, output tokens **−55.5%**, reparación **±0pp** vs baseline,
   **100%** de propuestas con schema válido, **−80%** llamadas (batching N=5).
   Ver `bench_headroom_fase1.py` y `reports/fase1_before_after.json`.
+- **Medición de la Fase 2** (120 mutantes, suite real de 12 tests, sandbox
+  subprocess real): escalera N1 → N2 → N3 reduce el tiempo de evaluación
+  **−77.5% por mutante** (20.3 → 4.6 ms), los evaluaciones de sandbox
+  **120 → 18** (solo **15%** toca N3, ≤20%), **0 falsos positivos**
+  (ningún mutante correcto es rechazado) y N1 promedia **0.51 ms**.
+  Ver `bench_headroom_fase2.py` y `reports/fase2_before_after.json`.
+  * O4 `AmdahlHeadroomFilter` (`hotspot_profiler.py`): profiling bajo carga
+    (~10 s) y exclusión de funciones con <0.5% de CPU de las regiones
+    mutables (`select_code_regions`). Fail-open: sin perfil, se incluye todo.
+  * O6 N1 (`tiered_evaluator.py`): nanopass en memoria — parse + fingerprint
+    de API (strict/relaxed) + walk de seguridad sobre el mismo árbol (<1 ms).
+  * O6 N2 + A4: subset mínimo de tests por set cover / crecimiento guiado por
+    cobertura (`trace`), in-process si es puro, subprocess endurecido si I/O.
+  * O6 N3: solo el top ~20% de sobrevivientes de N2 paga el sandbox completo
+    (Docker si hay engine, fail-closed a subprocess) + Ray opcional.
 
 ## Arquitectura
 

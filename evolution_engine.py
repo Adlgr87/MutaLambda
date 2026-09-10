@@ -293,11 +293,57 @@ class CoreEvolutionEngine:
                 )
             )
 
+        # O4 (FASE 2, Amdahl): when profiling_filter is enabled, drop regions
+        # that live inside functions owning <min_cpu_pct of the measured CPU.
+        # Mutating them cannot move end-to-end runtime → pure token spend.
+        spans = self._amdahl_excluded_spans(code)
+        if spans:
+            regions = [
+                r for r in regions
+                if not any(ls <= r.start_line <= le for ls, le in spans)
+            ]
+
         regions.sort(
             key=lambda r: (r.complexity_score, r.end_line - r.start_line),
             reverse=True,
         )
         return regions[:max_regions]
+
+    _AMDHAL_SPANS_CACHE: Dict[str, Tuple[Tuple[int, int], ...]] = {}
+
+    @classmethod
+    def _amdahl_excluded_spans(cls, code: str) -> List[Tuple[int, int]]:
+        """Line spans of functions with *measured* CPU share below threshold.
+
+        Flag-gated (``profiling_filter.enabled``); fail-open — an unprofiled
+        target contributes no spans, so nothing is ever wrongly excluded.
+        """
+        try:
+            from optimization_flags import get_optimization_flags
+            flags = get_optimization_flags()
+            if not flags.enabled("profiling_filter.enabled"):
+                return []
+            from code_hash import stable_code_hash
+            key = stable_code_hash(code)
+            cached = cls._AMDHAL_SPANS_CACHE.get(key)
+            if cached is not None:
+                return list(cached)
+            from hotspot_profiler import AmdahlHeadroomFilter
+            f = AmdahlHeadroomFilter(
+                min_cpu_pct=float(flags.get("profiling_filter.min_cpu_pct", 0.5)),
+                profile_seconds=float(flags.get("profiling_filter.profile_seconds", 10.0)),
+            )
+            prof = f.profile(code)
+            spans: List[Tuple[int, int]] = []
+            if prof.profiled:
+                for name in f.excluded():
+                    s = prof.functions.get(name)
+                    if s is not None and s.line_start:
+                        spans.append((s.line_start, s.line_end or s.line_start))
+            cls._AMDHAL_SPANS_CACHE[key] = tuple(spans)
+            return spans
+        except Exception:
+            return []
 
     def build_mutation_prompt(
         self,

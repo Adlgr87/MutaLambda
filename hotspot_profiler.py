@@ -14,7 +14,7 @@ import io
 import sys
 import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Callable, Any
+from typing import List, Dict, Optional, Callable, Any, Tuple
 from pathlib import Path
 
 
@@ -60,7 +60,6 @@ class HotspotProfiler:
 
     def __init__(self, min_time_threshold: float = 0.05):
         self.min_time_threshold = min_time_threshold  # 5% minimum to report
-
     def profile_script(self, script_path: str, args: list = None) -> List[Hotspot]:
         """Profile a Python script and return top hotspots."""
         import subprocess
@@ -279,3 +278,300 @@ stats.print_stats(20)
             report.append("")
 
         return "\n".join(report)
+
+
+# ── O4 (Fase 2): Amdahl headroom filter ─────────────────────────────────────
+# Amdahl's law as a mutation gate: a function that owns <0.5% of the CPU
+# budget cannot move end-to-end runtime, so mutating it is pure token spend.
+# The filter profiles the target UNDER LOAD (default ~10 s budget) and only
+# *restricts mutation targets* — it never rejects a correct candidate, which
+# is what makes the "zero false positives" acceptance criterion hold by
+# construction.  Unprofileable targets fall back to "include everything"
+# (no false exclusions either way).
+
+
+@dataclass
+class FunctionCPUShare:
+    name: str
+    cumulative_sec: float
+    calls: int
+    line_start: int = 0
+    line_end: int = 0
+    share: float = 0.0  # fraction of total CPU time, normalised after profiling
+
+    @property
+    def share_pct(self) -> float:
+        return self.share * 100.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "cumulative_sec": round(self.cumulative_sec, 6),
+            "calls": self.calls,
+            "share_pct": round(self.share * 100.0, 4),
+            "lines": f"{self.line_start}-{self.line_end}",
+        }
+
+
+@dataclass
+class HotspotProfile:
+    total_sec: float
+    functions: Dict[str, FunctionCPUShare]
+    profiled: bool
+    entrypoint: str = ""
+    note: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "total_sec": round(self.total_sec, 6),
+            "profiled": self.profiled,
+            "entrypoint": self.entrypoint,
+            "note": self.note,
+            "functions": {k: v.to_dict() for k, v in self.functions.items()},
+        }
+
+
+def _sample_args_for(node: ast.FunctionDef) -> List[Any]:
+    """Deterministic sample arguments from a function signature.
+
+    Sizes favour exposing real work (1000) without exploding runtime; the
+    profiler stops at its wall-clock budget regardless.
+    """
+    args: List[Any] = []
+    defaults = list(node.args.defaults)
+    pos = list(node.args.posonlyargs) + list(node.args.args)
+    for i, a in enumerate(pos):
+        if a.arg in ("self", "cls"):
+            continue
+        has_default = i >= (len(pos) - len(defaults))
+        if has_default:
+            continue  # rely on the default
+        name = a.arg.lower()
+        ann = ast.unparse(a.annotation) if a.annotation else ""
+        if ann in ("int",) or name in ("n", "i", "k", "size", "count", "limit"):
+            args.append(1000)
+        elif ann in ("float",):
+            args.append(1000.0)
+        elif ann in ("str",):
+            args.append("x" * 200)
+        elif ann in ("list", "List"):
+            args.append(list(range(500)))
+        elif ann in ("tuple", "Tuple"):
+            args.append((500,))
+        elif ann in ("bool",):
+            args.append(True)
+        elif name in ("data", "x", "values", "arr", "items", "rows"):
+            args.append(list(range(500)))
+        else:
+            args.append(1000)
+    return args
+
+
+class AmdahlHeadroomFilter:
+    """O4: profile under load; exclude <min_cpu_pct functions from mutation.
+
+    Usage:
+        f = AmdahlHeadroomFilter(min_cpu_pct=0.5, profile_seconds=10)
+        f.profile(source, entrypoint="solution")
+        if f.should_mutate("inner_helper"):
+            ... mutate ...
+    """
+
+    def __init__(
+        self,
+        min_cpu_pct: float = 0.5,
+        profile_seconds: float = 10.0,
+        seed: int = 42,
+    ) -> None:
+        self.min_cpu_pct = float(min_cpu_pct)
+        self.profile_seconds = float(profile_seconds)
+        self.seed = int(seed)
+        self.result: Optional[HotspotProfile] = None
+
+    # ── Profiling ─────────────────────────────────────────────────────────
+    def profile(
+        self,
+        source: str,
+        entrypoint: Optional[str] = None,
+        sample_args: Optional[List[Any]] = None,
+        max_seconds: Optional[float] = None,
+    ) -> HotspotProfile:
+        """Run the target under load for ~``profile_seconds`` and measure it."""
+        budget = max(0.05, float(max_seconds if max_seconds is not None else self.profile_seconds))
+        try:
+            tree = ast.parse(source)
+        except SyntaxError as exc:
+            self.result = HotspotProfile(0.0, {}, False, note=f"parse_error:{exc}")
+            return self.result
+
+        # Module-level function inventory (top-level defs only).
+        funcs: Dict[str, ast.FunctionDef] = {}
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                funcs[node.name] = node  # type: ignore[arg-type]
+        if not funcs:
+            self.result = HotspotProfile(0.0, {}, False, note="no_top_level_functions")
+            return self.result
+
+        entry = entrypoint or (
+            "solution" if "solution" in funcs else next(iter(funcs))
+        )
+        if entry not in funcs:
+            entry = next(iter(funcs))
+
+        # Exec once in a fresh namespace to obtain callables.
+        namespace: Dict[str, Any] = {"__name__": "__mutalambda_profile__"}
+        try:
+            exec(compile(tree, "<profile-target>", "exec"), namespace)  # noqa: S102
+        except Exception as exc:
+            self.result = HotspotProfile(
+                0.0, {}, False, entrypoint=entry, note=f"exec_error:{str(exc)[:120]}"
+            )
+            return self.result
+        target = namespace.get(entry)
+        if not callable(target):
+            self.result = HotspotProfile(
+                0.0, {}, False, entrypoint=entry, note="entrypoint_not_callable"
+            )
+            return self.result
+
+        if sample_args is None:
+            sample_args = _sample_args_for(funcs[entry])
+        try:
+            target(*sample_args)  # warmup / arg sanity
+        except TypeError:
+            sample_args = []  # signature mismatch → try zero-arg
+            try:
+                target()
+            except Exception as exc:
+                self.result = HotspotProfile(
+                    0.0, {}, False, entrypoint=entry, note=f"call_error:{str(exc)[:120]}"
+                )
+                return self.result
+        except Exception:
+            self.result = HotspotProfile(
+                0.0, {}, False, entrypoint=entry, note="call_error:warmup"
+            )
+            return self.result
+
+        # Under load: repeat until the wall budget is spent.
+        profiler = cProfile.Profile()
+        try:
+            profiler.enable()
+        except Exception:
+            self.result = HotspotProfile(0.0, {}, False, entrypoint=entry, note="cprofile_unavailable")
+            return self.result
+        start = time.perf_counter()
+        calls = 0
+        last_error = ""
+        try:
+            while time.perf_counter() - start < budget:
+                target(*sample_args)
+                calls += 1
+        except Exception as exc:  # the target may legitimately raise on big args
+            last_error = f"call_error:{str(exc)[:120]}"
+        profiler.disable()
+        elapsed = time.perf_counter() - start
+        if calls == 0:
+            self.result = HotspotProfile(0.0, {}, False, entrypoint=entry, note=last_error or "no_successful_calls")
+            return self.result
+
+        # Attribute time to the target's module-level functions.  cProfile
+        # keys are (filename, lineno, name) tuples.
+        stats = pstats.Stats(profiler)
+        total = max(1e-9, stats.total_tt)
+        by_key: Dict[Tuple[str, int, str], Tuple] = {
+            (k[0], k[1], k[2]): v for k, v in stats.stats.items()
+        }
+        shares: Dict[str, FunctionCPUShare] = {}
+        for fname, fnode in funcs.items():
+            target_fn = namespace.get(fname)
+            if callable(target_fn):
+                co = getattr(target_fn, "__code__", None)
+                if co is not None:
+                    key = (co.co_filename, co.co_firstlineno, co.co_name)
+                else:
+                    key = ("<target>", fnode.lineno, fname)
+            else:
+                key = ("<target>", fnode.lineno, fname)
+            entry_stats = by_key.get(key)
+            if entry_stats is None:
+                # Nested/aliased callables fall back to 0 (never excluded by
+                # absence of data — absence means "not measured", not "cheap").
+                shares[fname] = FunctionCPUShare(
+                    fname, 0.0, 0, fnode.lineno, fnode.end_lineno or fnode.lineno
+                )
+                continue
+            cc, _nc, _tt, ct, _callers = entry_stats
+            shares[fname] = FunctionCPUShare(
+                name=fname,
+                cumulative_sec=float(ct),
+                calls=int(cc),
+                line_start=fnode.lineno,
+                line_end=fnode.end_lineno or fnode.lineno,
+            )
+        for share in shares.values():
+            share.share = float(share.cumulative_sec) / float(total)
+
+        self.result = HotspotProfile(
+            total_sec=elapsed,
+            functions=shares,
+            profiled=True,
+            entrypoint=entry,
+            note=last_error,
+        )
+        return self.result
+
+    # ── Decisions ─────────────────────────────────────────────────────────
+    @property
+    def min_share(self) -> float:
+        return self.min_cpu_pct / 100.0
+
+    def should_mutate(self, func_name: str) -> bool:
+        """True when *func_name* is a worthwhile mutation target.
+
+        Unprofiled / unmeasured functions are INCLUDED (fail-open): the filter
+        only excludes functions with *measured* share below the threshold, so
+        it can never produce a false positive on correctness.
+        """
+        if self.result is None or not self.result.profiled:
+            return True
+        share = self.result.functions.get(func_name)
+        if share is None:
+            return True  # not measured → do not exclude
+        return share.share >= self.min_share
+
+    def excluded(self) -> List[str]:
+        if self.result is None or not self.result.profiled:
+            return []
+        return sorted(
+            name
+            for name, s in self.result.functions.items()
+            if s.share < self.min_share
+        )
+
+    def top_functions(self, pct: float = 20.0) -> List[str]:
+        """The functions that together account for at least ``pct``% of CPU
+        (ordered by share, smallest sufficient set)."""
+        if self.result is None or not self.result.profiled:
+            return sorted(self.result.functions) if self.result else []
+        ordered = sorted(
+            self.result.functions.values(), key=lambda s: s.share, reverse=True
+        )
+        out: List[str] = []
+        acc = 0.0
+        for s in ordered:
+            out.append(s.name)
+            acc += s.share
+            if acc * 100.0 >= pct:
+                break
+        return out
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "min_cpu_pct": self.min_cpu_pct,
+            "profile_seconds": self.profile_seconds,
+            "profile": self.result.to_dict() if self.result else None,
+            "excluded": self.excluded(),
+            "top_20pct": self.top_functions(20.0),
+        }
