@@ -118,7 +118,7 @@ class CppEmitter:
 
         if isinstance(node, For):
             var = " ".join(self._emit_node(node.var, indent))
-            iterable = " ".join(self._emit_node(node.iter, indent))
+            iterable = " ".join(self._emit_node(node.iterable, indent))  # BUGFIX: For.iterable
             lines = [f"{indent_str}for (int {var} : {iterable}) {{"]
             for n in node.body:
                 lines.extend(self._emit_node(n, indent + 1))

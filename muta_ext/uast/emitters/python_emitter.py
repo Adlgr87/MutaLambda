@@ -36,6 +36,18 @@ class PythonEmitter:
 
     language = "python"
 
+    @staticmethod
+    def _join_expr(parts: list) -> str:
+        """Join emitted expression fragments without leaking statement indent.
+
+        ``Opaque`` fragments keep the leading indentation that belongs to the
+        surrounding statement; when they are used *inside* an expression
+        (``if <cond>:``, ``for x in <it>:`` ...) that indentation is noise.
+        ``" ".join`` already flattens multi-line fragments, so stripping each
+        part here only removes spurious leading whitespace.
+        """
+        return " ".join(part.strip() for part in parts)
+
     def can_emit(self, uast: CoreUAST) -> bool:
         """Check if UAST is for Python language."""
         return uast.language == "python"
@@ -58,25 +70,27 @@ class PythonEmitter:
         if isinstance(node, Identifier):
             return [node.name]
         if isinstance(node, BinaryOp):
-            left = " ".join(self._emit_node(node.left, indent))
-            right = " ".join(self._emit_node(node.right, indent))
+            left = self._join_expr(self._emit_node(node.left, indent))
+            right = self._join_expr(self._emit_node(node.right, indent))
             return [f"{left} {node.op} {right}"]
         if isinstance(node, UnaryOp):
-            operand = " ".join(self._emit_node(node.operand, indent))
+            operand = self._join_expr(self._emit_node(node.operand, indent))
             return [f"{node.op}{operand}"]
         if isinstance(node, Call):
-            func = " ".join(self._emit_node(node.func, indent))
-            args = ", ".join(" ".join(self._emit_node(a, indent)) for a in node.args)
+            func = self._join_expr(self._emit_node(node.func, indent))
+            args = ", ".join(self._join_expr(self._emit_node(a, indent)) for a in node.args)
             return [f"{func}({args})"]
         if isinstance(node, Assign):
             if isinstance(node.target, list):
-                targets = ", ".join(" ".join(self._emit_node(t, indent)) for t in node.target)
+                targets = ", ".join(
+                    self._join_expr(self._emit_node(t, indent)) for t in node.target
+                )
             else:
-                targets = " ".join(self._emit_node(node.target, indent))
-            value = " ".join(self._emit_node(node.value, indent))
+                targets = self._join_expr(self._emit_node(node.target, indent))
+            value = self._join_expr(self._emit_node(node.value, indent))
             return [f"{indent_str}{targets} = {value}"]
         if isinstance(node, If):
-            condition = " ".join(self._emit_node(node.condition, indent))
+            condition = self._join_expr(self._emit_node(node.condition, indent))
             lines = [f"{indent_str}if {condition}:"]
             for n in node.then_body:
                 lines.extend(self._emit_node(n, indent + 1))
@@ -86,25 +100,27 @@ class PythonEmitter:
                     lines.extend(self._emit_node(n, indent + 1))
             return lines
         if isinstance(node, For):
-            var = " ".join(self._emit_node(node.var, indent))
-            iterable = " ".join(self._emit_node(node.iter, indent))
+            var = self._join_expr(self._emit_node(node.var, indent))
+            iterable = self._join_expr(
+                self._emit_node(node.iterable, indent)
+            )  # BUGFIX: For.iterable
             lines = [f"{indent_str}for {var} in {iterable}:"]
             for n in node.body:
                 lines.extend(self._emit_node(n, indent + 1))
             return lines
         if isinstance(node, While):
-            condition = " ".join(self._emit_node(node.condition, indent))
+            condition = self._join_expr(self._emit_node(node.condition, indent))
             lines = [f"{indent_str}while {condition}:"]
             for n in node.body:
                 lines.extend(self._emit_node(n, indent + 1))
             return lines
         if isinstance(node, Return):
             if node.value:
-                val = " ".join(self._emit_node(node.value, indent))
+                val = self._join_expr(self._emit_node(node.value, indent))
                 return [f"{indent_str}return {val}"]
             return [f"{indent_str}return"]
         if isinstance(node, Function):
-            params = ", ".join(" ".join(self._emit_node(p, indent)) for p in node.params)
+            params = ", ".join(self._join_expr(self._emit_node(p, indent)) for p in node.params)
             lines = [f"{indent_str}def {node.name.name}({params}):"]
             for n in node.body:
                 lines.extend(self._emit_node(n, indent + 1))
@@ -118,7 +134,9 @@ class PythonEmitter:
                 lines.extend(self._emit_node(n, indent + 1))
             for clause in node.except_clauses:
                 if clause.exception_type:
-                    exc_type = " ".join(self._emit_node(clause.exception_type, indent))
+                    exc_type = self._join_expr(
+                        self._emit_node(clause.exception_type, indent)
+                    )
                     if clause.binding:
                         lines.append(f"{indent_str}except {exc_type} as {clause.binding}:")
                     else:
@@ -136,7 +154,7 @@ class PythonEmitter:
             lines = [f"{indent_str}class {node.name}:"]
             for field in node.fields:
                 if field.default:
-                    default_val = " ".join(self._emit_node(field.default, indent))
+                    default_val = self._join_expr(self._emit_node(field.default, indent))
                     lines.append(f"{indent_str}    {field.name} = {default_val}")
             for method in node.methods:
                 lines.extend(self._emit_function(method, indent + 1))
@@ -175,16 +193,16 @@ class PythonEmitter:
                 ]
             return []
         if isinstance(node, Match):
-            subject = " ".join(self._emit_node(node.subject, indent))
+            subject = self._join_expr(self._emit_node(node.subject, indent))
             lines = [f"{indent_str}match {subject}:"]
             for arm in node.arms:
-                pattern = " ".join(self._emit_node(arm.pattern, indent))
+                pattern = self._join_expr(self._emit_node(arm.pattern, indent))
                 lines.append(f"{indent_str}    case {pattern}:")
                 for n in arm.body:
                     lines.extend(self._emit_node(n, indent + 2))
             return lines
         if isinstance(node, Reference):
-            target = " ".join(self._emit_node(node.target, indent))
+            target = self._join_expr(self._emit_node(node.target, indent))
             return [f"&mut {target}" if node.is_mutable else f"&{target}"]
         if isinstance(node, TypeAnnotation):
             return [node.type_name]
