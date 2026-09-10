@@ -39,6 +39,8 @@ _VALID_VALUES: Dict[str, list] = {
         "mistral",
     ],
     "llm.provider": ["openai"],
+    "uast.engine": ["legacy", "v2"],
+    "uast.shadow_mode": ["exact", "subset"],
 }
 
 _DEFAULTS: Dict[str, Any] = {
@@ -117,6 +119,14 @@ _DEFAULTS: Dict[str, Any] = {
     "uast.uast_timeout_sec": 30.0,
     "uast.cache_enabled": True,
     "uast.cache_dir": ".uast_cache",
+    # UAST v2 (muta_ext/uast2) — feature-flagged, legacy stays the default.
+    "uast.engine": "legacy",
+    "uast.shadow": False,
+    "uast.verify": False,
+    "uast.strict": False,
+    "uast.arena": False,
+    "uast.extended_dialect": False,
+    "uast.shadow_mode": "exact",
     # ── Scientific Extension ──────────────────────────────────────────
     "scientific.enabled": False,
     "scientific.validation.invariants": True,
@@ -312,6 +322,29 @@ def validate_config(  # noqa: C901
     uast_timeout = _get_nested(raw, "uast.uast_timeout_sec")
     if uast_timeout is not None and uast_timeout <= 0:
         errors.append("uast.uast_timeout_sec must be positive")
+
+    uast_engine = _get_nested(raw, "uast.engine")
+    if uast_engine is not None and uast_engine not in ("legacy", "v2"):
+        errors.append("uast.engine must be 'legacy' or 'v2'")
+
+    uast_shadow_mode = _get_nested(raw, "uast.shadow_mode")
+    if uast_shadow_mode is not None and uast_shadow_mode not in ("exact", "subset"):
+        errors.append("uast.shadow_mode must be 'exact' or 'subset'")
+
+    languages = _get_nested(raw, "uast.supported_languages")
+    if languages is not None and not isinstance(languages, list):
+        errors.append("uast.supported_languages must be a list")
+
+    for boolean_key in (
+        "uast.shadow",
+        "uast.verify",
+        "uast.strict",
+        "uast.arena",
+        "uast.extended_dialect",
+    ):
+        value = _get_nested(raw, boolean_key)
+        if value is not None and not isinstance(value, bool):
+            errors.append(f"{boolean_key} must be a boolean")
 
     return errors
 

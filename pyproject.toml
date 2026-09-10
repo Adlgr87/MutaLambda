@@ -54,6 +54,10 @@ scientific = [
 ]
 dev = [
   "pytest>=7,<10",
+  # The suite uses ``@pytest.mark.flaky(reruns=...)`` for the timing-sensitive
+  # deep-evolution tests; without this plugin the marker is a no-op and those
+  # tests fail under load.
+  "pytest-rerunfailures>=14,<17",
   "hypothesis>=6,<7",
   "ruff>=0.6,<1",
   "mypy>=1,<2",
@@ -116,7 +120,28 @@ py-modules = [
   "logging_setup",
   "constants",
 ]
-packages = ["cli", "muta_ext", "muta_ext.evaluation", "muta_ext.lineage", "muta_ext.mutation", "muta_ext.config", "muta_ext.diagnostics", "lsp", "muta_lambda"]
+packages = [
+  "cli",
+  "lsp",
+  "muta_lambda",
+  "muta_ext",
+  "muta_ext.config",
+  "muta_ext.diagnostics",
+  "muta_ext.evaluation",
+  "muta_ext.lineage",
+  "muta_ext.mutation",
+  "muta_ext.scientific",
+  "muta_ext.uast",
+  "muta_ext.uast.adapters",
+  "muta_ext.uast.emitter",
+  "muta_ext.uast.emitters",
+  "muta_ext.uast.handlers",
+  "muta_ext.uast.mutators",
+  "muta_ext.uast.mutators.generated",
+  "muta_ext.uast.mutators.scientific",
+  "muta_ext.uast.validators",
+  "muta_ext.uast2",
+]
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.md", "*.json"]

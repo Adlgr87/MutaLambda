@@ -51,8 +51,14 @@ class MutaLambdaCLI:
         tests: Optional[str] = None,
         task: Optional[str] = None,
         allow_untested: bool = False,
+        uast_overrides: Optional[Dict[str, Any]] = None,
     ) -> bool:
-        """Run a complete evolution process"""
+        """Run a complete evolution process.
+
+        ``uast_overrides`` (UAST v2 flags from the CLI) are merged into the
+        ``uast`` config section; passing ``None`` (the default) leaves behaviour
+        untouched.
+        """
 
         self._allow_untested = allow_untested
 
@@ -63,6 +69,11 @@ class MutaLambdaCLI:
                 return False
         else:
             self.current_config = self.config_manager.get_default()
+
+        if uast_overrides:
+            section = self.current_config.setdefault("uast", {}) or {}
+            section.update({key: value for key, value in uast_overrides.items() if value is not None})
+            self.current_config["uast"] = section
 
         if not self._prepare_target(source=source, tests=tests, task=task):
             return False

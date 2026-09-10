@@ -66,8 +66,37 @@ def cli(ctx):
 @click.option(
     "--allow-untested", is_flag=True, help="Permitir corridas sin tests (solo desarrollo)"
 )
+@click.option(
+    "--uast-engine",
+    type=click.Choice(["legacy", "v2"]),
+    default=None,
+    help="Motor UAST: legacy (por defecto) o v2 (mutable/arena)",
+)
+@click.option("--uast-shadow", is_flag=True, default=None, help="Parsear con ambos motores y comparar")
+@click.option("--uast-verify", is_flag=True, default=None, help="Verificar el IR tras cada nanopaso")
+@click.option("--uast-arena", is_flag=True, default=None, help="Asignar slab arena a los nodos v2")
+@click.option(
+    "--uast-extended", is_flag=True, default=None, help="Dialecto extendido v2 (comparaciones reales)"
+)
+@click.option("--uast-strict", is_flag=True, default=None, help="Pipeline UAST v2 estricto (falla ante IR inválido)")
 @click.pass_context
-def run(ctx, config, generations, animation, verbose, source, tests, task, allow_untested):
+def run(
+    ctx,
+    config,
+    generations,
+    animation,
+    verbose,
+    source,
+    tests,
+    task,
+    allow_untested,
+    uast_engine,
+    uast_shadow,
+    uast_verify,
+    uast_arena,
+    uast_extended,
+    uast_strict,
+):
     """🚀 Ejecutar corrida evolutiva completa."""
     cli_instance = ctx.obj["cli"]
     success = cli_instance.run_evolution(
@@ -79,6 +108,14 @@ def run(ctx, config, generations, animation, verbose, source, tests, task, allow
         tests=tests,
         task=task,
         allow_untested=allow_untested,
+        uast_overrides={
+            "engine": uast_engine,
+            "shadow": uast_shadow,
+            "verify": uast_verify,
+            "arena": uast_arena,
+            "extended_dialect": uast_extended,
+            "strict": uast_strict,
+        },
     )
     sys.exit(0 if success else 1)
 
@@ -266,6 +303,193 @@ def generate_mutator_cmd(ctx, instruction, lang, name, dry_run):
         dry_run=dry_run,
     )
     sys.exit(0 if success else 1)
+
+
+# ============================================================================
+# UAST v2 (shadow check / diagnostics)
+# ============================================================================
+@cli.group()
+def uast2():
+    """🧬 UAST v2 — verificación en modo shadow y diagnóstico del motor."""
+
+
+@uast2.command("check")
+@click.argument("paths", nargs=-1, type=click.Path(exists=True))
+@click.option("--language", "-l", type=str, default="python", help="Lenguaje a parsear")
+@click.option(
+    "--mode",
+    type=click.Choice(["exact", "subset"]),
+    default="exact",
+    help="exact = paridad legacy/v2; subset = dialecto extendido",
+)
+@click.option("--extended", is_flag=True, help="Usa el dialecto extendido (comparaciones reales)")
+@click.option("--json-output", "--json", "json_output", is_flag=True, help="Salida JSON")
+def uast2_check(paths, language, mode, extended, json_output):
+    """🔍 Comparar legacy vs v2 sobre ficheros o directorios (nunca falla)."""
+    from pathlib import Path as _Path
+
+    try:
+        from muta_ext.uast2.shadow import run_shadow_suite
+        from muta_ext.uast2.metrics import snapshot
+        from muta_ext.uast2.engine import resolve_engine_config
+    except ImportError as exc:  # pragma: no cover - optional layer
+        console.print(f"[red]UAST v2 no disponible: {exc}[/red]")
+        sys.exit(1)
+
+    extensions = {
+        "python": ("*.py",),
+        "rust": ("*.rs",),
+        "cpp": ("*.cpp", "*.cc", "*.hpp", "*.h"),
+        "go": ("*.go",),
+    }.get(language, ("*.py",))
+
+    targets = []
+    for raw_path in paths or ["examples"]:
+        path = _Path(raw_path)
+        if path.is_dir():
+            for extension in extensions:
+                targets.extend(sorted(path.rglob(extension)))
+        else:
+            targets.append(path)
+    if not targets:
+        console.print("[yellow]No se encontraron ficheros para verificar.[/yellow]")
+        sys.exit(1)
+
+    report = run_shadow_suite(targets, language=language, mode=mode, extended=extended)
+    if json_output:
+        console.print_json(data={**report, "metrics": snapshot()})
+    else:
+        console.print(
+            f"[bold]UAST v2 shadow[/bold] engine={resolve_engine_config().engine} "
+            f"mode={mode} files={report['files']}"
+        )
+        for entry in report["results"]:
+            if entry.get("error"):
+                console.print(f"  [red]ERR[/red] {entry['path']}: {entry['error']}")
+            else:
+                mark = "[green]OK[/green]" if entry["equal"] else "[red]DIFF[/red]"
+                console.print(
+                    f"  {mark} {entry['path']} "
+                    f"(legacy={entry['legacy_nodes']} v2={entry['v2_nodes']}"
+                    + (f", {entry['differences'][0]}" if entry["differences"] else "")
+                    + ")"
+                )
+        color = "green" if report["ok"] else "red"
+        console.print(
+            f"[{color}]mismatches={report['mismatches']} errors={report['errors']}[/{color}]"
+        )
+    sys.exit(0 if report["ok"] else 2)
+
+
+@uast2.command("parse")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--language", "-l", type=str, default="python", help="Lenguaje a parsear")
+@click.option("--extended", is_flag=True, help="Usa el dialecto extendido (comparaciones reales)")
+@click.option("--json-output", "--json", "json_output", is_flag=True, help="Salida JSON")
+def uast2_parse(path, language, extended, json_output):
+    """🌳 Parsear un fichero con el motor v2 (árbol + canonical_hash)."""
+    from pathlib import Path as _Path
+
+    try:
+        from muta_ext.uast2.adapters import parse_to_uast
+        from muta_ext.uast2.visitor import dump
+    except ImportError as exc:  # pragma: no cover - optional layer
+        console.print(f"[red]UAST v2 no disponible: {exc}[/red]")
+        sys.exit(1)
+
+    source = _Path(path).read_text(encoding="utf-8")
+    try:
+        document = parse_to_uast(source, language=language, extended=extended)
+    except Exception as exc:  # noqa: BLE001 - surfaced to the user
+        console.print(f"[red]Error de parseo en {path}: {exc}[/red]")
+        sys.exit(1)
+
+    if json_output:
+        console.print_json(
+            data={
+                "path": str(path),
+                "language": language,
+                "extended": bool(extended),
+                "nodes": document.node_count(),
+                "canonical_hash": document.canonical_hash(),
+                "tree": document.to_dict(),
+            }
+        )
+    else:
+        console.print(dump(document))
+        console.print(
+            f"[dim]nodes={document.node_count()} "
+            f"canonical_hash={document.canonical_hash()}[/dim]"
+        )
+    sys.exit(0)
+
+
+@uast2.command("mutate")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--language", "-l", type=str, default="python", help="Lenguaje a mutar")
+@click.option("--seed", type=int, default=42, help="Semilla de mutación (reproducible)")
+@click.option("--extended", is_flag=True, help="Usa el dialecto extendido")
+@click.option("--strict", is_flag=True, help="Aborta si el IR queda inválido (no hace rollback)")
+@click.option("--no-verify", is_flag=True, help="Desactiva los verificadores (solo desarrollo)")
+@click.option("--output", "-o", type=click.Path(dir_okay=False), default=None, help="Escribir el código mutado")
+@click.option("--json-output", "--json", "json_output", is_flag=True, help="Salida JSON")
+def uast2_mutate(path, language, seed, extended, strict, no_verify, output, json_output):
+    """🧬 Aplicar los nanopasses v2 in-situ y emitir el código mutado."""
+    from pathlib import Path as _Path
+
+    try:
+        from muta_ext.uast2.adapters import parse_to_uast
+        from muta_ext.uast2.engine import mutate as mutate_document
+    except ImportError as exc:  # pragma: no cover - optional layer
+        console.print(f"[red]UAST v2 no disponible: {exc}[/red]")
+        sys.exit(1)
+
+    source = _Path(path).read_text(encoding="utf-8")
+    document = parse_to_uast(source, language=language, extended=extended)
+    before = document.canonical_hash()
+    result = mutate_document(
+        document,
+        seed=seed,
+        strict=strict,
+        verify=not no_verify,
+        original_source=source,
+    )
+    mutated = document.emit() if result.ok else source
+
+    if output:
+        _Path(output).write_text(mutated, encoding="utf-8")
+
+    if json_output:
+        console.print_json(
+            data={
+                "path": str(path),
+                "ok": result.ok,
+                "rolled_back": list(result.rolled_back),
+                "mutations": dict(result.mutations),
+                "canonical_hash_before": before,
+                "canonical_hash_after": document.canonical_hash(),
+                "duration_sec": result.duration_sec,
+                "diagnostics": [
+                    {"severity": diag.severity, "pass": diag.pass_name, "message": diag.message}
+                    for diag in result.errors
+                ],
+                "mutated_source": mutated,
+            }
+        )
+    elif output:
+        console.print(
+            f"[green]✓[/green] {output} — mutations={sum(result.mutations.values())} "
+            f"rolled_back={list(result.rolled_back)}"
+        )
+    else:
+        # The mutated program goes to stdout so it can be piped; the summary
+        # goes to stderr so it never contaminates the code.
+        click.echo(mutated)
+        Console(stderr=True).print(
+            f"[dim]ok={result.ok} mutations={sum(result.mutations.values())} "
+            f"rolled_back={list(result.rolled_back)}[/dim]"
+        )
+    sys.exit(0 if result.ok else 2)
 
 
 # ============================================================================

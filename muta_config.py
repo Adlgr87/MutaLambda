@@ -165,6 +165,13 @@ class UASTSection(BaseModel):
 
     UAST provides language-agnostic code analysis and mutation.
     Disabled by default for safe opt-in adoption.
+
+    ``engine`` selects the AST implementation and defaults to the frozen
+    ``legacy`` engine, so existing runs are bit-for-bit unchanged.  ``v2``
+    enables the mutable/arena engine in ``muta_ext.uast2``; ``shadow`` parses
+    with both engines, compares the structure and only logs/metrics any
+    difference (it never fails a run) — the migration gate described in the UAST
+    v2 playbook.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -175,6 +182,14 @@ class UASTSection(BaseModel):
     uast_timeout_sec: float = Field(30.0, gt=0)
     cache_enabled: bool = True
     cache_dir: str = ".uast_cache"
+    # ── UAST v2 feature flag ──────────────────────────────────────────────
+    engine: Literal["legacy", "v2"] = "legacy"
+    shadow: bool = False
+    verify: bool = False
+    strict: bool = False
+    arena: bool = False
+    extended_dialect: bool = False
+    shadow_mode: Literal["exact", "subset"] = "exact"
 
 
 class ReproducibilitySection(BaseModel):
@@ -320,6 +335,12 @@ class MutaLambdaConfig(BaseModel):
             uast_timeout_sec=self.uast.uast_timeout_sec,
             uast_cache_enabled=self.uast.cache_enabled,
             uast_cache_dir=self.uast.cache_dir,
+            uast_engine=self.uast.engine,
+            uast_shadow=self.uast.shadow,
+            uast_verify=self.uast.verify,
+            uast_strict=self.uast.strict,
+            uast_arena=self.uast.arena,
+            uast_extended_dialect=self.uast.extended_dialect,
             allow_expression_eval=sand.allow_expression_eval,
             enforce_ast_scan=sand.enforce_ast_scan,
             enforce_api_fingerprint=wf.enforce_api_fingerprint or tgt.enforce_api_fingerprint,
