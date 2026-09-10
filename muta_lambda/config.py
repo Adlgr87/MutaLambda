@@ -93,6 +93,14 @@ class EvolveConfig:
     uast_timeout_sec: float = 30.0
     uast_cache_enabled: bool = True
     uast_cache_dir: str = ".uast_cache"
+    # UAST v2 engine selection (see muta_ext/uast2). "legacy" keeps the frozen
+    # engine; "v2" opts into the mutable/arena engine; shadow compares both.
+    uast_engine: str = "legacy"
+    uast_shadow: bool = False
+    uast_verify: bool = False
+    uast_strict: bool = False
+    uast_arena: bool = False
+    uast_extended_dialect: bool = False
     runner_mode: str = "subprocess"  # subprocess | container | microvm
     allow_expression_eval: bool = False
     enforce_ast_scan: bool = True
@@ -259,6 +267,12 @@ class EvolveConfig:
             uast_timeout_sec=cfg.get("uast", {}).get("uast_timeout_sec", 30.0),
             uast_cache_enabled=cfg.get("uast", {}).get("cache_enabled", True),
             uast_cache_dir=cfg.get("uast", {}).get("cache_dir", ".uast_cache"),
+            uast_engine=cfg.get("uast", {}).get("engine", "legacy"),
+            uast_shadow=cfg.get("uast", {}).get("shadow", False),
+            uast_verify=cfg.get("uast", {}).get("verify", False),
+            uast_strict=cfg.get("uast", {}).get("strict", False),
+            uast_arena=cfg.get("uast", {}).get("arena", False),
+            uast_extended_dialect=cfg.get("uast", {}).get("extended_dialect", False),
         )
 
         config.sandbox_timeout = sand.get("timeout_sec", 10.0)
