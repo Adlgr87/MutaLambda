@@ -14,8 +14,8 @@ from workflow_protocol import (
     artifact_ref,
 )
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _pass_stage(name: str, message: str = "") -> StageResult:
     return make_stage_result(name, PASS, message)
@@ -44,6 +44,7 @@ def _stages_runner(*stage_results: StageResult):
 
 
 # ── Tests de gates secuenciales ─────────────────────────────────────────────
+
 
 @pytest.mark.e2e
 class TestSequentialGates:
@@ -131,10 +132,7 @@ class TestSequentialGates:
     def test_stage_order_preserved(self):
         """El orden de las etapas en el trace refleja el orden de ejecución."""
         order = ["auth", "schema", "sanitize", "validate"]
-        stages = [
-            ProtocolStage(name, _stages_runner(_pass_stage(name)))
-            for name in order
-        ]
+        stages = [ProtocolStage(name, _stages_runner(_pass_stage(name))) for name in order]
         workflow = ProtocolWorkflow(stages)
         trace = ProtocolTrace(run_id="run-6", subject_id="subj-6")
 
@@ -144,6 +142,7 @@ class TestSequentialGates:
 
 
 # ── Tests de serialización de traces ─────────────────────────────────────────
+
 
 @pytest.mark.e2e
 class TestTraceSerialization:
@@ -201,9 +200,7 @@ class TestTraceSerialization:
     def test_duration_computed(self):
         """La duración de cada stage se computa correctamente."""
         started = time.perf_counter()
-        stage = make_stage_result(
-            "timing", PASS, "duration test", started_at=started
-        )
+        stage = make_stage_result("timing", PASS, "duration test", started_at=started)
         trace = ProtocolTrace(run_id="run-300", subject_id="subj-300")
         trace.add_stage(stage)
 
@@ -214,6 +211,7 @@ class TestTraceSerialization:
 
 
 # ── Tests de detección de seguridad ──────────────────────────────────────────
+
 
 @pytest.mark.e2e
 class TestSecurityFindings:
@@ -332,6 +330,7 @@ data = json.loads('{"x": 1}')
 
 # ── Tests de artifact_ref ────────────────────────────────────────────────────
 
+
 @pytest.mark.e2e
 class TestArtifactRef:
     """Validar referencia estable de artefactos."""
@@ -356,12 +355,14 @@ class TestArtifactRef:
 
 # ── Tests de integración de workflow completo ────────────────────────────────
 
+
 @pytest.mark.e2e
 class TestFullWorkflowIntegration:
     """Integración completa: workflow → trace → serialización."""
 
     def test_promote_pipeline(self):
         """Pipeline completo que termina en promote."""
+
         def ctx_scanner(ctx):
             return make_stage_result("scanner", PASS, "clean")
 
@@ -371,11 +372,13 @@ class TestFullWorkflowIntegration:
         def ctx_security(ctx):
             return make_stage_result("security", PASS, "no findings")
 
-        workflow = ProtocolWorkflow([
-            ProtocolStage("scanner", ctx_scanner),
-            ProtocolStage("linter", ctx_linter),
-            ProtocolStage("security", ctx_security),
-        ])
+        workflow = ProtocolWorkflow(
+            [
+                ProtocolStage("scanner", ctx_scanner),
+                ProtocolStage("linter", ctx_linter),
+                ProtocolStage("security", ctx_security),
+            ]
+        )
 
         trace = ProtocolTrace(run_id="full-1", subject_id="subject-A")
         success = workflow.execute({"code": "def f(): pass"}, trace)
@@ -389,6 +392,7 @@ class TestFullWorkflowIntegration:
 
     def test_reject_pipeline(self):
         """Pipeline completo que termina en reject por security."""
+
         def safe_scanner(ctx):
             return make_stage_result("scanner", PASS, "clean")
 
@@ -396,20 +400,18 @@ class TestFullWorkflowIntegration:
             code = ctx.get("code", "")
             findings = security_findings(code)
             if findings:
-                return make_stage_result(
-                    "security", FAIL, f"findings: {', '.join(findings)}"
-                )
+                return make_stage_result("security", FAIL, f"findings: {', '.join(findings)}")
             return make_stage_result("security", PASS, "clean")
 
-        workflow = ProtocolWorkflow([
-            ProtocolStage("scanner", safe_scanner),
-            ProtocolStage("security", failing_security),
-        ])
+        workflow = ProtocolWorkflow(
+            [
+                ProtocolStage("scanner", safe_scanner),
+                ProtocolStage("security", failing_security),
+            ]
+        )
 
         trace = ProtocolTrace(run_id="full-2", subject_id="subject-B")
-        success = workflow.execute(
-            {"code": "x = eval(user_input)"}, trace
-        )
+        success = workflow.execute({"code": "x = eval(user_input)"}, trace)
 
         assert success is False
         assert trace.decision == "reject"
@@ -418,16 +420,21 @@ class TestFullWorkflowIntegration:
 
     def test_workflow_with_metadata_propagation(self):
         """Los stages pueden passing metadata que persiste en el trace."""
+
         def metadata_stage(ctx):
             return make_stage_result(
-                "process", PASS, "done",
+                "process",
+                PASS,
+                "done",
                 metadata={"score": 0.9, "tags": ["a", "b"]},
                 artifacts={"hash": "abc123"},
             )
 
-        workflow = ProtocolWorkflow([
-            ProtocolStage("process", metadata_stage),
-        ])
+        workflow = ProtocolWorkflow(
+            [
+                ProtocolStage("process", metadata_stage),
+            ]
+        )
 
         trace = ProtocolTrace(run_id="full-3", subject_id="subject-C")
         workflow.execute({}, trace)

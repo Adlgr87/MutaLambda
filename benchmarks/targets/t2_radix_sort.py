@@ -1,4 +1,3 @@
-
 TARGET_NAME = "radix_sort"
 TIER = 2
 function_name = "radix_sort"
@@ -29,9 +28,14 @@ def _counting_sort_by_digit(arr, exp):
     return output
 """
 test_cases = [
-    {"function": "radix_sort", "args": [[170, 45, 75, 90, 802, 24, 2, 66]], "expected": [2, 24, 45, 66, 75, 90, 170, 802], "comparison": "equal"},
+    {
+        "function": "radix_sort",
+        "args": [[170, 45, 75, 90, 802, 24, 2, 66]],
+        "expected": [2, 24, 45, 66, 75, 90, 170, 802],
+        "comparison": "equal",
+    },
     {"function": "radix_sort", "args": [[]], "expected": [], "comparison": "equal"},
     {"function": "radix_sort", "args": [[5]], "expected": [5], "comparison": "equal"},
 ]
-invariants = ['out == sorted(x)']
+invariants = ["out == sorted(x)"]
 input_strategy = "st.lists(st.integers(min_value=0,max_value=9999),min_size=0,max_size=30)"

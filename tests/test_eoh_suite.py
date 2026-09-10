@@ -5,6 +5,7 @@ Validates that eoh_suite.run_comparison_with_mutalambda:
   - returns mean_fitness / speedup floats in [0, inf),
   - does not regress vs the greedy baseline.
 """
+
 import pytest
 from benchmarks.eoh_suite import run_comparison_with_mutalambda, EoHTask
 
@@ -12,15 +13,20 @@ from benchmarks.eoh_suite import run_comparison_with_mutalambda, EoHTask
 @pytest.fixture(scope="module")
 def small_tasks():
     return [
-        EoHTask("circle_packing_rectangle", "Pack N circles into minimum-area square",
-                n_dimensions=2, optimal_known=False, optimal_value=None),
+        EoHTask(
+            "circle_packing_rectangle",
+            "Pack N circles into minimum-area square",
+            n_dimensions=2,
+            optimal_known=False,
+            optimal_value=None,
+        ),
     ]
 
 
 def test_run_comparison_returns_scores(small_tasks):
     res = run_comparison_with_mutalambda(
         tasks=small_tasks,
-        n_generations=5,        # tiny for CI speed
+        n_generations=5,  # tiny for CI speed
         budget_secs=60,
     )
     assert "results" in res

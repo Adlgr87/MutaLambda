@@ -103,7 +103,9 @@ def test_early_stop_uses_combined_score(monkeypatch):
 
     seen_scores = []
     monkeypatch.setattr(agent, "_score_with_novelty", lambda ind: ind.score + 42.0)
-    monkeypatch.setattr(agent._early_stop, "update", lambda score: (seen_scores.append(score), False)[1])
+    monkeypatch.setattr(
+        agent._early_stop, "update", lambda score: (seen_scores.append(score), False)[1]
+    )
 
     best = agent.run(task="")
     assert seen_scores, "expected early-stop update to be called"

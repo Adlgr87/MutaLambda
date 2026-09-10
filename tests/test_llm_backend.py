@@ -151,6 +151,7 @@ def test_generation_failure_raises_llm_backend_error(monkeypatch):
 # Cost tracking tests
 # ---------------------------------------------------------------------------
 
+
 def test_estimate_tokens_approximate():
     # Heuristic: ~4 chars per token, minimum 1.
     assert _estimate_tokens("hello world") == max(1, len("hello world") // 4)
@@ -207,6 +208,7 @@ def test_max_cost_usd_raises_budget_exceeded(monkeypatch):
 # Batch mode tests
 # ---------------------------------------------------------------------------
 
+
 def test_generate_batch_sequential_for_unsupported_backend(monkeypatch):
     monkeypatch.setenv("MUTALAMBDA_OLLAMA_URL", "http://ollama.example/api/generate")
     session = FakeSession({"response": "ok"})
@@ -239,3 +241,56 @@ def test_generate_batch_circuit_open_raises(monkeypatch):
     llm._circuit_opened_at = 9999999999
     with pytest.raises(LLMCircuitOpen):
         llm.generate_batch(["p1", "p2"])
+
+
+# ── ML-014: privacy redaction & external-backend policy ─────────────────────
+
+
+def test_redact_prompt_strips_common_secrets():
+    from llm_backend import redact_prompt
+
+    prompt = (
+        "api_key=sk-1234567890abcdef1234\n"
+        "aws AKIAIOSFODNN7EXAMPLE\n"
+        "ghp_0123456789abcdefghijklmnop\n"
+        "-----BEGIN RSA PRIVATE KEY-----\nSECRETKEYMATERIAL\n-----END RSA PRIVATE KEY-----\n"
+        "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.secret.payload\n"
+    )
+    out = redact_prompt(prompt)
+    assert "sk-1234567890abcdef1234" not in out
+    assert "AKIAIOSFODNN7EXAMPLE" not in out
+    assert "ghp_0123456789abcdefghijklmnop" not in out
+    assert "SECRETKEYMATERIAL" not in out
+    assert "eyJhbGciOiJIUzI1NiJ9.secret.payload" not in out
+    assert "[REDACTED" in out
+
+
+def test_generate_redacts_prompt_before_request(monkeypatch):
+    session = FakeSession({"choices": [{"message": {"content": "ok"}}]})
+    monkeypatch.setattr(requests, "Session", lambda: session)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-key")
+    llm = LLMBackend(backend="openai", model="gpt-4o", privacy_redact_secrets=True)
+    llm.generate("secret=supersecretvalue123")
+    sent = session.calls[0]["json"]["messages"][0]["content"]
+    assert "supersecretvalue123" not in sent
+    assert "[REDACTED]" in sent
+
+
+def test_privacy_allow_external_false_blocks_external_backend(monkeypatch):
+    """ML-014: with privacy.allow_external_llm=false, no external backend is
+    ever initialized (and therefore no request can leave the host)."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-key")
+    sessions = []
+    monkeypatch.setattr(
+        requests, "Session", lambda: sessions.append(1) or FakeSession({"choices": []})
+    )
+
+    with pytest.raises(ValueError):
+        LLMBackend(backend="openai", model="gpt-4o", privacy_allow_external=False)
+
+    # No HTTP session was created — the policy rejected the backend at init.
+    assert sessions == []
+
+    # Local backend (ollama) remains allowed under the same policy.
+    llm = LLMBackend(backend="ollama", model="test", privacy_allow_external=False)
+    assert llm.backend == "ollama"

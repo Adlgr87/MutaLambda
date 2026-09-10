@@ -7,6 +7,7 @@ D4: 3-layer verification (delegated to benchmarks/verification.py).
 D5: raw.json + .diff per target in benchmarks/results/<target>/.
 D6: compares Original, MutaLambda, LLM-direct(ollama), LLM best-of-5, Numba, mypyc.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -35,6 +36,7 @@ from comparison import compare_values  # noqa: E402
 
 try:
     from numba import njit
+
     HAS_NUMBA = True
 except ImportError:
     HAS_NUMBA = False
@@ -67,6 +69,7 @@ def median_iqr(samples):
 def mann_whitney_p(a, b):
     """Mann-Whitney U p-value (non-parametric, two-sided)."""
     from scipy.stats import mannwhitneyu
+
     if len(a) < 2 or len(b) < 2:
         return 1.0
     try:
@@ -80,7 +83,8 @@ def cliffs_delta(a, b):
     """Cliff's delta effect size in [-1, 1]."""
     if not a or not b:
         return 0.0
-    a = np.asarray(a); b = np.asarray(b)
+    a = np.asarray(a)
+    b = np.asarray(b)
     more = np.sum(a[:, None] > b[None, :])
     less = np.sum(a[:, None] < b[None, :])
     return float((more - less) / (len(a) * len(b)))
@@ -135,13 +139,14 @@ def time_function_code(code, function_name, arg_factory, reps=REPS):
 
 
 # ── arg factory ─────────────────────────────────────────────────────
-def _build_arg_factory(sample_args):
+def _build_arg_factory(sample_args):  # noqa: C901
     """Return a factory producing fresh random args matching sample_args structure.
 
     For functions like euclidean_distances(a, b) where a, b are lists of arrays
     with matching dimensionality, dimensions are shared across top-level args.
     """
     import random as _r
+
     rng = _r.Random(12345)
 
     # Determine shared dimension for array args (e.g. euclidean_distances(a, b))
@@ -159,9 +164,9 @@ def _build_arg_factory(sample_args):
             # list-of-lists (e.g. matrix). Record first such arg so we can share inner dim.
             if first_lol_idx is None:
                 first_lol_idx = idx
-                inner_dims[idx] = len(v)          # outer dim (rows)
+                inner_dims[idx] = len(v)  # outer dim (rows)
                 if v and isinstance(v[0], (list, tuple)):
-                    inner_dims[(idx, 'inner')] = len(v[0])  # inner dim (cols of a == rows of b)
+                    inner_dims[(idx, "inner")] = len(v[0])  # inner dim (cols of a == rows of b)
 
     def make_one(v, top_idx=None):
         if isinstance(v, (list, tuple)):
@@ -172,8 +177,10 @@ def _build_arg_factory(sample_args):
             if isinstance(elem, np.ndarray):
                 # Use shared dim if available for this top-level arg
                 dim = array_dims.get(top_idx, len(elem)) if top_idx is not None else len(elem)
-                gen_arr = (lambda d=dim: np.random.uniform(-10, 10, size=max(d, rng.randint(1, max(d, 2)))))
-                return (lambda: [gen_arr() for _ in range(rng.randint(1, max(n, 1)))])
+                gen_arr = lambda d=dim: np.random.uniform(
+                    -10, 10, size=max(d, rng.randint(1, max(d, 2)))
+                )
+                return lambda: [gen_arr() for _ in range(rng.randint(1, max(n, 1)))]
             if isinstance(elem, (list, tuple)):
                 # list-of-lists (matrix): keep inner dimension consistent across
                 # paired args so matrix_multiply(a,b) has compatible shapes.
@@ -182,47 +189,53 @@ def _build_arg_factory(sample_args):
                 if top_idx == first_lol_idx:
                     # First matrix: pick and remember the shared inner (col) dimension.
                     def _gen_first():
-                        if (first_lol_idx, 'cols') not in inner_dims:
-                            inner_dims[(first_lol_idx, 'cols')] = rng.randint(2, max(base_cols, 2))
-                        cols = inner_dims[(first_lol_idx, 'cols')]
+                        if (first_lol_idx, "cols") not in inner_dims:
+                            inner_dims[(first_lol_idx, "cols")] = rng.randint(2, max(base_cols, 2))
+                        cols = inner_dims[(first_lol_idx, "cols")]
                         rows = rng.randint(2, max(base_rows, 2))
                         return [[rng.randint(-5, 5) for _ in range(cols)] for _ in range(rows)]
+
                     return _gen_first
-                elif first_lol_idx is not None and (first_lol_idx, 'cols') in inner_dims:
-                    shared = inner_dims[(first_lol_idx, 'cols')]
+                elif first_lol_idx is not None and (first_lol_idx, "cols") in inner_dims:
+                    shared = inner_dims[(first_lol_idx, "cols")]
+
                     def _gen_second():
                         cols = rng.randint(2, max(base_cols, 2))
                         rows = shared  # rows of b must equal cols of a for matmul
                         return [[rng.randint(-5, 5) for _ in range(cols)] for _ in range(rows)]
+
                     return _gen_second
                 else:
+
                     def _gen_plain():
                         cols = rng.randint(2, max(base_cols, 2))
                         rows = rng.randint(2, max(base_rows, 2))
                         return [[rng.randint(-5, 5) for _ in range(cols)] for _ in range(rows)]
+
                     return _gen_plain
             inner = make_one(elem, top_idx)
-            return (lambda: [inner() for _ in range(max(rng.randint(1, n * 2), 1))])
+            return lambda: [inner() for _ in range(max(rng.randint(1, n * 2), 1))]
         if isinstance(v, np.ndarray):
             dim = array_dims.get(top_idx, len(v)) if top_idx is not None else len(v)
-            return (lambda: np.random.uniform(-10, 10, size=max(dim, rng.randint(1, max(dim, 2)))))
+            return lambda: np.random.uniform(-10, 10, size=max(dim, rng.randint(1, max(dim, 2))))
         if isinstance(v, str):
             chars = v or "abc"
-            return (lambda: "".join(rng.choice(chars) for _ in range(rng.randint(1, 8))))
+            return lambda: "".join(rng.choice(chars) for _ in range(rng.randint(1, 8)))
         if isinstance(v, bool):
-            return (lambda: rng.random() < 0.5)
+            return lambda: rng.random() < 0.5
         if isinstance(v, int):
-            return (lambda: rng.randint(-1000, 1000))
+            return lambda: rng.randint(-1000, 1000)
         if isinstance(v, float):
-            return (lambda: rng.uniform(-1000, 1000))
+            return lambda: rng.uniform(-1000, 1000)
         if callable(v):
-            return (lambda: v)
-        return (lambda: rng.uniform(-1000, 1000))
+            return lambda: v
+        return lambda: rng.uniform(-1000, 1000)
 
     gens = [make_one(a, top_idx=idx) for idx, a in enumerate(sample_args)]
 
     def factory():
         return tuple(g() for g in gens)
+
     return factory
 
 
@@ -237,17 +250,22 @@ def _build_arg_factory_from_strategy(strategy_str, validator=None, n_samples=5):
     try:
         from hypothesis import given, settings as hyp_settings
         from hypothesis import strategies as st
+
         strat = eval(strategy_str, {"st": st})  # noqa: S307
     except Exception:
+
         def factory():
             return ()
+
         return factory
 
     samples = []
+
     @given(strat)
     @hyp_settings(max_examples=n_samples * 8, deadline=None)
     def _collect(x):
         samples.append(x)
+
     _collect()
 
     # Optionally filter out samples that crash the target function.
@@ -266,11 +284,13 @@ def _build_arg_factory_from_strategy(strategy_str, validator=None, n_samples=5):
         samples = [()]
 
     idx = 0
+
     def factory():
         nonlocal idx
         val = samples[idx % len(samples)]
         idx += 1
         return val if isinstance(val, tuple) else (val,)
+
     return factory
 
 
@@ -284,11 +304,13 @@ def _mutate_code(code, function_name, mod=None, arg_factory=None, max_tries=12):
     """
     from evolution_engine import ASTMutator
     import random as _r
+
     rng = _r.Random(7)
     attempts = []
     # 1) numpy vectorization variants (often correct + faster for numeric targets)
     try:
         from numpy_optimizer import generate_numpy_variants
+
         attempts += [v for v in generate_numpy_variants(code, 8) if v.strip() != code.strip()]
     except Exception:
         pass
@@ -308,6 +330,7 @@ def _mutate_code(code, function_name, mod=None, arg_factory=None, max_tries=12):
     best = code
     best_samples = baseline_samples
     import os
+
     os.environ["MUTALAMBDA_LOG_LEVEL"] = "ERROR"
     for cand in attempts:
         if mod is not None and arg_factory is not None:
@@ -320,7 +343,8 @@ def _mutate_code(code, function_name, mod=None, arg_factory=None, max_tries=12):
             except Exception:
                 continue
             if statistics.mean(samples) < statistics.mean(best_samples):
-                best = cand; best_samples = samples
+                best = cand
+                best_samples = samples
     return best
 
 
@@ -335,13 +359,19 @@ def _is_valid_python(code):
 def _extract_function(resp, function_name):
     """Extract a `def function_name...` block from LLM text."""
     import re
+
     m = re.search(rf"(def {re.escape(function_name)}\b.*)", resp, re.DOTALL)
     if m:
         body = m.group(0)
         lines = body.split("\n")
         kept = [lines[0]]
         for ln in lines[1:]:
-            if ln and not ln.startswith(" ") and not ln.startswith("\t") and ln.strip().startswith("def "):
+            if (
+                ln
+                and not ln.startswith(" ")
+                and not ln.startswith("\t")
+                and ln.strip().startswith("def ")
+            ):
                 break
             kept.append(ln)
         text = "\n".join(kept)
@@ -353,6 +383,7 @@ def _extract_function(resp, function_name):
 def _llm_backend():
     try:
         from llm_backend import LLMBackend
+
         model = os.getenv("MUTALAMBDA_LLM_MODEL", "qwen2.5:3b")
         return LLMBackend(backend="ollama", model=model, timeout_sec=90.0, temperature=0.1)
     except Exception:
@@ -364,8 +395,10 @@ def _llm_direct(code, function_name):
     b = _llm_backend()
     if b is None:
         return code
-    prompt = ("Optimize this Python function for speed. Return ONLY the code, no explanation.\n"
-              "```python\n" + code + "\n```\nOptimized:\n")
+    prompt = (
+        "Optimize this Python function for speed. Return ONLY the code, no explanation.\n"
+        "```python\n" + code + "\n```\nOptimized:\n"
+    )
     try:
         resp = b.generate(prompt)
     except Exception:
@@ -403,6 +436,7 @@ def _compile_numba(code, function_name):
 def _run_mypyc_compile(code, function_name):
     """Compile a source file with the mypyc CLI; return the compiled callable or None."""
     import shutil
+
     if not shutil.which("mypyc"):
         return None
     mod_file = REPO_ROOT / "_mpyc_target.py"
@@ -410,8 +444,13 @@ def _run_mypyc_compile(code, function_name):
         mod_file.write_text(code)
         out_dir = REPO_ROOT / "_mpyc_out"
         out_dir.mkdir(exist_ok=True)
-        proc = subprocess.run(["mypyc", str(mod_file)], capture_output=True, text=True,
-                              timeout=120, cwd=str(REPO_ROOT))
+        proc = subprocess.run(
+            ["mypyc", str(mod_file)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=str(REPO_ROOT),
+        )
         if proc.returncode != 0:
             return None
         sys.path.insert(0, str(out_dir))
@@ -435,6 +474,7 @@ def _run_real_mutalambda(code, function_name, test_cases):
     from contextlib import redirect_stdout
     import muta_lambda as _ml
     from mutation_filters import _filter_mutant
+
     if not hasattr(_ml, "_filter_mutant"):
         _ml._filter_mutant = _filter_mutant
     from evolution_engine import ASTMutator
@@ -442,28 +482,56 @@ def _run_real_mutalambda(code, function_name, test_cases):
 
     def mock_llm(prompt):
         lines = prompt.split("\n")
-        code_lines = [l for l in lines
-                      if l.strip()
-                      and not l.startswith(("You are", "Task:", "Improve", "Return",
-                                            "Instructions:", "Constraints:", "Evaluation", "Scoring"))]
+        code_lines = [
+            l
+            for l in lines
+            if l.strip()
+            and not l.startswith(
+                (
+                    "You are",
+                    "Task:",
+                    "Improve",
+                    "Return",
+                    "Instructions:",
+                    "Constraints:",
+                    "Evaluation",
+                    "Scoring",
+                )
+            )
+        ]
         c = "\n".join(code_lines).strip()
         if not c:
             return "def solution():\n    return 42"
         return ASTMutator.apply_random_mutation(c)
 
     cfg = EvolveConfig(
-        num_islands=2, generations=4, population_size=5,
-        seed_codes=[code], topology="ring", top_k=2,
-        checkpoint_enabled=False, prompt_evolution=False, hfc_enabled=False,
-        thc_enabled=False, spatial_enabled=False, workflow_enabled=True,
-        allow_untested=False, enforce_differential=True, llm_backend="direct",
+        num_islands=2,
+        generations=4,
+        population_size=5,
+        seed_codes=[code],
+        topology="ring",
+        top_k=2,
+        checkpoint_enabled=False,
+        prompt_evolution=False,
+        hfc_enabled=False,
+        thc_enabled=False,
+        spatial_enabled=False,
+        workflow_enabled=True,
+        allow_untested=False,
+        enforce_differential=True,
+        llm_backend="direct",
     )
     cfg.sandbox_timeout = 15.0
     sink = io.StringIO()
     try:
         with redirect_stdout(sink):
-            agent = MutaLambdaAgent(config=cfg, llm_fn=mock_llm, test_cases=test_cases,
-                                    timeout_sec=15.0, task=f"Optimize {function_name} for speed")
+            agent = MutaLambdaAgent(
+                config=cfg,
+                llm_fn=mock_llm,
+                test_cases=test_cases,
+                timeout_sec=15.0,
+                task=f"Optimize {function_name} for speed",
+            )
             best = agent.run(task=f"Optimize {function_name} for speed")
             agent.shutdown()
     except Exception:
@@ -533,6 +601,7 @@ def _cpu_info():
 
 def _env_info():
     import platform
+
     return {
         "python": platform.python_version(),
         "os": platform.platform(),
@@ -547,6 +616,7 @@ def _env_info():
 
 def _which(cmd):
     import shutil
+
     return shutil.which(cmd)
 
 
@@ -568,13 +638,19 @@ def _to_stat(samples):
 def _stat_dict(s):
     if s is None:
         return {"median_s": None, "iqr": None, "p95": None, "n": 0, "error": "unavailable"}
-    return {"median_s": round(s.median_s, 6), "iqr": round(s.iqr, 6),
-            "p95": round(s.p95, 6), "mean_s": round(s.mean_s, 6), "n": s.n,
-            "samples": [round(x, 8) for x in s.samples]}
+    return {
+        "median_s": round(s.median_s, 6),
+        "iqr": round(s.iqr, 6),
+        "p95": round(s.p95, 6),
+        "mean_s": round(s.mean_s, 6),
+        "n": s.n,
+        "samples": [round(x, 8) for x in s.samples],
+    }
 
 
 def _make_diff(original, mutated):
     import difflib
+
     o = original.splitlines(keepends=True)
     m = mutated.splitlines(keepends=True)
     diff = list(difflib.unified_diff(o, m, fromfile="original", tofile="optimized", n=3))
@@ -583,9 +659,16 @@ def _make_diff(original, mutated):
 
 def _verify(code, src, mod, trials=DIFF_TRIALS):
     """Run 3-layer verification; returns VerificationResult."""
-    return verify_candidate(code, src, mod.test_cases, function_name=mod.function_name,
-                            invariants=mod.invariants, input_strategy=getattr(mod, 'input_strategy', None),
-                            random_trials=trials, seed=42)
+    return verify_candidate(
+        code,
+        src,
+        mod.test_cases,
+        function_name=mod.function_name,
+        invariants=mod.invariants,
+        input_strategy=getattr(mod, "input_strategy", None),
+        random_trials=trials,
+        seed=42,
+    )
 
 
 def _bench_alt(src, function_name, arg_factory, code, mod):
@@ -593,7 +676,9 @@ def _bench_alt(src, function_name, arg_factory, code, mod):
     if src is None or src.strip() == code.strip():
         return [], True
     if isinstance(src, str):
-        ver = _verify(code, src, mod, trials=ALT_DIFF_TRIALS)  # global, overridable via --alt-trials
+        ver = _verify(
+            code, src, mod, trials=ALT_DIFF_TRIALS
+        )  # global, overridable via --alt-trials
         if not ver.ok:
             return [], False
         try:
@@ -608,10 +693,14 @@ def _bench_callable(fn, arg_factory, code, function_name, mod):
     """Benchmark a callable (numba/mypyc) against original."""
     try:
         args = arg_factory()
-        ns = {"__name__": "__cmp__"}; exec(compile(code, "<c>", "exec"), ns, ns)  # noqa: S102
+        ns = {"__name__": "__cmp__"}
+        exec(compile(code, "<c>", "exec"), ns, ns)  # noqa: S102
         orig_fn = ns[function_name]
-        a = orig_fn(*args); b = fn(*args)
-        if not np.allclose(np.asarray(a, dtype=float), np.asarray(b, dtype=float), rtol=1e-9, atol=1e-12):
+        a = orig_fn(*args)
+        b = fn(*args)
+        if not np.allclose(
+            np.asarray(a, dtype=float), np.asarray(b, dtype=float), rtol=1e-9, atol=1e-12
+        ):
             return [], False
     except Exception:
         return [], False
@@ -636,9 +725,9 @@ def bench_one_target(mod, target_name, use_real_mutalambda=True, skip_llm=False)
     test_cases = mod.test_cases
     sample_args = list(test_cases[0]["args"]) if test_cases else []
     # Allow target to override arg generation (e.g. for correlated inputs like confusion_matrix).
-    arg_factory = getattr(mod, 'arg_factory', None)
+    arg_factory = getattr(mod, "arg_factory", None)
     if arg_factory is None:
-        if hasattr(mod, 'input_strategy') and mod.input_strategy:
+        if hasattr(mod, "input_strategy") and mod.input_strategy:
             arg_factory = _build_arg_factory_from_strategy(mod.input_strategy, validator=None)
         else:
             arg_factory = _build_arg_factory(sample_args)
@@ -651,20 +740,30 @@ def bench_one_target(mod, target_name, use_real_mutalambda=True, skip_llm=False)
         baseline_fn = None
     if arg_factory is not None and baseline_fn is not None:
         # Rebuild a validating factory now that we have the function.
-        if hasattr(mod, 'input_strategy') and mod.input_strategy and not getattr(mod, 'arg_factory', None):
-            arg_factory = _build_arg_factory_from_strategy(mod.input_strategy, validator=baseline_fn)
+        if (
+            hasattr(mod, "input_strategy")
+            and mod.input_strategy
+            and not getattr(mod, "arg_factory", None)
+        ):
+            arg_factory = _build_arg_factory_from_strategy(
+                mod.input_strategy, validator=baseline_fn
+            )
     try:
         baseline_samples = time_function_code(code, function_name, arg_factory, reps=REPS)
     except Exception as exc:
         print(f"  [{target_name}] baseline timing failed: {exc}")
         return None
     b_med, b_iqr, b_p95 = median_iqr(baseline_samples)
-    baseline_stat = VariantStat(b_med, b_iqr, b_p95, statistics.mean(baseline_samples), REPS, baseline_samples)
+    baseline_stat = VariantStat(
+        b_med, b_iqr, b_p95, statistics.mean(baseline_samples), REPS, baseline_samples
+    )
 
     # Candidate
     if use_real_mutalambda:
         candidate_src = _run_real_mutalambda(code, function_name, test_cases)
-        mutation_label = "MutaLambda real evolution" if candidate_src is not None else "AST+numpy fallback"
+        mutation_label = (
+            "MutaLambda real evolution" if candidate_src is not None else "AST+numpy fallback"
+        )
         if candidate_src is None:
             candidate_src = _mutate_code(code, function_name, mod, arg_factory)
     else:
@@ -682,7 +781,9 @@ def bench_one_target(mod, target_name, use_real_mutalambda=True, skip_llm=False)
             cand_samples = []
         if cand_samples:
             c_med, c_iqr, c_p95 = median_iqr(cand_samples)
-            candidate_stat = VariantStat(c_med, c_iqr, c_p95, statistics.mean(cand_samples), REPS, cand_samples)
+            candidate_stat = VariantStat(
+                c_med, c_iqr, c_p95, statistics.mean(cand_samples), REPS, cand_samples
+            )
 
     # D6 alternatives
     alts = {}
@@ -702,8 +803,11 @@ def bench_one_target(mod, target_name, use_real_mutalambda=True, skip_llm=False)
 
     p_val = mann_whitney_p(baseline_samples, candidate_stat.samples or baseline_samples)
     delta = cliffs_delta(baseline_samples, candidate_stat.samples or baseline_samples)
-    speedup = (round(b_med / candidate_stat.median_s, 4)
-               if candidate_stat.median_s > 0 and candidate_stat.median_s != float("inf") else None)
+    speedup = (
+        round(b_med / candidate_stat.median_s, 4)
+        if candidate_stat.median_s > 0 and candidate_stat.median_s != float("inf")
+        else None
+    )
 
     correctness = {
         "verified": verification.ok,
@@ -715,9 +819,14 @@ def bench_one_target(mod, target_name, use_real_mutalambda=True, skip_llm=False)
     }
 
     result = TargetResult(
-        target=target_name, tier=mod.TIER, git_sha=get_git_sha(),
-        mutalambda_version="4.0.0", env=_env_info(),
-        baseline=baseline_stat, optimized=candidate_stat, speedup=speedup,
+        target=target_name,
+        tier=mod.TIER,
+        git_sha=get_git_sha(),
+        mutalambda_version="4.0.0",
+        env=_env_info(),
+        baseline=baseline_stat,
+        optimized=candidate_stat,
+        speedup=speedup,
         correctness=correctness,
         statistics={"mann_whitney_u_p": p_val, "cliffs_delta": delta},
         mutation_applied=mutation_label,
@@ -732,16 +841,29 @@ def bench_one_target(mod, target_name, use_real_mutalambda=True, skip_llm=False)
     result.diff_path = f"benchmarks/results/{target_name}/{target_name}.diff"
 
     raw = {
-        "target": target_name, "tier": mod.TIER, "git_sha": result.git_sha,
-        "mutalambda_version": result.mutalambda_version, "env": result.env,
-        "baseline": _stat_dict(baseline_stat), "optimized": _stat_dict(candidate_stat),
-        "speedup": speedup, "correctness": correctness, "statistics": result.statistics,
-        "mutation_applied": mutation_label, "diff": result.diff_path,
+        "target": target_name,
+        "tier": mod.TIER,
+        "git_sha": result.git_sha,
+        "mutalambda_version": result.mutalambda_version,
+        "env": result.env,
+        "baseline": _stat_dict(baseline_stat),
+        "optimized": _stat_dict(candidate_stat),
+        "speedup": speedup,
+        "correctness": correctness,
+        "statistics": result.statistics,
+        "mutation_applied": mutation_label,
+        "diff": result.diff_path,
         "alternatives": {k: _stat_dict(v) for k, v in result.alternatives.items()},
         "alternatives_correct": result.alternatives_correct,
-        "protocol": {"repeticiones": REPS, "warmup": WARMUPS, "metrica": "mediana",
-                     "dispersion": "IQR + p95", "significancia": "Mann-Whitney U",
-                     "efecto": "Cliffs delta", "correccion": "Holm-Bonferroni sobre todos los targets"},
+        "protocol": {
+            "repeticiones": REPS,
+            "warmup": WARMUPS,
+            "metrica": "mediana",
+            "dispersion": "IQR + p95",
+            "significancia": "Mann-Whitney U",
+            "efecto": "Cliffs delta",
+            "correccion": "Holm-Bonferroni sobre todos los targets",
+        },
     }
     (run_dir / "raw.json").write_text(json.dumps(raw, indent=2, default=_json_default))
     return result
@@ -769,7 +891,9 @@ def _aggregate_holm(results):
     adj = holm_bonferroni(pvals)
     for i, r in zip(idxs, adj):
         results[i].statistics["p_adj_holm"] = r
-        results[i].statistics["significant"] = bool(r < 0.05) and results[i].speedup is not None and results[i].speedup > 1.0
+        results[i].statistics["significant"] = (
+            bool(r < 0.05) and results[i].speedup is not None and results[i].speedup > 1.0
+        )
         rd = RESULTS_BASE / results[i].target
         if (rd / "raw.json").exists():
             raw = json.loads((rd / "raw.json").read_text())
@@ -782,11 +906,15 @@ def _aggregate_holm(results):
 def _write_summary(results):
     run_dir = RESULTS_BASE / "latest"
     run_dir.mkdir(parents=True, exist_ok=True)
-    summary = {"git_sha": get_git_sha(),
-               "generated_at": datetime.now(timezone.utc).isoformat(),
-               "total_targets": len(results), "significant_targets": [],
-               "non_significant_targets": []}
+    summary = {
+        "git_sha": get_git_sha(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "total_targets": len(results),
+        "significant_targets": [],
+        "non_significant_targets": [],
+    }
     from collections import Counter
+
     tc = Counter()
     sig = 0
     for r in results:
@@ -806,21 +934,31 @@ def _write_summary(results):
     print(f"Targets: {len(results)} | Significant (p_adj<0.05 & faster): {sig}")
     for r in results:
         tag = "SIG " if r.statistics.get("significant") else "    "
-        alts = {k: (round(v.median_s, 6) if v and v.median_s else None) for k, v in r.alternatives.items()}
-        print(f"  {tag} {r.target:26s} T{r.tier} muta_speedup={r.speedup} "
-              f"L2div={r.correctness.get('divergences')} corr={r.correctness.get('verified')} "
-              f"alts_ok={r.alternatives_correct}")
+        alts = {
+            k: (round(v.median_s, 6) if v and v.median_s else None)
+            for k, v in r.alternatives.items()
+        }
+        print(
+            f"  {tag} {r.target:26s} T{r.tier} muta_speedup={r.speedup} "
+            f"L2div={r.correctness.get('divergences')} corr={r.correctness.get('verified')} "
+            f"alts_ok={r.alternatives_correct}"
+        )
 
 
 def _run_bench_target(target_name, use_real, skip_llm):
     import importlib
+
     mod = importlib.import_module(f"targets.{target_name}")
-    print(f"\n--- Target: {target_name} (tier {mod.TIER}) {'[REAL MutaLambda]' if use_real else ''}")
+    print(
+        f"\n--- Target: {target_name} (tier {mod.TIER}) {'[REAL MutaLambda]' if use_real else ''}"
+    )
     try:
         r = bench_one_target(mod, target_name, use_real_mutalambda=use_real, skip_llm=skip_llm)
         if r:
-            print(f"  speedup={r.speedup} correct={r.correctness.get('verified')} "
-                  f"L2div={r.correctness.get('divergences')}")
+            print(
+                f"  speedup={r.speedup} correct={r.correctness.get('verified')} "
+                f"L2div={r.correctness.get('divergences')}"
+            )
         return r
     except Exception as e:
         print(f"  ERROR [{target_name}]: {e}")
@@ -831,18 +969,37 @@ def _run_bench_target(target_name, use_real, skip_llm):
 def main():
     global REPS, ALT_DIFF_TRIALS, SKIP_COMPILERS
     parser = argparse.ArgumentParser(description="MutaLambda Bloque D benchmark harness")
-    parser.add_argument("--targets", nargs="*", default=[],
-                        help="specific target module names (comma- or space-separated, e.g. --targets t1_a,t1_b")
+    parser.add_argument(
+        "--targets",
+        nargs="*",
+        default=[],
+        help="specific target module names (comma- or space-separated, e.g. --targets t1_a,t1_b",
+    )
     parser.add_argument("--all", action="store_true", help="run all targets")
-    parser.add_argument("--real-muta", type=int, default=0,
-                        help="number of targets to run REAL MutaLambda engine on")
-    parser.add_argument("--skip-llm", action="store_true", help="skip LLM direct/best-of-5 (faster, no network)")
-    parser.add_argument("--skip-compilers", action="store_true",
-                        help="skip numba + mypyc compilation (much faster; needed for CI)")
-    parser.add_argument("--alt-trials", type=int, default=DIFF_TRIALS, help="differential trials for alternatives")
+    parser.add_argument(
+        "--real-muta",
+        type=int,
+        default=0,
+        help="number of targets to run REAL MutaLambda engine on",
+    )
+    parser.add_argument(
+        "--skip-llm", action="store_true", help="skip LLM direct/best-of-5 (faster, no network)"
+    )
+    parser.add_argument(
+        "--skip-compilers",
+        action="store_true",
+        help="skip numba + mypyc compilation (much faster; needed for CI)",
+    )
+    parser.add_argument(
+        "--alt-trials", type=int, default=DIFF_TRIALS, help="differential trials for alternatives"
+    )
     parser.add_argument("--reps", type=int, default=REPS)
-    parser.add_argument("--parallel", type=int, default=1,
-                        help="number of targets to benchmark in parallel (default 1)")
+    parser.add_argument(
+        "--parallel",
+        type=int,
+        default=1,
+        help="number of targets to benchmark in parallel (default 1)",
+    )
     args = parser.parse_args()
     REPS = args.reps
     ALT_DIFF_TRIALS = args.alt_trials
@@ -859,14 +1016,19 @@ def main():
         selected = [t for t in targets if t[0] in sel]
     else:
         selected = targets[:5]
-    print(f"MutaLambda Bloque D harness: {len(selected)} targets, {REPS} reps, parallel={args.parallel}")
+    print(
+        f"MutaLambda Bloque D harness: {len(selected)} targets, {REPS} reps, parallel={args.parallel}"
+    )
     real_indices = set(range(args.real_muta))
     results = []
     if args.parallel > 1:
         from concurrent.futures import ProcessPoolExecutor, as_completed
+
         with ProcessPoolExecutor(max_workers=args.parallel) as ex:
-            futs = {ex.submit(_run_bench_target, name, i in real_indices, args.skip_llm): name
-                    for i, (name, mod) in enumerate(selected)}
+            futs = {
+                ex.submit(_run_bench_target, name, i in real_indices, args.skip_llm): name
+                for i, (name, mod) in enumerate(selected)
+            }
             for fut in as_completed(futs):
                 r = fut.result()
                 if r:

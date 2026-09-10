@@ -73,4 +73,3 @@ def test_generate_mutator_feature_flag_off(monkeypatch):
 
     ok = cli.generate_mutator("rename x", lang="python", dry_run=True)
     assert ok is False
-

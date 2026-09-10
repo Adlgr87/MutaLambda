@@ -74,9 +74,9 @@ class ASTAnalyzer:
         """Estimate cyclomatic complexity."""
         complexity = 1  # Base complexity
         for node in ast.walk(tree):
-            if isinstance(node, (ast.If, ast.While, ast.For, 
-                                 ast.ExceptHandler, ast.With,
-                                 ast.comprehension)):
+            if isinstance(
+                node, (ast.If, ast.While, ast.For, ast.ExceptHandler, ast.With, ast.comprehension)
+            ):
                 complexity += 1
             elif isinstance(node, ast.BoolOp):
                 complexity += len(node.values) - 1
@@ -85,8 +85,7 @@ class ASTAnalyzer:
     @staticmethod
     def has_io_calls(tree: ast.AST) -> bool:
         """Detect I/O operations in AST."""
-        io_functions = {'open', 'read', 'write', 'print', 'input',
-                       'socket', 'requests', 'urllib'}
+        io_functions = {"open", "read", "write", "print", "input", "socket", "requests", "urllib"}
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Name):
@@ -100,6 +99,7 @@ class ASTAnalyzer:
     @staticmethod
     def has_nested_loops(tree: ast.AST, max_depth: int = 2) -> bool:
         """Check for nested loops up to max_depth."""
+
         def _check_depth(node, depth=0):
             if depth >= max_depth:
                 return True

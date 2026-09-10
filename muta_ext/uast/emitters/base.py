@@ -1,4 +1,5 @@
 """Base emitter interface for emitting CoreUAST back to source."""
+
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 

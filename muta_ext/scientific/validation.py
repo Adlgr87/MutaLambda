@@ -21,6 +21,7 @@ except ImportError:
     # Fallback for testing
     PASS = "PASS"
     FAIL = "FAIL"
+
     @dataclass
     class StageResult:
         name: str
@@ -30,14 +31,22 @@ except ImportError:
         finished_at: float = 0.0
         metadata: Dict[str, Any] = field(default_factory=dict)
         artifacts: Dict[str, Any] = field(default_factory=dict)
+
     def make_stage_result(name, status, message="", started_at=0.0, **kwargs):
-        return StageResult(name=name, status=status, message=message,
-                        started_at=started_at, finished_at=time.perf_counter(), **kwargs)
+        return StageResult(
+            name=name,
+            status=status,
+            message=message,
+            started_at=started_at,
+            finished_at=time.perf_counter(),
+            **kwargs,
+        )
 
 
 @dataclass
 class InvariantResult:
     """Result of checking a single invariant."""
+
     name: str
     passed: bool
     severity: str
@@ -48,6 +57,7 @@ class InvariantResult:
 @dataclass
 class ScientificValidationResult:
     """Aggregated validation result across all invariants."""
+
     passed: bool
     scientific_score: float
     hard_passed: int
@@ -62,11 +72,15 @@ class ScientificValidationResult:
     def summary(self) -> str:
         """Human-readable summary of validation result."""
         if self.hard_failed:
-            return (f"FAIL: {self.hard_failed} hard failure(s), "
-                    f"{self.soft_failed} soft (score={self.scientific_score:.3f})")
+            return (
+                f"FAIL: {self.hard_failed} hard failure(s), "
+                f"{self.soft_failed} soft (score={self.scientific_score:.3f})"
+            )
         if self.soft_failed:
-            return (f"PASS with penalties: {self.soft_failed} soft failure(s) "
-                    f"(score={self.scientific_score:.3f})")
+            return (
+                f"PASS with penalties: {self.soft_failed} soft failure(s) "
+                f"(score={self.scientific_score:.3f})"
+            )
         return f"All {self.total_invariants} invariants passed (score={self.scientific_score:.3f})"
 
 
@@ -104,10 +118,14 @@ def evaluate_invariants(
             logger.debug("Invariant '%s' raised: %s", inv.name, exc)
             holds = False
 
-        details.append(InvariantResult(
-            name=inv.name, passed=holds, severity=inv.severity,
-            message="" if holds else f"'{inv.name}' violated",
-        ))
+        details.append(
+            InvariantResult(
+                name=inv.name,
+                passed=holds,
+                severity=inv.severity,
+                message="" if holds else f"'{inv.name}' violated",
+            )
+        )
 
         if holds:
             if inv.severity == "hard":
@@ -122,15 +140,19 @@ def evaluate_invariants(
 
     # Calculate score: hard failures reduce by 50% each, soft failures multiply penalty
     hard_ratio = 1.0 - (hard_failed / max(len(invariants), 1)) * 0.5
-    soft_ratio = soft_penalty ** soft_failed
+    soft_ratio = soft_penalty**soft_failed
     scientific_score = round(max(0.0, hard_ratio * soft_ratio), 4)
     passed = hard_failed == 0
 
     return ScientificValidationResult(
-        passed=passed, scientific_score=scientific_score,
-        hard_passed=hard_passed, hard_failed=hard_failed,
-        soft_passed=soft_passed, soft_failed=soft_failed,
-        total_invariants=len(invariants), details=details,
+        passed=passed,
+        scientific_score=scientific_score,
+        hard_passed=hard_passed,
+        hard_failed=hard_failed,
+        soft_passed=soft_passed,
+        soft_failed=soft_failed,
+        total_invariants=len(invariants),
+        details=details,
     )
 
 
@@ -148,7 +170,8 @@ def run_scientific_validation_stage(context: Dict[str, Any]) -> StageResult:
 
     if not enabled:
         return make_stage_result(
-            name="scientific_validation", status=PASS,
+            name="scientific_validation",
+            status=PASS,
             message="Scientific validation disabled",
             started_at=started_at,
             metadata={"scientific_score": 1.0, "enabled": False},
@@ -186,8 +209,10 @@ def run_scientific_validation_stage(context: Dict[str, Any]) -> StageResult:
 
     if not active:
         return make_stage_result(
-            name="scientific_validation", status=PASS,
-            message="No active invariants", started_at=started_at,
+            name="scientific_validation",
+            status=PASS,
+            message="No active invariants",
+            started_at=started_at,
             metadata={"scientific_score": 1.0, "invariants_run": 0},
         )
 
@@ -195,8 +220,10 @@ def run_scientific_validation_stage(context: Dict[str, Any]) -> StageResult:
     status = PASS if result.passed else FAIL
 
     return make_stage_result(
-        name="scientific_validation", status=status,
-        message=result.summary, started_at=started_at,
+        name="scientific_validation",
+        status=status,
+        message=result.summary,
+        started_at=started_at,
         metadata={
             "scientific_score": result.scientific_score,
             "passed": result.passed,
@@ -205,6 +232,5 @@ def run_scientific_validation_stage(context: Dict[str, Any]) -> StageResult:
             "total_invariants": result.total_invariants,
             "enabled": True,
         },
-        artifacts={d.name: "PASS" if d.passed else f"FAIL({d.severity})"
-                   for d in result.details},
+        artifacts={d.name: "PASS" if d.passed else f"FAIL({d.severity})" for d in result.details},
     )

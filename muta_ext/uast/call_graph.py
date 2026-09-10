@@ -13,6 +13,7 @@ logger = logging.getLogger("MutaLambda.UAST.CallGraph")
 @dataclass(frozen=True)
 class CallGraphNode:
     """Nodo en el call graph."""
+
     name: str
     file_path: str
     line_number: int = 0
@@ -22,6 +23,7 @@ class CallGraphNode:
 @dataclass(frozen=True)
 class CallGraphEdge:
     """Arista dirigida en el call graph."""
+
     caller: CallGraphNode
     callee: CallGraphNode
 
@@ -29,6 +31,7 @@ class CallGraphEdge:
 @dataclass
 class CallGraph:
     """Call graph representado como grafo directional."""
+
     nodes: Dict[str, CallGraphNode] = field(default_factory=dict)
     edges: List[CallGraphEdge] = field(default_factory=list)
     entry_points: Set[str] = field(default_factory=set)
@@ -39,10 +42,11 @@ class CallGraph:
         if key not in self.nodes:
             self.nodes[key] = node
         elif not self.nodes[key].is_hot and node.is_hot:
-            self.nodes[key] = CallGraphNode(node.name, node.file_path,
-                                             node.line_number, True)
+            self.nodes[key] = CallGraphNode(node.name, node.file_path, node.line_number, True)
 
-    def add_edge(self, caller: str, callee: str, caller_file: str = "", callee_file: str = "") -> None:
+    def add_edge(
+        self, caller: str, callee: str, caller_file: str = "", callee_file: str = ""
+    ) -> None:
         """Añade una arista al grafo."""
         cn = self._find_or_create(caller, caller_file)
         cl = self._find_or_create(callee, callee_file)
@@ -67,8 +71,7 @@ class CallGraph:
         # Mark hot nodes
         for key, node in self.nodes.items():
             if node.name in hot_names:
-                self.nodes[key] = CallGraphNode(node.name, node.file_path,
-                                                 node.line_number, True)
+                self.nodes[key] = CallGraphNode(node.name, node.file_path, node.line_number, True)
 
         hot_keys = {k for k, n in self.nodes.items() if n.name in hot_names and n.is_hot}
         current = set(hot_keys)
@@ -107,9 +110,21 @@ class CallGraph:
 
 # ── Extractors ────────────────────────────────────────────────
 
-_BUILTINS: Set[str] = set(dir(__builtins__)) if hasattr(__builtins__, '__dir__') else set()
-_EXTERNAL_PREFIXES = {"math.", "np.", "numpy.", "torch.", "tf.", "scipy.",
-                      "pandas.", "pd.", "plt.", "random.", "os.", "sys."}
+_BUILTINS: Set[str] = set(dir(__builtins__)) if hasattr(__builtins__, "__dir__") else set()
+_EXTERNAL_PREFIXES = {
+    "math.",
+    "np.",
+    "numpy.",
+    "torch.",
+    "tf.",
+    "scipy.",
+    "pandas.",
+    "pd.",
+    "plt.",
+    "random.",
+    "os.",
+    "sys.",
+}
 
 
 def extract_call_graph_from_ast(tree: ast.AST, file_path: str = "<single>") -> CallGraph:

@@ -28,7 +28,7 @@ def test_massive_adapter_local_target_promotable():
     eq = adapter.equivalence(src)
     assert eq.ok
     # Equivalent rewrite should pass
-    rewrite = '''
+    rewrite = """
 def calculate_group_cohesion(opinions):
     vals = [float(x) for x in opinions]
     n = len(vals)
@@ -45,10 +45,15 @@ def calculate_group_cohesion(opinions):
     mean_diff = total / pairs
     c = 1.0 - mean_diff / 2.0
     return max(0.0, min(1.0, c))
-'''
+"""
     pkg = adapter.promotion_package(rewrite)
     assert pkg["promotable"] is True
-    assert "--- original" in pkg["patch"] or "+++" in pkg["patch"] or pkg["patch"] == "" or "calculate_group_cohesion" in pkg["patch"]
+    assert (
+        "--- original" in pkg["patch"]
+        or "+++" in pkg["patch"]
+        or pkg["patch"] == ""
+        or "calculate_group_cohesion" in pkg["patch"]
+    )
 
 
 def test_massive_adapter_rejects_api_break():

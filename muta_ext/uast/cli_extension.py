@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """CLI extension for multi-language UAST evolution."""
+
 import click
 
 from muta_ext.uast.handlers.rust_handler import RustHandler
@@ -28,7 +29,7 @@ def uast_run(config, code, tests, generations, output):
     except Exception as e:
         click.echo(f"Error loading config: {e}")
         return
-    
+
     # Load source code
     try:
         with open(code) as f:
@@ -36,7 +37,7 @@ def uast_run(config, code, tests, generations, output):
     except Exception as e:
         click.echo(f"Error loading code: {e}")
         return
-    
+
     # Determine handler from config
     if "rust" in content:
         handler = RustHandler()
@@ -44,13 +45,16 @@ def uast_run(config, code, tests, generations, output):
         handler = CppHandler()
     else:
         handler = PythonHandler()
-    
+
     # Create adapter and run
     from muta_ext.uast.evolution_adapter import UASTEvolutionAdapter
+
     adapter = UASTEvolutionAdapter(handler=handler)
-    
-    results = adapter.run(source_code=source, test_code="", generations=generations, population_size=8)
-    
+
+    results = adapter.run(
+        source_code=source, test_code="", generations=generations, population_size=8
+    )
+
     click.echo(f"Generations completed: {results['generations_completed']}")
     click.echo(f"Valid candidates: {results['valid_candidates']}")
 
@@ -62,14 +66,14 @@ def uast_roundtrip(lang, code):
     """Parse → CoreUAST → Emit roundtrip test."""
     with open(code) as f:
         source = f.read()
-    
+
     if lang == "python":
         handler = PythonHandler()
     elif lang == "rust":
         handler = RustHandler()
     else:
         handler = CppHandler()
-    
+
     result = handler.roundtrip(source)
     click.echo(result)
 
@@ -81,14 +85,14 @@ def uast_validate(lang, code):
     """Validate syntax for a specific language."""
     with open(code) as f:
         source = f.read()
-    
+
     if lang == "python":
         handler = PythonHandler()
     elif lang == "rust":
         handler = RustHandler()
     else:
         handler = CppHandler()
-    
+
     ok, err = handler.validate_syntax(source)
     if ok:
         click.echo("Syntax valid")

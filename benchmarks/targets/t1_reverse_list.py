@@ -12,5 +12,5 @@ test_cases = [
     {"function": "reverse_list", "args": [[]], "expected": [], "comparison": "equal"},
     {"function": "reverse_list", "args": [[7]], "expected": [7], "comparison": "equal"},
 ]
-invariants = ['list(out) == list(reversed(x))']
+invariants = ["list(out) == list(reversed(x))"]
 input_strategy = "st.lists(st.integers(min_value=-100, max_value=100), min_size=0, max_size=15)"

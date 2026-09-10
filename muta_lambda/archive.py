@@ -57,9 +57,7 @@ class SolutionArchive:
                 "Install them: pip install faiss-cpu sentence-transformers"
             )
 
-        self.embedder = sentence_transformer(
-            f"sentence-transformers/{embedder_model}"
-        )
+        self.embedder = sentence_transformer(f"sentence-transformers/{embedder_model}")
         # Prefer modern API when available (sentence-transformers rename).
         if hasattr(self.embedder, "get_embedding_dimension"):
             self._dim = self.embedder.get_embedding_dimension()
@@ -87,9 +85,9 @@ class SolutionArchive:
         faiss = _get_faiss()
         self.index = faiss.IndexFlatIP(self._dim)
         if self.solutions:
-            embeddings = np.vstack(
-                [s.embedding.reshape(1, -1) for s in self.solutions]
-            ).astype("float32")
+            embeddings = np.vstack([s.embedding.reshape(1, -1) for s in self.solutions]).astype(
+                "float32"
+            )
             faiss.normalize_L2(embeddings)
             self.index.add(embeddings)
 
@@ -128,9 +126,7 @@ class SolutionArchive:
             will_evict = len(self.solutions) == self.max_size
 
             self.index.add(emb.reshape(1, -1))
-            self.solutions.append(
-                ArchivedSolution(code=code, metrics=metrics, embedding=emb)
-            )
+            self.solutions.append(ArchivedSolution(code=code, metrics=metrics, embedding=emb))
 
             if will_evict and len(self.solutions) == old_len:
                 self._pending_prunes += 1
@@ -150,9 +146,7 @@ class SolutionArchive:
             old_len = len(self.solutions)
             self.index.add(embeddings)
             for (code, metrics), emb in zip(items, embeddings):
-                self.solutions.append(
-                    ArchivedSolution(code=code, metrics=metrics, embedding=emb)
-                )
+                self.solutions.append(ArchivedSolution(code=code, metrics=metrics, embedding=emb))
 
             evicted = max(0, old_len + len(items) - self.max_size)
             self._pending_prunes += evicted
@@ -183,10 +177,7 @@ class SolutionArchive:
             return 1.0
 
         emb = self._encode_normalized([code])[0]
-        distances = [
-            float(np.linalg.norm(emb - neighbor.embedding))
-            for neighbor in neighbors
-        ]
+        distances = [float(np.linalg.norm(emb - neighbor.embedding)) for neighbor in neighbors]
         if not distances:
             return 1.0
         return float(np.mean(distances))
@@ -200,12 +191,8 @@ class SolutionArchive:
             if n <= k:
                 return [s.code for s in self.solutions]
 
-            embs = np.vstack(
-                [s.embedding.reshape(1, -1) for s in self.solutions]
-            ).astype("float32")
-            kmeans = _get_faiss().Kmeans(
-                d=self._dim, k=k, niter=20, verbose=False, gpu=False
-            )
+            embs = np.vstack([s.embedding.reshape(1, -1) for s in self.solutions]).astype("float32")
+            kmeans = _get_faiss().Kmeans(d=self._dim, k=k, niter=20, verbose=False, gpu=False)
             kmeans.train(embs)
             _, assignments = kmeans.index.search(embs, 1)
             diverse: List[str] = []
@@ -244,7 +231,8 @@ class SolutionArchive:
 
         logger.info(
             "SolutionArchive saved: %d solutions → %s",
-            len(self.solutions), path,
+            len(self.solutions),
+            path,
         )
 
     @classmethod
@@ -262,9 +250,7 @@ class SolutionArchive:
             )
 
         archive = cls.__new__(cls)
-        archive.embedder = sentence_transformer(
-            f"sentence-transformers/{embedder_model}"
-        )
+        archive.embedder = sentence_transformer(f"sentence-transformers/{embedder_model}")
         archive._dim = archive.embedder.get_sentence_embedding_dimension()
         archive._lock = threading.RLock()
         archive._pending_prunes = 0
@@ -291,7 +277,8 @@ class SolutionArchive:
 
         logger.info(
             "SolutionArchive loaded: %d solutions from %s",
-            len(archive.solutions), path,
+            len(archive.solutions),
+            path,
         )
         return archive
 
@@ -304,8 +291,7 @@ class SolutionArchive:
             else:
                 sample = min(total, 500)
                 embs = np.vstack(
-                    [self.solutions[i].embedding.reshape(1, -1)
-                     for i in range(sample)]
+                    [self.solutions[i].embedding.reshape(1, -1) for i in range(sample)]
                 ).astype("float32")
                 sims = embs @ embs.T
                 np.fill_diagonal(sims, 0.0)

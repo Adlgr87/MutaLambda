@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """C++ language handler for UAST multi-language support."""
+
+import os
 import shutil
 import subprocess
 import tempfile
@@ -9,7 +11,7 @@ from typing import Optional
 from muta_ext.uast.core_uast import CoreUAST
 from muta_ext.uast.adapters.cpp_adapter import CppAdapter
 from muta_ext.uast.emitters.cpp_emitter import CppEmitter
-from muta_ext.uast.handlers.base_handler import BaseLanguageHandler
+from muta_ext.uast.handlers.base_handler import BaseLanguageHandler, run_hardened
 
 
 class CppHandler(BaseLanguageHandler):
@@ -36,22 +38,20 @@ class CppHandler(BaseLanguageHandler):
         if not shutil.which("g++"):
             # Fallback: just try to parse with tree-sitter
             return (True, "") if self._adapter.can_parse(source) else (False, "g++ not available")
-        
+
         try:
             with tempfile.NamedTemporaryFile(suffix=".cpp", delete=False) as f:
                 f.write(source.encode())
                 tmpfile = f.name
-            
-            result = subprocess.run(
-                ["g++", "-fsyntax-only", "-std=c++17", tmpfile],
-                capture_output=True,
-                text=True,
-                timeout=self._compile_timeout
+
+            result = run_hardened(
+                ["g++", "-fsyntax-only", "-std=c++17", tmpfile], timeout=self._compile_timeout
             )
-            
+
             import os
+
             os.unlink(tmpfile)
-            
+
             if result.returncode == 0:
                 return (True, "")
             return (False, result.stderr)
@@ -64,27 +64,23 @@ class CppHandler(BaseLanguageHandler):
         """Compile C++ source with g++."""
         if not shutil.which("g++"):
             return (False, "g++ not available")
-        
+
         try:
             with tempfile.NamedTemporaryFile(suffix=".cpp", delete=False) as f:
                 f.write(source.encode())
                 tmpfile = f.name
-            
+
             cmd = ["g++", "-O2", "-std=c++17", tmpfile, "-o", output_path]
             if self._use_sanitizers:
                 cmd.insert(1, "-fsanitize=undefined,address")
                 cmd.insert(1, "-fno-sanitize-recover=all")
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=self._compile_timeout
-            )
-            
+
+            result = run_hardened(cmd, timeout=self._compile_timeout)
+
             import os
+
             os.unlink(tmpfile)
-            
+
             if result.returncode == 0:
                 return (True, "")
             return (False, result.stderr)
@@ -98,7 +94,7 @@ class CppHandler(BaseLanguageHandler):
         # For simplicity, compile and run the combined source
         if not shutil.which("g++"):
             return (True, "g++ not available, skipping tests", 0.0)
-        
+
         start = time.perf_counter()
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -107,63 +103,52 @@ class CppHandler(BaseLanguageHandler):
                     f.write(source)
                     if test_source:
                         f.write("\n" + test_source)
-                
+
                 output_path = f"{tmpdir}/test_binary"
-                result = subprocess.run(
+                result = run_hardened(
                     ["g++", "-O2", "-std=c++17", main_cpp, "-o", output_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=self._compile_timeout
+                    timeout=self._compile_timeout,
                 )
-                
+
                 elapsed = time.perf_counter() - start
-                
+
                 if result.returncode != 0:
                     return (False, result.stderr, elapsed)
-                
+
                 # Run the binary
-                run_result = subprocess.run(
-                    [output_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=self._run_timeout
-                )
-                
+                run_result = run_hardened([output_path], timeout=self._run_timeout)
+
                 return (run_result.returncode == 0, run_result.stdout + run_result.stderr, elapsed)
         except Exception as e:
             return (False, str(e), 0.0)
 
     def benchmark(self, binary_path: str, iterations: int = 1000) -> dict:
         """Run benchmark on compiled binary."""
-        if not shutil.which(binary_path):
+        if not os.path.isfile(binary_path):
             return {"error": "Binary not found"}
-        
+
         times = []
         try:
             for _ in range(iterations):
                 start = time.perf_counter()
-                result = subprocess.run(
-                    [binary_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=self._run_timeout
-                )
+                result = run_hardened([binary_path], timeout=self._run_timeout)
                 elapsed = time.perf_counter() - start
                 times.append(elapsed)
         except subprocess.TimeoutExpired:
             pass
         except Exception as e:
             return {"error": str(e)}
-        
+
         if not times:
             return {"error": "No successful runs"}
-        
+
         import statistics
+
         return {
             "latency_p50": statistics.median(times),
             "latency_p99": sorted(times)[int(len(times) * 0.99)] if times else 0,
             "throughput": iterations / sum(times) if times else 0,
-            "runs": len(times)
+            "runs": len(times),
         }
 
     def roundtrip(self, source: str) -> str:

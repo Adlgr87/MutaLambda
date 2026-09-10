@@ -89,25 +89,17 @@ class Island:
         self._workflow_require_score_improvement = bool(
             getattr(config, "workflow_require_score_improvement", False)
         )
-        self._workflow_enforce_security = bool(
-            getattr(config, "workflow_enforce_security", True)
-        )
+        self._workflow_enforce_security = bool(getattr(config, "workflow_enforce_security", True))
         self._api_policy = str(getattr(config, "target_api_policy", "strict") or "strict")
-        self._enforce_api_fingerprint = bool(
-            getattr(config, "enforce_api_fingerprint", False)
-        )
-        self._enforce_differential = bool(
-            getattr(config, "enforce_differential", False)
-        )
+        self._enforce_api_fingerprint = bool(getattr(config, "enforce_api_fingerprint", False))
+        self._enforce_differential = bool(getattr(config, "enforce_differential", False))
         seeds = getattr(config, "seed_codes", None) or []
         if seeds and not self._baseline_code:
             self._baseline_code = seeds[0]
 
     def seed_population(self, codes: List[str]) -> None:
         """Inicializa la población con semillas de código."""
-        self.population = [
-            Individual(code=c) for c in codes[: self.config.population_size]
-        ]
+        self.population = [Individual(code=c) for c in codes[: self.config.population_size]]
         if codes and not self._baseline_code:
             self._baseline_code = codes[0]
 
@@ -145,7 +137,7 @@ class Island:
         self._pending_migrants.clear()
         return count
 
-    def _evolve_local(self) -> None:
+    def _evolve_local(self) -> None:  # noqa: C901
         """Evaluación → selección elitista → mutación."""
         if not self.population:
             return
@@ -181,9 +173,11 @@ class Island:
                 self.generation,
             )
 
-        if (self.migration_bus is not None
-                and getattr(self.migration_bus, "lineage_graph", None) is not None
-                and self.generation > 0):
+        if (
+            self.migration_bus is not None
+            and getattr(self.migration_bus, "lineage_graph", None) is not None
+            and self.generation > 0
+        ):
             lineage = self.migration_bus.lineage_graph
             # Resolve real parent code from current population or lineage store.
             pop_by_id = {p.id: p for p in self.population}
@@ -207,7 +201,11 @@ class Island:
                                 parents.append(Individual(id=pid, code=""))
                         reason = getattr(ind, "creation_reason", "mutation")
                         lineage.record(
-                            ind, parents, self.generation, self.id, reason=reason,
+                            ind,
+                            parents,
+                            self.generation,
+                            self.id,
+                            reason=reason,
                         )
                     except Exception as exc:
                         logger.warning(
@@ -223,7 +221,9 @@ class Island:
             self.local_best = copy.deepcopy(top)
             logger.info(
                 "Island %d — gen %d — nuevo mejor local: score=%.4f",
-                self.id, self.generation, top.score,
+                self.id,
+                self.generation,
+                top.score,
             )
 
         advanced_selection = getattr(self.migration_bus, "advanced_selection", None)
@@ -232,12 +232,11 @@ class Island:
 
         try:
             from nsga2 import nsga2_select, nsga2_tournament_select
+
             elites = nsga2_select(self.population, self.config.top_k)
             use_nsga2 = True
         except ImportError:
-            elites = heapq.nlargest(
-                self.config.top_k, self.population, key=lambda x: x.score
-            )
+            elites = heapq.nlargest(self.config.top_k, self.population, key=lambda x: x.score)
             use_nsga2 = False
 
         error_map: Dict[str, str] = {}
@@ -266,9 +265,7 @@ class Island:
                 else:
                     strategy = "mutation"
                     error_info = error_map.get(parent.id, "")
-                    mutated_code = self._mutate_with_context(
-                        parent.code, parent.score, error_info
-                    )
+                    mutated_code = self._mutate_with_context(parent.code, parent.score, error_info)
             elif strategy == "ast":
                 from evolution_engine import ASTMutator
 
@@ -279,9 +276,7 @@ class Island:
                 # llm / mutation — context-aware LLM path with AST fallback
                 strategy = "llm" if strategy == "llm" else "mutation"
                 error_info = error_map.get(parent.id, "")
-                mutated_code = self._mutate_with_context(
-                    parent.code, parent.score, error_info
-                )
+                mutated_code = self._mutate_with_context(parent.code, parent.score, error_info)
 
             child = self._build_child_candidate(
                 parent=parent,
@@ -298,9 +293,7 @@ class Island:
 
         self.population = new_pop
 
-    def _select_operator_strategy(
-        self, parent: Individual, elites: List[Individual]
-    ) -> str:
+    def _select_operator_strategy(self, parent: Individual, elites: List[Individual]) -> str:
         """Choose redesign/crossover/mutation/ast via bandit or legacy heuristic."""
         bandit = getattr(self.migration_bus, "operator_bandit", None)
         if bandit is not None:
@@ -375,8 +368,7 @@ class Island:
 
         prompt = (
             "Improve this Python function for correctness and efficiency. "
-            "Return only valid Python code, no explanations:\n\n"
-            + code
+            "Return only valid Python code, no explanations:\n\n" + code
         )
         result = self.llm_fn(prompt)
 
@@ -477,16 +469,23 @@ class Island:
         # control-flow nodes (for/if/while/try/except/with).
         try:
             from code_hash import cached_parse
+
             parent_tree = cached_parse(parent_code)
             mutant_tree = cached_parse(mutated_code)
 
             parent_cf_nodes = sum(
-                1 for n in ast.walk(parent_tree)
-                if isinstance(n, (ast.If, ast.For, ast.While, ast.Try, ast.With, ast.AsyncFor, ast.AsyncWith))
+                1
+                for n in ast.walk(parent_tree)
+                if isinstance(
+                    n, (ast.If, ast.For, ast.While, ast.Try, ast.With, ast.AsyncFor, ast.AsyncWith)
+                )
             )
             mutant_cf_nodes = sum(
-                1 for n in ast.walk(mutant_tree)
-                if isinstance(n, (ast.If, ast.For, ast.While, ast.Try, ast.With, ast.AsyncFor, ast.AsyncWith))
+                1
+                for n in ast.walk(mutant_tree)
+                if isinstance(
+                    n, (ast.If, ast.For, ast.While, ast.Try, ast.With, ast.AsyncFor, ast.AsyncWith)
+                )
             )
             # If control-flow node count is identical, this is a pure structural mutation.
             if parent_cf_nodes == mutant_cf_nodes:
@@ -506,7 +505,10 @@ class Island:
     ) -> Individual:
         if not self._workflow_enabled:
             child = Individual(code=mutated_code, tier="laboratory", record_lineage=True)
-            if self.migration_bus is not None and getattr(self.migration_bus, "lineage_graph", None) is not None:
+            if (
+                self.migration_bus is not None
+                and getattr(self.migration_bus, "lineage_graph", None) is not None
+            ):
                 child.parent_ids = [p.id for p in child_parents]
             child.creation_reason = strategy
             return child
@@ -519,9 +521,7 @@ class Island:
 
         trace = ProtocolTrace(
             run_id=self._protocol_run_id,
-            subject_id=(
-                f"island-{self.id}-gen-{self.generation}-candidate-{candidate_index}"
-            ),
+            subject_id=(f"island-{self.id}-gen-{self.generation}-candidate-{candidate_index}"),
             metadata={
                 "island_id": self.id,
                 "generation": self.generation,
@@ -590,7 +590,10 @@ class Island:
                         and result.fitness.correctness >= self._workflow_correctness_threshold
                     )
                 child.creation_reason = attempt_strategy
-                if self.migration_bus is not None and getattr(self.migration_bus, "lineage_graph", None) is not None:
+                if (
+                    self.migration_bus is not None
+                    and getattr(self.migration_bus, "lineage_graph", None) is not None
+                ):
                     child.parent_ids = [p.id for p in child_parents]
                 child.workflow_trace = trace.to_dict()
                 self._emit_protocol_trace(trace)
@@ -613,7 +616,10 @@ class Island:
         child.fitness = copy.deepcopy(parent.fitness)
         child.passed = parent.passed
         child.creation_reason = f"{strategy}_rejected"
-        if self.migration_bus is not None and getattr(self.migration_bus, "lineage_graph", None) is not None:
+        if (
+            self.migration_bus is not None
+            and getattr(self.migration_bus, "lineage_graph", None) is not None
+        ):
             child.parent_ids = [p.id for p in child_parents]
         child.workflow_trace = trace.to_dict()
         return child

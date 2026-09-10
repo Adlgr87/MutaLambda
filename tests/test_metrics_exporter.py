@@ -120,8 +120,8 @@ class TestHistogram:
         h.observe(0.5)
         prom = h.to_prometheus()
         assert "latency_bucket{" in prom
-        assert "endpoint=\"/api\"" in prom
-        assert "le=\"+Inf\"" in prom
+        assert 'endpoint="/api"' in prom
+        assert 'le="+Inf"' in prom
         assert "latency_sum{" in prom
         assert "latency_count{" in prom
 
@@ -238,7 +238,9 @@ class TestConvenienceFunctions:
         assert reg.counter("mutation_rejected_total").value == 1.0
 
     def test_record_gpu_status(self):
-        record_gpu_status(utilization=85.0, memory_used_mb=4000.0, memory_total_mb=8000.0, batch_count=10)
+        record_gpu_status(
+            utilization=85.0, memory_used_mb=4000.0, memory_total_mb=8000.0, batch_count=10
+        )
         reg = get_registry()
         assert reg.gauge("gpu_utilization").value == 85.0
         assert reg.gauge("gpu_memory_used_mb").value == 4000.0
@@ -263,6 +265,7 @@ class TestMetricsServer:
         try:
             time.sleep(0.2)
             import urllib.request  # noqa: PLC0415
+
             resp = urllib.request.urlopen("http://127.0.0.1:19100/metrics", timeout=2)
             assert resp.status == 200
             body = resp.read().decode()
@@ -278,6 +281,7 @@ class TestMetricsServer:
         try:
             time.sleep(0.2)
             import urllib.request  # noqa: PLC0415
+
             resp = urllib.request.urlopen("http://127.0.0.1:19101/healthz", timeout=2)
             assert resp.status == 200
             body = json.loads(resp.read())

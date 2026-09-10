@@ -5,6 +5,7 @@ Tracks resource utilization, bottleneck detection, and alerts
 during evolution runs. Integrates with metrics_exporter for
 Prometheus/OpenTelemetry output.
 """
+
 from __future__ import annotations
 
 import json
@@ -24,6 +25,7 @@ if TYPE_CHECKING:
 
 try:
     import psutil
+
     _HAS_PSUTIL = True
 except ImportError:
     _HAS_PSUTIL = False
@@ -33,6 +35,7 @@ except ImportError:
 @dataclass
 class ResourceSnapshot:
     """Point-in-time resource utilization snapshot."""
+
     timestamp: float
     cpu_percent: float
     memory_used_mb: float
@@ -47,6 +50,7 @@ class ResourceSnapshot:
 @dataclass
 class BottleneckAlert:
     """Alert when a resource bottleneck is detected."""
+
     timestamp: float
     resource: str
     value: float
@@ -58,6 +62,7 @@ class BottleneckAlert:
 @dataclass
 class MonitorConfig:
     """Configuration for the performance monitor."""
+
     sampling_interval_sec: float = 1.0
     history_size: int = 3600  # Keep 1 hour of samples
     cpu_threshold_pct: float = 90.0
@@ -101,9 +106,7 @@ class PerformanceMonitor:
 
         self._running = True
         self._start_time = time.perf_counter()
-        self._thread = threading.Thread(
-            target=self._monitor_loop, daemon=True, name="perf-monitor"
-        )
+        self._thread = threading.Thread(target=self._monitor_loop, daemon=True, name="perf-monitor")
         self._thread.start()
         logger.info(
             "Performance monitor started (interval=%.1fs)",
@@ -165,19 +168,23 @@ class PerformanceMonitor:
         gpu_mem = 0.0
         try:
             from gpu_optimizer import GPUOptimizer
+
             mem = GPUOptimizer({}).get_memory_usage()
             gpu_mem = mem.get("gpu_memory_used_mb", 0.0)
             # GPU utilization requires nvidia-smi
             if _HAS_PSUTIL:
                 try:
                     import subprocess
+
                     result = subprocess.run(
                         [
                             "nvidia-smi",
                             "--query-gpu=utilization.gpu",
                             "--format=csv,noheader,nounits",
                         ],
-                        capture_output=True, text=True, timeout=2,
+                        capture_output=True,
+                        text=True,
+                        timeout=2,
                     )
                     if result.returncode == 0 and result.stdout.strip():
                         gpu_util = float(result.stdout.strip().split("\n")[0])
@@ -280,9 +287,7 @@ class PerformanceMonitor:
             "evolution_duration": {
                 "mean": float(np.mean(durations)) if durations else None,
                 "trend": (
-                    "improving"
-                    if len(durations) > 1 and durations[-1] < durations[0]
-                    else "stable"
+                    "improving" if len(durations) > 1 and durations[-1] < durations[0] else "stable"
                 ),
             },
             "alerts_triggered": len(self._alerts),
@@ -322,11 +327,11 @@ class PerformanceMonitor:
 
         latest = self.get_latest()
         if latest:
-            lines.append(f'mutalambda_cpu_percent {latest.cpu_percent}')
-            lines.append(f'mutalambda_memory_percent {latest.memory_percent}')
-            lines.append(f'mutalambda_gpu_utilization {latest.gpu_utilization}')
-            lines.append(f'mutalambda_gpu_memory_used_mb {latest.gpu_memory_used_mb}')
-            lines.append(f'mutalambda_alerts_total {len(self._alerts)}')
+            lines.append(f"mutalambda_cpu_percent {latest.cpu_percent}")
+            lines.append(f"mutalambda_memory_percent {latest.memory_percent}")
+            lines.append(f"mutalambda_gpu_utilization {latest.gpu_utilization}")
+            lines.append(f"mutalambda_gpu_memory_used_mb {latest.gpu_memory_used_mb}")
+            lines.append(f"mutalambda_alerts_total {len(self._alerts)}")
 
             # Evolution metrics if available
             gen = getattr(latest, "evolution_generation", None)
@@ -351,6 +356,7 @@ class PerformanceMonitor:
         Prometheus /metrics endpoint and the OTel bridge.
         """
         from metrics_exporter import get_registry
+
         if registry is None:
             registry = get_registry()
         latest = self.get_latest()
@@ -359,38 +365,20 @@ class PerformanceMonitor:
 
         registry.gauge("cpu_percent").set(latest.cpu_percent)
         registry.gauge("memory_percent").set(latest.memory_percent)
-        registry.gauge(
-            "gpu_utilization"
-        ).set(latest.gpu_utilization)
-        registry.gauge(
-            "gpu_memory_used_mb"
-        ).set(latest.gpu_memory_used_mb)
-        registry.gauge(
-            "memory_used_mb"
-        ).set(latest.memory_used_mb)
-        registry.gauge(
-            "memory_total_mb"
-        ).set(latest.memory_total_mb)
-        registry.gauge(
-            "disk_read_mb"
-        ).set(latest.disk_read_mb)
-        registry.gauge(
-            "disk_write_mb"
-        ).set(latest.disk_write_mb)
-        registry.gauge(
-            "alerts_total"
-        ).set(float(len(self._alerts)))
+        registry.gauge("gpu_utilization").set(latest.gpu_utilization)
+        registry.gauge("gpu_memory_used_mb").set(latest.gpu_memory_used_mb)
+        registry.gauge("memory_used_mb").set(latest.memory_used_mb)
+        registry.gauge("memory_total_mb").set(latest.memory_total_mb)
+        registry.gauge("disk_read_mb").set(latest.disk_read_mb)
+        registry.gauge("disk_write_mb").set(latest.disk_write_mb)
+        registry.gauge("alerts_total").set(float(len(self._alerts)))
 
         gen = getattr(latest, "evolution_generation", None)
         if gen is not None:
             registry.gauge("evolution_generation").set(float(gen))
-            score = getattr(
-                latest, "evolution_best_score", None
-            )
+            score = getattr(latest, "evolution_best_score", None)
             if score is not None:
-                registry.gauge(
-                    "evolution_best_score"
-                ).set(score)
+                registry.gauge("evolution_best_score").set(score)
 
 
 # Singleton instance
@@ -428,9 +416,13 @@ if __name__ == "__main__":
     start = time.perf_counter()
     while time.perf_counter() - start < args.duration:
         trends = monitor.get_trends()
-        print(f"\rCPU: {trends.get('cpu', {}).get('mean', 0):.1f}% | "
-              f"Mem: {trends.get('memory', {}).get('mean', 0):.1f}% | "
-              f"Alerts: {trends.get('alerts_triggered', 0)}   ", end="", flush=True)
+        print(
+            f"\rCPU: {trends.get('cpu', {}).get('mean', 0):.1f}% | "
+            f"Mem: {trends.get('memory', {}).get('mean', 0):.1f}% | "
+            f"Alerts: {trends.get('alerts_triggered', 0)}   ",
+            end="",
+            flush=True,
+        )
         time.sleep(args.interval)
 
     monitor.stop()

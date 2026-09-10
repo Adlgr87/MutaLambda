@@ -1,4 +1,5 @@
 """Example: Simple NumPy array operation for optimization."""
+
 import numpy as np
 
 
@@ -15,6 +16,6 @@ def compute_stats(data):
         diff = data[i] - mean
         variance += diff * diff
     variance /= n
-    std = variance ** 0.5
+    std = variance**0.5
 
     return mean, std

@@ -17,7 +17,12 @@ test_cases = [
     {"function": "primes_up_to", "args": [10], "expected": [2, 3, 5, 7], "comparison": "equal"},
     {"function": "primes_up_to", "args": [2], "expected": [2], "comparison": "equal"},
     {"function": "primes_up_to", "args": [1], "expected": [], "comparison": "equal"},
-    {"function": "primes_up_to", "args": [20], "expected": [2, 3, 5, 7, 11, 13, 17, 19], "comparison": "equal"},
+    {
+        "function": "primes_up_to",
+        "args": [20],
+        "expected": [2, 3, 5, 7, 11, 13, 17, 19],
+        "comparison": "equal",
+    },
 ]
-invariants = ['all(p >= 2 for p in out)']
+invariants = ["all(p >= 2 for p in out)"]
 input_strategy = "st.integers(min_value=0, max_value=100)"

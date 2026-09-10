@@ -26,6 +26,7 @@ from api_fingerprint import compare_api, extract_api_fingerprint
 from benchmarking import BenchmarkConfig, BenchmarkResult, run_callable_benchmark
 from differential import DifferentialResult, differential_test
 from runners import SubprocessRunner
+from secure_exec import load_function
 
 
 @dataclass
@@ -113,7 +114,10 @@ class MassiveTargetAdapter:
         except SyntaxError:
             return src
         for node in tree.body:
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == self.entrypoint:
+            if (
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == self.entrypoint
+            ):
                 lines = src.splitlines(keepends=True)
                 # 1-based linenos
                 chunk = "".join(lines[node.lineno - 1 : node.end_lineno])
@@ -165,8 +169,10 @@ class MassiveTargetAdapter:
         )
         return CorrectnessResult(
             ok=diff.equivalent,
-            correctness=1.0 if diff.equivalent else max(
-                0.0, 1.0 - (diff.mismatches / max(1, diff.compared))
+            correctness=(
+                1.0
+                if diff.equivalent
+                else max(0.0, 1.0 - (diff.mismatches / max(1, diff.compared)))
             ),
             message="equivalent" if diff.equivalent else "differential_mismatch",
             details=diff.to_dict(),
@@ -175,12 +181,12 @@ class MassiveTargetAdapter:
     def benchmark(self, code: str) -> BenchmarkResult:
         """Micro-benchmark entrypoint using declared test inputs when available."""
         # Build a zero-arg callable that runs the entrypoint on first test args.
-        namespace: Dict[str, Any] = {"__name__": "__massive_bench__"}
+        # ML-001: use the guarded, AST-scanned loader instead of a bare
+        # in-process exec.
         try:
-            exec(compile(code, "<bench>", "exec"), namespace, namespace)  # noqa: S102
+            fn = load_function(code, self.entrypoint)
         except Exception as exc:
             return BenchmarkResult(error=f"compile:{exc}")
-        fn = namespace.get(self.entrypoint)
         if not callable(fn):
             return BenchmarkResult(error=f"missing entrypoint {self.entrypoint}")
 
@@ -221,9 +227,7 @@ class MassiveTargetAdapter:
             "benchmark_baseline": bench_base.to_dict(),
             "benchmark_candidate": bench_cand.to_dict(),
             "patch": self.patch(original, candidate),
-            "promotable": bool(
-                correctness.ok and equiv.ok and not bench_cand.error
-            ),
+            "promotable": bool(correctness.ok and equiv.ok and not bench_cand.error),
         }
 
     @classmethod

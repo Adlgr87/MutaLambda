@@ -193,6 +193,7 @@ def test_hfc_deduplicates_demoted_elite_duplicate_in_factory():
     engine = _engine(lambda_clones=0, tier3_size=1)
     engine.tier2 = [existing_factory, challenger]
     engine.tier3 = [existing_elite]
+
     class MappingEvaluator:
         def __init__(self):
             self.fitness = {
@@ -387,7 +388,9 @@ def test_factory_offspring_skip_evaluation_uses_parent_fitness():
     )
 
     # Factory clones should NOT have been evaluated
-    factory_clones = [ind for ind in engine.tier1 + engine.tier2 + engine.tier3 if ind.parent_ids == [parent.id]]
+    factory_clones = [
+        ind for ind in engine.tier1 + engine.tier2 + engine.tier3 if ind.parent_ids == [parent.id]
+    ]
     for clone in factory_clones:
         # If clone is in tier2, it inherited parent's fitness (not re-evaluated)
         assert clone.score == parent.score
@@ -422,7 +425,11 @@ class _CountingEvaluator:
                 results.append(EvalResult(fitness=fitness, passed=True, metrics=fitness.to_dict()))
             else:
                 fitness = FitnessVector.worst()
-                results.append(EvalResult(fitness=fitness, passed=False, metrics=fitness.to_dict(), stderr="err"))
+                results.append(
+                    EvalResult(
+                        fitness=fitness, passed=False, metrics=fitness.to_dict(), stderr="err"
+                    )
+                )
         return results
 
 
@@ -500,7 +507,11 @@ class _MockEvalWithStats(_CountingEvaluator):
                 results.append(EvalResult(fitness=fitness, passed=True, metrics=fitness.to_dict()))
             else:
                 fitness = FitnessVector.worst()
-                results.append(EvalResult(fitness=fitness, passed=False, metrics=fitness.to_dict(), stderr="err"))
+                results.append(
+                    EvalResult(
+                        fitness=fitness, passed=False, metrics=fitness.to_dict(), stderr="err"
+                    )
+                )
         return results
 
 

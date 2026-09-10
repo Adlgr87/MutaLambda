@@ -7,8 +7,12 @@ re-exported from ``muta_lambda/__init__.py`` so existing callers
 
 from __future__ import annotations
 
+import logging
+import random
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
+
+import numpy as np
 
 __all__ = ["EvolveConfig"]
 
@@ -131,6 +135,7 @@ class EvolveConfig:
         except Exception as _mlc_exc:
             # Legacy fallback keeps older call sites working if schema drifts.
             import logging as _logging
+
             _logging.getLogger("MutaLambda").debug(
                 "MutaLambdaConfig path failed (%s); using legacy from_yaml", _mlc_exc
             )
@@ -175,8 +180,12 @@ class EvolveConfig:
             novelty_alpha=evo.get("novelty_alpha", 0.15),
             workflow_enabled=cfg.get("workflow", {}).get("enabled", True),
             workflow_max_retries=cfg.get("workflow", {}).get("max_retries", 1),
-            workflow_correctness_threshold=cfg.get("workflow", {}).get("correctness_threshold", 1.0),
-            workflow_require_score_improvement=cfg.get("workflow", {}).get("require_score_improvement", False),
+            workflow_correctness_threshold=cfg.get("workflow", {}).get(
+                "correctness_threshold", 1.0
+            ),
+            workflow_require_score_improvement=cfg.get("workflow", {}).get(
+                "require_score_improvement", False
+            ),
             workflow_enforce_security=cfg.get("workflow", {}).get("enforce_security", True),
             workflow_trace_limit=cfg.get("workflow", {}).get("trace_limit", 200),
             convergent_boost_enabled=evo.get("convergent_boost", {}).get("enabled", True),
@@ -186,7 +195,9 @@ class EvolveConfig:
             resurrection_threshold=evo.get("resurrection", {}).get("threshold", 8),
             resurrection_max_attempts=evo.get("resurrection", {}).get("max_attempts", 3),
             resurrection_min_score_ratio=evo.get("resurrection", {}).get("min_score_ratio", 0.3),
-            cross_branch_crossover_enabled=evo.get("cross_branch_crossover", {}).get("enabled", True),
+            cross_branch_crossover_enabled=evo.get("cross_branch_crossover", {}).get(
+                "enabled", True
+            ),
             cross_branch_crossover_prob=evo.get("cross_branch_crossover", {}).get("prob", 0.05),
             cross_branch_min_distance=evo.get("cross_branch_crossover", {}).get("min_distance", 3),
             use_process_pool=evo.get("use_process_pool", False),
@@ -218,10 +229,13 @@ class EvolveConfig:
             spatial_enabled=spatial.get("enabled", False),
             spatial_neighborhood=spatial.get("neighborhood", "moore"),
             pattern_memory_enabled=patterns.get("enabled", False),
-            enforce_api_fingerprint=cfg.get("workflow", {}).get("enforce_api_fingerprint",
-                cfg.get("target", {}).get("enforce_api_fingerprint", False)),
-            enforce_differential=cfg.get("workflow", {}).get("enforce_differential",
-                cfg.get("target", {}).get("enforce_differential", False)),
+            enforce_api_fingerprint=cfg.get("workflow", {}).get(
+                "enforce_api_fingerprint",
+                cfg.get("target", {}).get("enforce_api_fingerprint", False),
+            ),
+            enforce_differential=cfg.get("workflow", {}).get(
+                "enforce_differential", cfg.get("target", {}).get("enforce_differential", False)
+            ),
             benchmark_warmups=cfg.get("benchmark", {}).get("warmups", 0),
             benchmark_samples=cfg.get("benchmark", {}).get("samples", 1),
             benchmark_operations_per_case=cfg.get("benchmark", {}).get("operations_per_case", 1),
@@ -309,4 +323,3 @@ class GenerationResult:
     snapshots: List[IslandSnapshot] = field(default_factory=list)
     should_stop: bool = False
     combined_best_score: float = float("-inf")
-

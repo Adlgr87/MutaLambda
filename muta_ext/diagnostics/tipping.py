@@ -76,20 +76,22 @@ def mad(data: List[float]) -> float:
 
     data_sorted = sorted(data)
     n = len(data_sorted)
-    median = data_sorted[n // 2] if n % 2 == 1 else (
-        data_sorted[n // 2 - 1] + data_sorted[n // 2]
-    ) / 2.0
+    median = (
+        data_sorted[n // 2] if n % 2 == 1 else (data_sorted[n // 2 - 1] + data_sorted[n // 2]) / 2.0
+    )
 
     abs_devs = sorted(abs(x - median) for x in data)
     n_dev = len(abs_devs)
-    mad_val = abs_devs[n_dev // 2] if n_dev % 2 == 1 else (
-        abs_devs[n_dev // 2 - 1] + abs_devs[n_dev // 2]
-    ) / 2.0
+    mad_val = (
+        abs_devs[n_dev // 2]
+        if n_dev % 2 == 1
+        else (abs_devs[n_dev // 2 - 1] + abs_devs[n_dev // 2]) / 2.0
+    )
 
     return mad_val
 
 
-def detect_tipping(
+def detect_tipping(  # noqa: C901
     fitness_series: List[float],
     window: int = 5,
     n_deviations: float = 3.0,

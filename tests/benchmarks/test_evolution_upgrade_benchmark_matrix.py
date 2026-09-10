@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 BENCHMARK_VARIANTS = [
     "base",
     "base_plus_thc",

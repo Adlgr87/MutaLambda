@@ -31,14 +31,20 @@ from typing import Any, Callable, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from benchmarks.effibench_loader import load_tasks, PREAMBLE
-from benchmarks.effibench_harness import make_service, eval_code, extract_code, PROMPT_TMPL, summarize
+from benchmarks.effibench_harness import (
+    make_service,
+    eval_code,
+    extract_code,
+    PROMPT_TMPL,
+    summarize,
+)
 from evaluation_service import EvaluationService
 from llm_backend import LLMBackend
-
 
 # ---------------------------------------------------------------------------
 # LLM backend factory
 # ---------------------------------------------------------------------------
+
 
 def make_llm_generate(
     backend: str,
@@ -80,6 +86,7 @@ def make_llm_generate(
 # SaaS tool stubs (for CI / local when credentials absent)
 # ---------------------------------------------------------------------------
 
+
 def copilot_stub(prompt: str) -> str:
     """Stub for GitHub Copilot — returns canonical (baseline) code.
 
@@ -88,16 +95,17 @@ def copilot_stub(prompt: str) -> str:
     """
     # Parse the code block from the prompt - this is the canonical solution
     import re
-    m = re.search(r'```python\n(.*?)```', prompt, re.DOTALL)
+
+    m = re.search(r"```python\n(.*?)```", prompt, re.DOTALL)
     if m:
         code = m.group(1)
     else:
         # Fallback: extract from the "Current correct implementation" section
-        m = re.search(r'Current correct implementation:\s*```python\n(.*?)```', prompt, re.DOTALL)
+        m = re.search(r"Current correct implementation:\s*```python\n(.*?)```", prompt, re.DOTALL)
         code = m.group(1) if m else prompt
     # Ensure shim is present
-    if 'solution = Solution()' not in code:
-        code = code.rstrip() + '\n\nsolution = Solution()\n'
+    if "solution = Solution()" not in code:
+        code = code.rstrip() + "\n\nsolution = Solution()\n"
     return code
 
 
@@ -169,6 +177,7 @@ TOOL_REGISTRY: dict[str, dict] = {
 # Task sets per benchmark suite
 # ---------------------------------------------------------------------------
 
+
 def load_comparison_tasks(parquet: str, n_tasks: int = 10) -> list:
     """Load a representative slice of EffiBench tasks for comparison."""
     tasks = load_tasks(parquet)
@@ -178,6 +187,7 @@ def load_comparison_tasks(parquet: str, n_tasks: int = 10) -> list:
 # ---------------------------------------------------------------------------
 # Main run logic
 # ---------------------------------------------------------------------------
+
 
 async def run_tool(tool_key: str, tasks: list, args, api_keys: dict) -> dict:
     """Run one tool across all tasks and return aggregated results."""
@@ -192,10 +202,16 @@ async def run_tool(tool_key: str, tasks: list, args, api_keys: dict) -> dict:
         try:
             baseline = eval_code(svc, task.seed_code())
             if baseline["correctness"] < 1.0:
-                rec = {"problem_idx": task.problem_idx, "task_name": task.task_name,
-                       "status": "baseline_fail", "baseline": baseline}
+                rec = {
+                    "problem_idx": task.problem_idx,
+                    "task_name": task.task_name,
+                    "status": "baseline_fail",
+                    "baseline": baseline,
+                }
                 records.append(rec)
-                print(f"    [{i+1}/{len(tasks)}] #{task.problem_idx} {task.task_name[:40]:40s} baseline_fail")
+                print(
+                    f"    [{i+1}/{len(tasks)}] #{task.problem_idx} {task.task_name[:40]:40s} baseline_fail"
+                )
                 continue
 
             if tool_cfg["type"] == "llm" and tool_cfg.get("backend") == "openrouter":
@@ -269,17 +285,31 @@ async def run_tool(tool_key: str, tasks: list, args, api_keys: dict) -> dict:
                 rec["llm_wall_sec"] = round(llm_wall, 2)
 
             records.append(rec)
-            ratio_str = f"ratio={rec['ratio_to_canonical']}" if rec['ratio_to_canonical'] else "incorrect"
-            print(f"    [{i+1}/{len(tasks)}] #{task.problem_idx} {task.task_name[:40]:40s} {status} {ratio_str}")
+            ratio_str = (
+                f"ratio={rec['ratio_to_canonical']}" if rec["ratio_to_canonical"] else "incorrect"
+            )
+            print(
+                f"    [{i+1}/{len(tasks)}] #{task.problem_idx} {task.task_name[:40]:40s} {status} {ratio_str}"
+            )
 
         except Exception as exc:
-            rec = {"problem_idx": task.problem_idx, "task_name": task.task_name,
-                   "status": f"error: {type(exc).__name__}: {exc}"}
+            rec = {
+                "problem_idx": task.problem_idx,
+                "task_name": task.task_name,
+                "status": f"error: {type(exc).__name__}: {exc}",
+            }
             records.append(rec)
-            print(f"    [{i+1}/{len(tasks)}] #{task.problem_idx} {task.task_name[:40]:40s} error: {exc}")
+            print(
+                f"    [{i+1}/{len(tasks)}] #{task.problem_idx} {task.task_name[:40]:40s} error: {exc}"
+            )
 
     summary = summarize(records, args.min_improvement)
-    return {"tool": tool_key, "display": tool_cfg["display"], "summary": summary, "results": records}
+    return {
+        "tool": tool_key,
+        "display": tool_cfg["display"],
+        "summary": summary,
+        "results": records,
+    }
 
 
 def print_leaderboard(tool_results: list[dict]) -> None:
@@ -287,7 +317,9 @@ def print_leaderboard(tool_results: list[dict]) -> None:
     print("\n" + "=" * 80)
     print("  MARKET LEADERBOARD (lower ratio = faster)")
     print("=" * 80)
-    print(f"{'Tool':<35} {'Tasks':>6} {'Valid':>6} {'MedRatio':>9} {'MeanSpeed':>10} {'Opt%':>6} {'Corr%':>6}")
+    print(
+        f"{'Tool':<35} {'Tasks':>6} {'Valid':>6} {'MedRatio':>9} {'MeanSpeed':>10} {'Opt%':>6} {'Corr%':>6}"
+    )
     print("-" * 80)
 
     # Sort by median ratio
@@ -303,8 +335,10 @@ def print_leaderboard(tool_results: list[dict]) -> None:
         mean_sp = s.get("mean_speedup_when_improved") or 0
         corr = s.get("llm_correctness_rate") or 0
         opt = s.get("opt_pct") or 0
-        print(f"{tr['display']:<35} {s['n_tasks']:>6} {s['n_valid_comparisons']:>6} "
-              f"{s['median_ratio_to_canonical']:>9.4f} {mean_sp:>10.4f}x {opt:>5.1f}% {corr:>5.1%}")
+        print(
+            f"{tr['display']:<35} {s['n_tasks']:>6} {s['n_valid_comparisons']:>6} "
+            f"{s['median_ratio_to_canonical']:>9.4f} {mean_sp:>10.4f}x {opt:>5.1f}% {corr:>5.1%}"
+        )
     print()
 
 
@@ -312,10 +346,15 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--parquet", default="/tmp/effibench_train.parquet")
     p.add_argument("--tasks", type=int, default=10)
-    p.add_argument("--smoke", action="store_true", help="Run pipeline integrity check (stub backends)")
-    p.add_argument("--tools", nargs="+",
-                   default=["mutalambda", "openrouter-dots3", "copilot", "codewhisperer"],
-                   help="Tools to compare (from TOOL_REGISTRY keys)")
+    p.add_argument(
+        "--smoke", action="store_true", help="Run pipeline integrity check (stub backends)"
+    )
+    p.add_argument(
+        "--tools",
+        nargs="+",
+        default=["mutalambda", "openrouter-dots3", "copilot", "codewhisperer"],
+        help="Tools to compare (from TOOL_REGISTRY keys)",
+    )
     p.add_argument("--samples", type=int, default=7)
     p.add_argument("--warmups", type=int, default=2)
     p.add_argument("--timeout", type=float, default=10.0)
@@ -385,11 +424,16 @@ def main() -> int:
 
 import subprocess
 
+
 def get_git_info() -> str:
     try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1]
-        ).decode().strip()[:10]
+        return (
+            subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1]
+            )
+            .decode()
+            .strip()[:10]
+        )
     except Exception:
         return "unknown"
 
@@ -397,6 +441,7 @@ def get_git_info() -> str:
 def get_cache_stats() -> dict:
     try:
         from benchmarks.checkpoints import get_cache_stats as gcs
+
         return gcs()
     except Exception:
         return {}

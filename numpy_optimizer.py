@@ -26,8 +26,8 @@ import copy
 import random
 from typing import List, Optional
 
-
 # ── Shared helpers ─────────────────────────────────────────────────────────
+
 
 def _has_numpy_import(tree: ast.Module) -> bool:
     """True if the module already imports numpy (any common form)."""
@@ -81,6 +81,7 @@ def _is_simple_name(node: ast.AST) -> bool:
 
 
 # ── Element-wise loop vectorization ────────────────────────────────────────
+
 
 class _LoopVarSubstituter(ast.NodeTransformer):
     """Replace every *load* of ``var`` with ``np.arange(bound)``."""
@@ -168,6 +169,7 @@ class NumPyVectorizer(ast.NodeTransformer):
 
 # ── Einsum optimization ────────────────────────────────────────────────────
 
+
 class NumPyEinsumOptimizer(ast.NodeTransformer):
     """Add ``optimize=True`` to existing ``np.einsum`` calls.
 
@@ -188,15 +190,14 @@ class NumPyEinsumOptimizer(ast.NodeTransformer):
             and node.func.attr == "einsum"
         ):
             if not any(kw.arg == "optimize" for kw in node.keywords):
-                node.keywords.append(
-                    ast.keyword(arg="optimize", value=ast.Constant(value=True))
-                )
+                node.keywords.append(ast.keyword(arg="optimize", value=ast.Constant(value=True)))
                 self.changes_made.append("einsum_optimize_true")
                 self.needs_numpy = True
         return node
 
 
 # ── Broadcasting (nested loops → outer product) ────────────────────────────
+
 
 class NumPyBroadcastOptimizer(ast.NodeTransformer):
     """Rewrite the canonical nested loop
@@ -236,10 +237,7 @@ class NumPyBroadcastOptimizer(ast.NodeTransformer):
         target = stmt.targets[0]
 
         # Target shape: C[i][j]
-        if not (
-            isinstance(target, ast.Subscript)
-            and isinstance(target.value, ast.Subscript)
-        ):
+        if not (isinstance(target, ast.Subscript) and isinstance(target.value, ast.Subscript)):
             return None
         c_node = target.value.value
         i_node = target.value.slice
@@ -301,6 +299,7 @@ class NumPyBroadcastOptimizer(ast.NodeTransformer):
 
 # ── Memory layout ──────────────────────────────────────────────────────────
 
+
 class NumPyMemoryLayoutOptimizer(ast.NodeTransformer):
     """Pin an explicit contiguous ``order='C'`` on array constructors.
 
@@ -324,15 +323,14 @@ class NumPyMemoryLayoutOptimizer(ast.NodeTransformer):
             and node.func.attr in self._CONSTRUCTORS
         ):
             if not any(kw.arg == "order" for kw in node.keywords):
-                node.keywords.append(
-                    ast.keyword(arg="order", value=ast.Constant(value="C"))
-                )
+                node.keywords.append(ast.keyword(arg="order", value=ast.Constant(value="C")))
                 self.changes_made.append("pin_c_order")
                 self.needs_numpy = True
         return node
 
 
 # ── Orchestrator ───────────────────────────────────────────────────────────
+
 
 class NumPyMutator:
     """Apply real NumPy-specific transformations to Python code."""
@@ -459,12 +457,14 @@ class NumPyMutator:
             return code
 
         if mutation_type == "auto":
-            mutation_type = random.choice([
-                "vectorize_loop",
-                "einsum_matmul",
-                "broadcast_ops",
-                "memory_layout",
-            ])
+            mutation_type = random.choice(
+                [
+                    "vectorize_loop",
+                    "einsum_matmul",
+                    "broadcast_ops",
+                    "memory_layout",
+                ]
+            )
 
         transformers = {
             "vectorize_loop": self.vectorizer,

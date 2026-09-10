@@ -17,6 +17,7 @@ from dataclasses import dataclass
 @dataclass
 class VerificationResult:
     """Result of algebraic equivalence verification."""
+
     is_equivalent: bool
     confidence: float  # 0.0 - 1.0
     reason: str
@@ -39,13 +40,13 @@ class SymbolicExtractor:
                 return None
 
             op_map = {
-                ast.Add: '+',
-                ast.Sub: '-',
-                ast.Mult: '*',
-                ast.Div: '/',
-                ast.Mod: '%',
-                ast.Pow: '**',
-                ast.FloorDiv: '//',
+                ast.Add: "+",
+                ast.Sub: "-",
+                ast.Mult: "*",
+                ast.Div: "/",
+                ast.Mod: "%",
+                ast.Pow: "**",
+                ast.FloorDiv: "//",
             }
             op_str = op_map.get(type(node.op))
             if op_str is None:
@@ -113,6 +114,7 @@ class AlgebraicVerifier:
         self.sympy_available = False
         try:
             import sympy
+
             self.sympy_available = True
         except ImportError:
             pass
@@ -124,7 +126,7 @@ class AlgebraicVerifier:
                 is_equivalent=True,  # Assume equivalent if SymPy not available
                 confidence=0.5,
                 reason="sympy_not_available",
-                details="Install sympy for algebraic verification"
+                details="Install sympy for algebraic verification",
             )
 
         import sympy
@@ -134,10 +136,7 @@ class AlgebraicVerifier:
             mutated_tree = ast.parse(mutated_code)
         except SyntaxError as e:
             return VerificationResult(
-                is_equivalent=False,
-                confidence=1.0,
-                reason="syntax_error",
-                details=str(e)
+                is_equivalent=False, confidence=1.0, reason="syntax_error", details=str(e)
             )
 
         extractor = SymbolicExtractor()
@@ -149,7 +148,7 @@ class AlgebraicVerifier:
                 is_equivalent=True,  # Can't verify, assume OK
                 confidence=0.3,
                 reason="no_expressions_found",
-                details="Could not extract expressions for comparison"
+                details="Could not extract expressions for comparison",
             )
 
         # Compare expressions
@@ -158,7 +157,7 @@ class AlgebraicVerifier:
                 is_equivalent=False,
                 confidence=0.8,
                 reason="different_return_count",
-                details=f"Original has {len(original_exprs)} returns, mutated has {len(mutated_exprs)}"
+                details=f"Original has {len(original_exprs)} returns, mutated has {len(mutated_exprs)}",
             )
 
         # Try symbolic comparison
@@ -173,7 +172,7 @@ class AlgebraicVerifier:
                         is_equivalent=False,
                         confidence=0.9,
                         reason="algebraic_mismatch",
-                        details=f"Expressions differ: {orig_expr} vs {mut_expr}"
+                        details=f"Expressions differ: {orig_expr} vs {mut_expr}",
                     )
             except (sympy.SympifyError, TypeError):
                 # Can't compare symbolically, fall through
@@ -183,7 +182,7 @@ class AlgebraicVerifier:
             is_equivalent=True,
             confidence=0.85,
             reason="expressions_match",
-            details="All extracted expressions are algebraically equivalent"
+            details="All extracted expressions are algebraically equivalent",
         )
 
 
@@ -204,10 +203,7 @@ class SemanticVerifier:
             mutated_tree = ast.parse(mutated_code)
         except SyntaxError as e:
             return VerificationResult(
-                is_equivalent=False,
-                confidence=1.0,
-                reason="syntax_error",
-                details=str(e)
+                is_equivalent=False, confidence=1.0, reason="syntax_error", details=str(e)
             )
 
         for check in self.structural_checks:
@@ -219,7 +215,7 @@ class SemanticVerifier:
             is_equivalent=True,
             confidence=0.7,
             reason="structural_match",
-            details="All structural checks passed"
+            details="All structural checks passed",
         )
 
     def _check_function_calls(self, orig: ast.AST, mut: ast.AST) -> VerificationResult:
@@ -238,7 +234,7 @@ class SemanticVerifier:
         # Check for hallucinated functions (in mutated but not original)
         hallucinated = mut_calls - orig_calls
         # Allow common numpy/math functions
-        allowed_new = {'np', 'numpy', 'array', 'zeros', 'ones', 'dot', 'sum', 'mean'}
+        allowed_new = {"np", "numpy", "array", "zeros", "ones", "dot", "sum", "mean"}
         hallucinated -= allowed_new
 
         if hallucinated:
@@ -246,7 +242,7 @@ class SemanticVerifier:
                 is_equivalent=False,
                 confidence=0.6,
                 reason="new_functions",
-                details=f"New functions detected: {hallucinated}"
+                details=f"New functions detected: {hallucinated}",
             )
 
         return VerificationResult(is_equivalent=True, confidence=0.7, reason="calls_match")
@@ -262,7 +258,7 @@ class SemanticVerifier:
                 is_equivalent=False,
                 confidence=0.5,
                 reason="loop_count_changed",
-                details=f"Loop count changed from {orig_loops} to {mut_loops}"
+                details=f"Loop count changed from {orig_loops} to {mut_loops}",
             )
 
         return VerificationResult(is_equivalent=True, confidence=0.6, reason="control_flow_ok")
@@ -287,7 +283,7 @@ class SemanticVerifier:
                 is_equivalent=False,
                 confidence=0.4,
                 reason="many_variables_removed",
-                details=f"Many variables removed: {missing}"
+                details=f"Many variables removed: {missing}",
             )
 
         return VerificationResult(is_equivalent=True, confidence=0.5, reason="variables_ok")
@@ -317,10 +313,12 @@ class ASTMathVerifier:
             is_equivalent=True,
             confidence=min(semantic_result.confidence, algebraic_result.confidence),
             reason="all_checks_passed",
-            details="Both semantic and algebraic checks passed"
+            details="Both semantic and algebraic checks passed",
         )
 
-    def batch_verify(self, original_code: str, mutations: List[str]) -> List[Tuple[str, VerificationResult]]:
+    def batch_verify(
+        self, original_code: str, mutations: List[str]
+    ) -> List[Tuple[str, VerificationResult]]:
         """Verify multiple mutations and return valid ones."""
         results = []
         for mutation in mutations:

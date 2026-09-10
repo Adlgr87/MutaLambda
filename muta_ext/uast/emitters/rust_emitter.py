@@ -1,15 +1,36 @@
 #!/usr/bin/env python3
 """CoreUAST → Rust source emitter."""
+
 import shutil
 import subprocess
 import tempfile
 from typing import Any, Optional
 
 from muta_ext.uast.core_uast import (
-    CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
-    Assign, If, For, While, Return, Function, Comment, Opaque,
-    TryExcept, ExceptClause, StructDef, FieldDef, TypeAnnotation,
-    Match, MatchArm, Reference, Break, ParallelFor
+    CoreUAST,
+    LiteralNode,
+    Identifier,
+    BinaryOp,
+    UnaryOp,
+    Call,
+    Assign,
+    If,
+    For,
+    While,
+    Return,
+    Function,
+    Comment,
+    Opaque,
+    TryExcept,
+    ExceptClause,
+    StructDef,
+    FieldDef,
+    TypeAnnotation,
+    Match,
+    MatchArm,
+    Reference,
+    Break,
+    ParallelFor,
 )
 
 
@@ -28,30 +49,26 @@ class RustEmitter:
         for node in uast.body:
             lines.extend(self._emit_node(node, indent=0))
         code = "\n".join(lines)
-        
+
         # Try to format with rustfmt if available
         if shutil.which("rustfmt"):
             try:
                 result = subprocess.run(
-                    ["rustfmt"],
-                    input=code,
-                    capture_output=True,
-                    text=True,
-                    timeout=10
+                    ["rustfmt"], input=code, capture_output=True, text=True, timeout=10
                 )
                 if result.returncode == 0:
                     return result.stdout
             except Exception:
                 pass
-        
+
         return code
 
-    def _emit_node(self, node: Optional[Any], indent: int = 0) -> list:
+    def _emit_node(self, node: Optional[Any], indent: int = 0) -> list:  # noqa: C901
         """Emit a single node to source lines."""
         if node is None:
             return []
         indent_str = "    " * indent
-        
+
         if isinstance(node, LiteralNode):
             if node.value is None:
                 return ["()"]
@@ -60,27 +77,27 @@ class RustEmitter:
             if isinstance(node.value, str):
                 return [f'"{node.value}"']
             return [repr(node.value)]
-        
+
         if isinstance(node, Identifier):
             return [node.name]
-        
+
         if isinstance(node, BinaryOp):
             left = " ".join(self._emit_node(node.left, indent))
             right = " ".join(self._emit_node(node.right, indent))
             # Convert Python operators to Rust operators
             op = node.op.replace("and", "&&").replace("or", "||")
             return [f"{left} {op} {right}"]
-        
+
         if isinstance(node, UnaryOp):
             operand = " ".join(self._emit_node(node.operand, indent))
             op = node.op
             return [f"{op}{operand}"]
-        
+
         if isinstance(node, Call):
             func = " ".join(self._emit_node(node.func, indent))
             args = ", ".join(" ".join(self._emit_node(a, indent)) for a in node.args)
             return [f"{func}({args})"]
-        
+
         if isinstance(node, Assign):
             if isinstance(node.target, list):
                 targets = ", ".join(" ".join(self._emit_node(t, indent)) for t in node.target)
@@ -88,7 +105,7 @@ class RustEmitter:
                 targets = " ".join(self._emit_node(node.target, indent))
             value = " ".join(self._emit_node(node.value, indent))
             return [f"{indent_str}let {targets} = {value};"]
-        
+
         if isinstance(node, If):
             condition = " ".join(self._emit_node(node.condition, indent))
             lines = [f"{indent_str}if {condition} {{"]
@@ -101,7 +118,7 @@ class RustEmitter:
                     lines.extend(self._emit_node(n, indent + 1))
                 lines.append(f"{indent_str}}}")
             return lines
-        
+
         if isinstance(node, For):
             var = " ".join(self._emit_node(node.var, indent))
             iterable = " ".join(self._emit_node(node.iter, indent))
@@ -110,7 +127,7 @@ class RustEmitter:
                 lines.extend(self._emit_node(n, indent + 1))
             lines.append(f"{indent_str}}}")
             return lines
-        
+
         if isinstance(node, While):
             condition = " ".join(self._emit_node(node.condition, indent))
             lines = [f"{indent_str}while {condition} {{"]
@@ -118,13 +135,13 @@ class RustEmitter:
                 lines.extend(self._emit_node(n, indent + 1))
             lines.append(f"{indent_str}}}")
             return lines
-        
+
         if isinstance(node, Return):
             if node.value:
                 val = " ".join(self._emit_node(node.value, indent))
                 return [f"{indent_str}return {val};"]
             return [f"{indent_str}return;"]
-        
+
         if isinstance(node, Function):
             params = ", ".join(p.name for p in node.params) if node.params else ""
             lines = [f"{indent_str}fn {node.name.name}({params}) {{"]
@@ -132,7 +149,7 @@ class RustEmitter:
                 lines.extend(self._emit_node(n, indent + 1))
             lines.append(f"{indent_str}}}")
             return lines
-        
+
         if isinstance(node, TryExcept):
             # Rust uses match on Result
             lines = []
@@ -148,7 +165,7 @@ class RustEmitter:
                         lines.append(f"{indent_str}    Ok(v) => v,")
                         lines.append(f"{indent_str}    Err({binding}) => {{}}")
             return lines
-        
+
         if isinstance(node, StructDef):
             lines = [f"{indent_str}struct {node.name} {{"]
             for field in node.fields:
@@ -161,7 +178,7 @@ class RustEmitter:
             for method in node.methods:
                 lines.extend(self._emit_function(method, indent))
             return lines
-        
+
         if isinstance(node, Match):
             subject = " ".join(self._emit_node(node.subject, indent))
             lines = [f"{indent_str}match {subject} {{"]
@@ -173,29 +190,27 @@ class RustEmitter:
                 lines.append(f"{indent_str}    }},")
             lines.append(f"{indent_str}}}")
             return lines
-        
+
         if isinstance(node, Reference):
             target = " ".join(self._emit_node(node.target, indent))
             return [f"&mut {target}" if node.is_mutable else f"&{target}"]
-        
+
         if isinstance(node, TypeAnnotation):
             return [node.type_name]
-        
+
         if isinstance(node, Opaque):
-            raise NotImplementedError(
-                f"{self.__class__.__name__} does not support Opaque nodes"
-            )
+            raise NotImplementedError(f"{self.__class__.__name__} does not support Opaque nodes")
 
         if isinstance(node, ParallelFor):
             var = " ".join(self._emit_node(node.var, indent))
             start_code = " ".join(self._emit_node(node.start, indent)) if node.start else "0"
             end_code = " ".join(self._emit_node(node.end, indent)) if node.end else "n"
-            
+
             body_lines = []
             for child in node.body:
                 body_lines.extend(self._emit_node(child, indent + 1))
             body_str = " ".join(body_lines) if body_lines else "()"
-            
+
             return [
                 f"{indent_str}// Requires rayon crate for parallel iteration",
                 f"{indent_str}let result: Vec<_> = ({start_code}..{end_code}).into_par_iter().map(|{var}| {{ {body_str} }}).collect();",

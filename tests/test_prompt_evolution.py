@@ -66,10 +66,12 @@ class TestPromptGenome:
         assert isinstance(mutant, PromptGenome)
         # At least one attribute should differ; try multiple times to reduce flakiness
         for _ in range(5):
-            if (mutant.system_prompt != pg.system_prompt
+            if (
+                mutant.system_prompt != pg.system_prompt
                 or mutant.temperature != pg.temperature
                 or mutant.few_shot_examples != pg.few_shot_examples
-                or mutant.mutation_instructions != pg.mutation_instructions):
+                or mutant.mutation_instructions != pg.mutation_instructions
+            ):
                 break
             mutant = pg.mutate()
         different = (
@@ -139,11 +141,13 @@ class TestPromptGenome:
 
     def test_fewshot_dedup_in_crossover(self):
         """Crossover should not duplicate few‑shot examples."""
-        parent_a = PromptGenome("A", [("x","x")], "", 0.5)
-        parent_b = PromptGenome("B", [("x","x")], "", 0.5)
+        parent_a = PromptGenome("A", [("x", "x")], "", 0.5)
+        parent_b = PromptGenome("B", [("x", "x")], "", 0.5)
         child = PromptGenome.crossover(parent_a, parent_b)
         # Duplicates removed by set() in crossover
-        assert len(child.few_shot_examples) <= len(set(parent_a.few_shot_examples + parent_b.few_shot_examples))
+        assert len(child.few_shot_examples) <= len(
+            set(parent_a.few_shot_examples + parent_b.few_shot_examples)
+        )
 
 
 class TestRichPromptEvolver:

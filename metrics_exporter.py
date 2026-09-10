@@ -30,31 +30,23 @@ class Gauge:
     value: float = 0.0
     labels: Dict[str, str] = field(default_factory=dict)
 
-    def set(
-        self, value: float, labels: Optional[Dict[str, str]] = None
-    ) -> None:
+    def set(self, value: float, labels: Optional[Dict[str, str]] = None) -> None:
         self.value = value
         if labels:
             self.labels.update(labels)
 
-    def inc(
-        self, delta: float = 1.0, labels: Optional[Dict[str, str]] = None
-    ) -> None:
+    def inc(self, delta: float = 1.0, labels: Optional[Dict[str, str]] = None) -> None:
         self.value += delta
         if labels:
             self.labels.update(labels)
 
-    def dec(
-        self, delta: float = 1.0, labels: Optional[Dict[str, str]] = None
-    ) -> None:
+    def dec(self, delta: float = 1.0, labels: Optional[Dict[str, str]] = None) -> None:
         self.value -= delta
         if labels:
             self.labels.update(labels)
 
     def to_prometheus(self) -> str:
-        label_str = ",".join(
-            f'{k}="{v}"' for k, v in sorted(self.labels.items())
-        )
+        label_str = ",".join(f'{k}="{v}"' for k, v in sorted(self.labels.items()))
         prefix = f"{{{label_str}}}" if label_str else ""
         return f"{self.name}{prefix} {self.value}"
 
@@ -66,17 +58,13 @@ class Counter:
     value: float = 0.0
     labels: Dict[str, str] = field(default_factory=dict)
 
-    def inc(
-        self, delta: float = 1.0, labels: Optional[Dict[str, str]] = None
-    ) -> None:
+    def inc(self, delta: float = 1.0, labels: Optional[Dict[str, str]] = None) -> None:
         self.value += delta
         if labels:
             self.labels.update(labels)
 
     def to_prometheus(self) -> str:
-        label_str = ",".join(
-            f'{k}="{v}"' for k, v in sorted(self.labels.items())
-        )
+        label_str = ",".join(f'{k}="{v}"' for k, v in sorted(self.labels.items()))
         prefix = f"{{{label_str}}}" if label_str else ""
         return f"{self.name}{prefix} {self.value}"
 
@@ -91,28 +79,31 @@ class Histogram:
     labels: Dict[str, str] = field(default_factory=dict)
     _bounds: List[float] = field(
         default_factory=lambda: [
-            0.005, 0.01, 0.025, 0.05, 0.1, 0.25,
-            0.5, 1.0, 2.5, 5.0, 10.0,
+            0.005,
+            0.01,
+            0.025,
+            0.05,
+            0.1,
+            0.25,
+            0.5,
+            1.0,
+            2.5,
+            5.0,
+            10.0,
         ]
     )
 
-    def observe(
-        self, value: float, labels: Optional[Dict[str, str]] = None
-    ) -> None:
+    def observe(self, value: float, labels: Optional[Dict[str, str]] = None) -> None:
         self.sum_value += value
         self.count += 1
         if labels:
             self.labels.update(labels)
         for bound in self._bounds:
-            self.buckets[bound] = self.buckets.get(bound, 0) + (
-                1 if value <= bound else 0
-            )
+            self.buckets[bound] = self.buckets.get(bound, 0) + (1 if value <= bound else 0)
 
     def _label_braces(self, extra: str = "") -> str:
         """Return ` {k="v",...[, extra]}` or '' when empty."""
-        parts = [
-            f'{k}="{v}"' for k, v in sorted(self.labels.items())
-        ]
+        parts = [f'{k}="{v}"' for k, v in sorted(self.labels.items())]
         if extra:
             parts.append(extra)
         return "{" + ",".join(parts) + "}" if parts else ""
@@ -121,21 +112,11 @@ class Histogram:
         lines = []
         for bound, cumulative in sorted(self.buckets.items()):
             le = f'le="{bound}"'
-            lines.append(
-                f"{self.name}_bucket"
-                f"{self._label_braces(le)} {cumulative}"
-            )
+            lines.append(f"{self.name}_bucket" f"{self._label_braces(le)} {cumulative}")
         le_inf = 'le="+Inf"'
-        lines.append(
-            f"{self.name}_bucket"
-            f"{self._label_braces(le_inf)} {self.count}"
-        )
-        lines.append(
-            f"{self.name}_sum{self._label_braces()} {self.sum_value}"
-        )
-        lines.append(
-            f"{self.name}_count{self._label_braces()} {self.count}"
-        )
+        lines.append(f"{self.name}_bucket" f"{self._label_braces(le_inf)} {self.count}")
+        lines.append(f"{self.name}_sum{self._label_braces()} {self.sum_value}")
+        lines.append(f"{self.name}_count{self._label_braces()} {self.count}")
         return "\n".join(lines)
 
 
@@ -149,41 +130,32 @@ class MetricsRegistry:
         self._lock = threading.Lock()
 
     # -- Gauge factories --
-    def gauge(
-        self, name: str, description: str = "", **labels: str
-    ) -> Gauge:
-        suffix = '_'.join(f'{k}={v}' for k, v in labels.items())
+    def gauge(self, name: str, description: str = "", **labels: str) -> Gauge:
+        suffix = "_".join(f"{k}={v}" for k, v in labels.items())
         key = f"{name}_{suffix}" if labels else name
         with self._lock:
             if key not in self._gauges:
-                g = Gauge(name=name, description=description,
-                          labels=dict(labels))
+                g = Gauge(name=name, description=description, labels=dict(labels))
                 self._gauges[key] = g
             return self._gauges[key]
 
     # -- Counter factories --
-    def counter(
-        self, name: str, description: str = "", **labels: str
-    ) -> Counter:
-        suffix = '_'.join(f'{k}={v}' for k, v in labels.items())
+    def counter(self, name: str, description: str = "", **labels: str) -> Counter:
+        suffix = "_".join(f"{k}={v}" for k, v in labels.items())
         key = f"{name}_{suffix}" if labels else name
         with self._lock:
             if key not in self._counters:
-                c = Counter(name=name, description=description,
-                            labels=dict(labels))
+                c = Counter(name=name, description=description, labels=dict(labels))
                 self._counters[key] = c
             return self._counters[key]
 
     # -- Histogram factories --
-    def histogram(
-        self, name: str, description: str = "", **labels: str
-    ) -> Histogram:
-        suffix = '_'.join(f'{k}={v}' for k, v in labels.items())
+    def histogram(self, name: str, description: str = "", **labels: str) -> Histogram:
+        suffix = "_".join(f"{k}={v}" for k, v in labels.items())
         key = f"{name}_{suffix}" if labels else name
         with self._lock:
             if key not in self._histograms:
-                h = Histogram(name=name, description=description,
-                              labels=dict(labels))
+                h = Histogram(name=name, description=description, labels=dict(labels))
                 self._histograms[key] = h
             return self._histograms[key]
 
@@ -207,15 +179,9 @@ class MetricsRegistry:
     def collect_json(self) -> Dict[str, Any]:
         with self._lock:
             return {
-                "gauges": {
-                    k: vars(v) for k, v in self._gauges.items()
-                },
-                "counters": {
-                    k: vars(v) for k, v in self._counters.items()
-                },
-                "histograms": {
-                    k: vars(v) for k, v in self._histograms.items()
-                },
+                "gauges": {k: vars(v) for k, v in self._gauges.items()},
+                "counters": {k: vars(v) for k, v in self._counters.items()},
+                "histograms": {k: vars(v) for k, v in self._histograms.items()},
             }
 
 
@@ -242,6 +208,7 @@ def reset_registry() -> None:
 # High-level metric keys used by MutaLambda
 # ---------------------------------------------------------------------------
 
+
 def register_mutalambda_metrics(
     registry: Optional[MetricsRegistry] = None,
 ) -> None:
@@ -259,12 +226,8 @@ def register_mutalambda_metrics(
     reg.gauge("evolution_diversity", "Population diversity index (0-1)")
 
     # Performance metrics
-    reg.counter(
-        "evolution_generations_completed", "Total generations completed"
-    )
-    reg.counter(
-        "evolution_evaluations_total", "Total fitness evaluations"
-    )
+    reg.counter("evolution_generations_completed", "Total generations completed")
+    reg.counter("evolution_evaluations_total", "Total fitness evaluations")
     reg.histogram(
         "evolution_generation_time_sec",
         "Time per generation in seconds",
@@ -305,6 +268,7 @@ def register_mutalambda_metrics(
 
 try:
     from http.server import HTTPServer, BaseHTTPRequestHandler
+
     _HAS_HTTP_SERVER = True
 except ImportError:
     _HAS_HTTP_SERVER = False
@@ -352,14 +316,17 @@ def start_metrics_server(
         t = threading.Thread(target=server.serve_forever, daemon=True)
         t.start()
         logger.info(
-            "Prometheus metrics server started on "
-            "http://%s:%d/metrics", host, port,
+            "Prometheus metrics server started on " "http://%s:%d/metrics",
+            host,
+            port,
         )
         return server
     except OSError as exc:
         logger.warning(
             "Could not start metrics server on %s:%d — %s",
-            host, port, exc,
+            host,
+            port,
+            exc,
         )
         return None
 
@@ -367,6 +334,7 @@ def start_metrics_server(
 # ---------------------------------------------------------------------------
 # OpenTelemetry integration (optional, graceful degradation)
 # ---------------------------------------------------------------------------
+
 
 class OTelMetricsBridge:
     """
@@ -399,19 +367,15 @@ class OTelMetricsBridge:
             self._meter = metrics_api.get_meter("mutalambda")
 
             # Create OTel instruments
-            self._gauges["evolution_best_score"] = (
-                self._meter.create_gauge(
-                    "evolution.best_score",
-                    unit="1",
-                    description="Best fitness score",
-                )
+            self._gauges["evolution_best_score"] = self._meter.create_gauge(
+                "evolution.best_score",
+                unit="1",
+                description="Best fitness score",
             )
-            self._gauges["evolution_generation"] = (
-                self._meter.create_gauge(
-                    "evolution.generation",
-                    unit="1",
-                    description="Current generation",
-                )
+            self._gauges["evolution_generation"] = self._meter.create_gauge(
+                "evolution.generation",
+                unit="1",
+                description="Current generation",
             )
             self._counters["evaluations"] = self._meter.create_counter(
                 "evolution.evaluations",
@@ -432,40 +396,28 @@ class OTelMetricsBridge:
         except Exception as exc:  # pragma: no cover
             logger.warning("Failed to init OTel bridge: %s", exc)
 
-    def record_gauge(
-        self, name: str, value: float
-    ) -> None:
+    def record_gauge(self, name: str, value: float) -> None:
         if self._meter and name in self._gauges:
             self._gauges[name].set(value)
         elif name == "evolution_best_score":
-            g = self._registry.gauge(
-                "evolution_best_score", "Best fitness score"
-            )
+            g = self._registry.gauge("evolution_best_score", "Best fitness score")
             g.set(value)
         elif name == "evolution_generation":
-            g = self._registry.gauge(
-                "evolution_generation", "Current generation"
-            )
+            g = self._registry.gauge("evolution_generation", "Current generation")
             g.set(value)
 
     def record_counter(self, name: str, delta: float = 1.0) -> None:
         if self._meter and name in self._counters:
             self._counters[name].add(delta)
         elif name == "evaluations":
-            c = self._registry.counter(
-                "evolution_evaluations_total", "Total evaluations"
-            )
+            c = self._registry.counter("evolution_evaluations_total", "Total evaluations")
             c.inc(delta)
 
-    def record_histogram(
-        self, name: str, value: float
-    ) -> None:
+    def record_histogram(self, name: str, value: float) -> None:
         if self._meter and name in self._histograms:
             self._histograms[name].record(value)
         elif name == "gen_time":
-            h = self._registry.histogram(
-                "evolution_generation_time_sec", "Generation time"
-            )
+            h = self._registry.histogram("evolution_generation_time_sec", "Generation time")
             h.observe(value)
 
     def shutdown(self) -> None:
@@ -495,9 +447,7 @@ def record_generation_end(
     reg.gauge("evolution_avg_score").set(avg_score)
     reg.gauge("evolution_generation").set(float(generation))
     reg.counter("evolution_generations_completed").inc()
-    reg.histogram(
-        "evolution_generation_time_sec"
-    ).observe(duration_sec)
+    reg.histogram("evolution_generation_time_sec").observe(duration_sec)
 
 
 def record_evaluation(
@@ -509,18 +459,14 @@ def record_evaluation(
     """Record a single fitness evaluation."""
     reg = registry or get_registry()
     reg.counter("evolution_evaluations_total").inc()
-    reg.histogram(
-        "evolution_evaluation_time_sec"
-    ).observe(duration_sec)
+    reg.histogram("evolution_evaluation_time_sec").observe(duration_sec)
     reg.counter("mutation_applied_total").inc()
     if accepted:
         reg.counter("mutation_accepted_total").inc()
     else:
         reg.counter("mutation_rejected_total").inc()
     if change_size > 0:
-        reg.histogram(
-            "mutation_change_size"
-        ).observe(float(change_size))
+        reg.histogram("mutation_change_size").observe(float(change_size))
 
 
 def record_gpu_status(
@@ -571,9 +517,11 @@ def create_metrics_middleware(
             from starlette.responses import (  # noqa: PLC0415
                 PlainTextResponse,
             )
+
             return PlainTextResponse(reg.collect())
         if request.url.path == "/healthz":
             from starlette.responses import JSONResponse  # noqa: PLC0415
+
             return JSONResponse({"status": "ok"})
         return call_next(request)
 
@@ -587,15 +535,9 @@ def create_metrics_middleware(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="MutaLambda Metrics Server"
-    )
-    parser.add_argument(
-        "--port", type=int, default=9100, help="Port to listen on"
-    )
-    parser.add_argument(
-        "--host", default="0.0.0.0", help="Host to bind"
-    )
+    parser = argparse.ArgumentParser(description="MutaLambda Metrics Server")
+    parser.add_argument("--port", type=int, default=9100, help="Port to listen on")
+    parser.add_argument("--host", default="0.0.0.0", help="Host to bind")
     parser.add_argument(
         "--json",
         action="store_true",
@@ -610,27 +552,16 @@ if __name__ == "__main__":
     reg.gauge("evolution_best_score").set(0.95)
     reg.gauge("evolution_generation").set(42.0)
     reg.counter("evolution_evaluations_total").inc(1500)
-    reg.histogram(
-        "evolution_generation_time_sec"
-    ).observe(2.3)
-    reg.histogram(
-        "evolution_generation_time_sec"
-    ).observe(1.8)
+    reg.histogram("evolution_generation_time_sec").observe(2.3)
+    reg.histogram("evolution_generation_time_sec").observe(1.8)
 
     if args.json:
         print(json.dumps(reg.collect_json(), indent=2))
     else:
         print(reg.collect())
 
-    print(
-        "\n--- Starting server on "
-        "http://{}:{}/metrics ---".format(
-            args.host, args.port
-        )
-    )
-    server = start_metrics_server(
-        host=args.host, port=args.port, registry=reg
-    )
+    print("\n--- Starting server on " "http://{}:{}/metrics ---".format(args.host, args.port))
+    server = start_metrics_server(host=args.host, port=args.port, registry=reg)
     if server:
         try:
             while True:

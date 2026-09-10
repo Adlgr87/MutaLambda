@@ -4,6 +4,7 @@ Ray-based Distributed Batch Scheduler for MutaLambda.
 Schedules fitness evaluations across a Ray cluster for parallel processing.
 Auto-fallback to local multiprocessing when Ray is unavailable.
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import ray
+
     _HAS_RAY = True
 except ImportError:
     _HAS_RAY = False
@@ -26,6 +28,7 @@ except ImportError:
 @dataclass
 class RayConfig:
     """Configuration for Ray distributed scheduling."""
+
     address: str = "auto"
     num_cpus: int = 4
     num_gpus: int = 0
@@ -108,12 +111,15 @@ class RayScheduler:
             @ray.remote  # type: ignore
             def _local_eval(individual: np.ndarray, fn: Callable) -> float:
                 return fn(individual)
+
             return _local_eval  # type: ignore
 
         @ray.remote(num_cpus=1, num_gpus=self.config.num_gpus / max(self.config.num_cpus, 1))
-        def _ray_eval(individual: np.ndarray, fn_pickle: bytes, idx: int) -> Dict:
-            import pickle  # noqa: PLC0415
-            fn = pickle.loads(fn_pickle)
+        def _ray_eval(individual: np.ndarray, fn: Callable, idx: int) -> Dict:
+            # ML-001: the fitness callable is passed as a Ray remote argument
+            # and serialized by Ray's own transport (cloudpickle). The previous
+            # manual ``pickle.dumps``/``pickle.loads`` round-trip of an
+            # arbitrary byte blob has been removed.
             start = time.perf_counter()
             score = fn(individual)
             elapsed = time.perf_counter() - start
@@ -167,7 +173,10 @@ class RayScheduler:
 
         logger.info(
             "Evaluated %d individuals in %.3fs (%.1f/s) via %s",
-            n, elapsed, stats["throughput"], stats["method"],
+            n,
+            elapsed,
+            stats["throughput"],
+            stats["method"],
         )
 
         self._stats = stats
@@ -181,8 +190,6 @@ class RayScheduler:
         stats: Dict,
     ) -> tuple:
         """Evaluate using Ray remote functions."""
-        import pickle as _pickle  # noqa: PLC0415
-
         n = len(individuals)
         scores = np.zeros(n)
 
@@ -193,16 +200,15 @@ class RayScheduler:
             # Submit batch tasks
             futures = []
             for i, ind in enumerate(batch):
-                future = self._make_eval_task(fitness_fn).remote(
-                    ind, _pickle.dumps(fitness_fn), start_idx + i
-                )
+                future = self._make_eval_task(fitness_fn).remote(ind, fitness_fn, start_idx + i)
                 futures.append(future)
 
             # Wait for results with retry
             for attempt in range(self.config.max_retries):
                 try:
-                    ready, _ = ray.wait(futures, num_returns=len(futures),
-                                        timeout=self.config.retry_interval)
+                    ready, _ = ray.wait(
+                        futures, num_returns=len(futures), timeout=self.config.retry_interval
+                    )
                     if len(ready) == len(futures):
                         results = ray.get(ready)
                         for r in results:

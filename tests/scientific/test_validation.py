@@ -1,4 +1,5 @@
 """Tests para Scientific Validation Layer."""
+
 import pytest
 from muta_ext.scientific.validation import (
     evaluate_invariants,
@@ -40,7 +41,7 @@ class TestEvaluateInvariants:
         assert not r.passed
 
     def test_nan_triggers_hard(self):
-        r = evaluate_invariants({"value": float('nan')}, {})
+        r = evaluate_invariants({"value": float("nan")}, {})
         assert not r.passed
 
 
@@ -53,38 +54,48 @@ class TestStageRunner:
 
     def test_enabled_all_pass(self):
         from types import SimpleNamespace
+
         ctx = {
             "eval_result": SimpleNamespace(
                 passed=True,
                 fitness=SimpleNamespace(
-                    correctness=1.0, latency_p50=0.1, latency_p99=0.2,
-                    throughput=1000, memory=50
+                    correctness=1.0, latency_p50=0.1, latency_p99=0.2, throughput=1000, memory=50
                 ),
                 metrics={"total_energy": 100.0, "mass_delta": 0.0},
             ),
-            "scientific_config": {"enabled": True, "validation": {
-                "invariants": True, "numerical_stability": True,
-                "conservation_checks": True, "property_based": True,
-            }},
+            "scientific_config": {
+                "enabled": True,
+                "validation": {
+                    "invariants": True,
+                    "numerical_stability": True,
+                    "conservation_checks": True,
+                    "property_based": True,
+                },
+            },
         }
         sr = run_scientific_validation_stage(ctx)
         assert sr.status == PASS
 
     def test_hard_failure_stage(self):
         from types import SimpleNamespace
+
         ctx = {
             "eval_result": SimpleNamespace(
                 passed=True,
                 fitness=SimpleNamespace(
-                    correctness=1.0, latency_p50=0.1, latency_p99=0.2,
-                    throughput=1000, memory=50
+                    correctness=1.0, latency_p50=0.1, latency_p99=0.2, throughput=1000, memory=50
                 ),
                 metrics={"total_energy": -5.0},
             ),
-            "scientific_config": {"enabled": True, "validation": {
-                "invariants": True, "numerical_stability": True,
-                "conservation_checks": True, "property_based": True,
-            }},
+            "scientific_config": {
+                "enabled": True,
+                "validation": {
+                    "invariants": True,
+                    "numerical_stability": True,
+                    "conservation_checks": True,
+                    "property_based": True,
+                },
+            },
         }
         sr = run_scientific_validation_stage(ctx)
         assert sr.status == FAIL

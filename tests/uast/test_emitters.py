@@ -1,4 +1,5 @@
 """Tests for UAST emitters - testing NotImplementedError for unsupported nodes."""
+
 import pytest
 
 from muta_ext.uast.core_uast import (
@@ -42,8 +43,10 @@ class TestRustEmitterUnsupported:
     def test_rust_emitter_raises_not_implemented_for_unknown_node(self):
         """Unknown node types should raise NotImplementedError."""
         emitter = RustEmitter()
+
         class UnknownNode:
             pass
+
         uast = CoreUAST(
             body=[UnknownNode()],
             language="rust",
@@ -66,8 +69,10 @@ class TestCppEmitterUnsupported:
     def test_cpp_emitter_raises_not_implemented_for_unknown_node(self):
         """Unknown node types should raise NotImplementedError."""
         emitter = CppEmitter()
+
         class UnknownNode:
             pass
+
         uast = CoreUAST(
             body=[UnknownNode()],
             language="cpp",
@@ -85,7 +90,7 @@ class TestEmittersSupportedNodes:
         func = Function(
             name=Identifier(name="add"),
             params=[Identifier(name="a"), Identifier(name="b")],
-            body=[BinaryOp(left=Identifier(name="a"), op="+", right=Identifier(name="b"))]
+            body=[BinaryOp(left=Identifier(name="a"), op="+", right=Identifier(name="b"))],
         )
         code = emitter.emit(CoreUAST(body=[func], language="rust"))
         assert "fn " in code
@@ -97,7 +102,7 @@ class TestEmittersSupportedNodes:
         func = Function(
             name=Identifier(name="add"),
             params=[Identifier(name="a"), Identifier(name="b")],
-            body=[BinaryOp(left=Identifier(name="a"), op="+", right=Identifier(name="b"))]
+            body=[BinaryOp(left=Identifier(name="a"), op="+", right=Identifier(name="b"))],
         )
         code = emitter.emit(CoreUAST(body=[func], language="cpp"))
         assert "add" in code

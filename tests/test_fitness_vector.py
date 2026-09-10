@@ -34,10 +34,22 @@ class TestFitnessVector:
 
     def test_dominates_strictly_better(self):
         """A dominates B when A is better in all dimensions and strictly in one."""
-        a = FitnessVector(correctness=1.0, latency_p50=0.01, latency_p99=0.02,
-                          throughput=100, memory_peak_mb=5, parsimony=0.9)
-        b = FitnessVector(correctness=0.5, latency_p50=0.05, latency_p99=0.10,
-                          throughput=50, memory_peak_mb=20, parsimony=0.3)
+        a = FitnessVector(
+            correctness=1.0,
+            latency_p50=0.01,
+            latency_p99=0.02,
+            throughput=100,
+            memory_peak_mb=5,
+            parsimony=0.9,
+        )
+        b = FitnessVector(
+            correctness=0.5,
+            latency_p50=0.05,
+            latency_p99=0.10,
+            throughput=50,
+            memory_peak_mb=20,
+            parsimony=0.3,
+        )
         assert a.dominates(b)
         assert not b.dominates(a)
 
@@ -56,8 +68,14 @@ class TestFitnessVector:
         assert not b.dominates(a)
 
     def test_weighted_sum_default(self):
-        fv = FitnessVector(correctness=1.0, latency_p50=0.01, latency_p99=0.02,
-                           throughput=100, memory_peak_mb=5, parsimony=0.9)
+        fv = FitnessVector(
+            correctness=1.0,
+            latency_p50=0.01,
+            latency_p99=0.02,
+            throughput=100,
+            memory_peak_mb=5,
+            parsimony=0.9,
+        )
         s = fv.weighted_sum()
         assert s > 0  # positive score for good solution
 
@@ -107,8 +125,14 @@ class TestFitnessVector:
     def test_worst_not_dominates(self):
         """Worst vector should never dominate anything."""
         worst = FitnessVector.worst()
-        best = FitnessVector(correctness=1.0, latency_p50=0.001, latency_p99=0.001,
-                             throughput=1000, memory_peak_mb=1, parsimony=1.0)
+        best = FitnessVector(
+            correctness=1.0,
+            latency_p50=0.001,
+            latency_p99=0.001,
+            throughput=1000,
+            memory_peak_mb=1,
+            parsimony=1.0,
+        )
         assert not worst.dominates(best)
 
     def test_dominates_transitive(self):

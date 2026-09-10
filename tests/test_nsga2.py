@@ -16,9 +16,14 @@ from nsga2 import (
 
 
 @pytest.mark.root
-def _make_ind(code: str, correctness: float = 0.5, latency: float = 0.01,
-              throughput: float = 50.0, memory: float = 10.0,
-              parsimony: float = 0.5) -> Individual:
+def _make_ind(
+    code: str,
+    correctness: float = 0.5,
+    latency: float = 0.01,
+    throughput: float = 50.0,
+    memory: float = 10.0,
+    parsimony: float = 0.5,
+) -> Individual:
     """Compat wrapper → tests.helpers.make_individual (FIX 4.1)."""
     from tests.helpers import make_individual
 
@@ -47,12 +52,15 @@ class TestNonDominatedSort:
 
     def test_pareto_frontier(self):
         """Best individual dominates all others → single front."""
-        best = _make_ind("best", correctness=1.0, latency=0.001,
-                          throughput=1000, memory=1.0, parsimony=1.0)
-        worst = _make_ind("worst", correctness=0.0, latency=1.0,
-                           throughput=1.0, memory=100.0, parsimony=0.0)
-        mid = _make_ind("mid", correctness=0.5, latency=0.5,
-                         throughput=50.0, memory=50.0, parsimony=0.5)
+        best = _make_ind(
+            "best", correctness=1.0, latency=0.001, throughput=1000, memory=1.0, parsimony=1.0
+        )
+        worst = _make_ind(
+            "worst", correctness=0.0, latency=1.0, throughput=1.0, memory=100.0, parsimony=0.0
+        )
+        mid = _make_ind(
+            "mid", correctness=0.5, latency=0.5, throughput=50.0, memory=50.0, parsimony=0.5
+        )
         fronts = non_dominated_sort([worst, mid, best])
         assert fronts[0].rank == 0
         # best should dominate mid and worst
@@ -78,13 +86,20 @@ class TestNonDominatedSort:
         pop = []
         # chain: ind_0 dominates ind_1 dominates ... dominates ind_29
         for i in range(30):
-            pop.append(_make_ind(f"ind_{i}", correctness=1.0 - i / 30,
-                                 latency=0.001 * (i + 1), throughput=1.0))
+            pop.append(
+                _make_ind(
+                    f"ind_{i}", correctness=1.0 - i / 30, latency=0.001 * (i + 1), throughput=1.0
+                )
+            )
         # add incomparable cluster
         for _ in range(30):
             pop.append(_make_ind("inc", correctness=0.5, latency=0.5, throughput=50.0))
 
-        pure = _n.non_dominated_sort.__wrapped__ if hasattr(_n.non_dominated_sort, "__wrapped__") else None
+        pure = (
+            _n.non_dominated_sort.__wrapped__
+            if hasattr(_n.non_dominated_sort, "__wrapped__")
+            else None
+        )
         # Force pure-python path by temporarily lowering the threshold.
         orig = _NUMPY_FASTPATH_THRESHOLD
         try:
@@ -108,8 +123,7 @@ class TestNSGA2Select:
 
     def test_top_k_selection(self):
         pop = [
-            _make_ind(f"f{i}", correctness=0.1 * i, latency=0.1 / max(1, i))
-            for i in range(1, 11)
+            _make_ind(f"f{i}", correctness=0.1 * i, latency=0.1 / max(1, i)) for i in range(1, 11)
         ]
         selected = nsga2_select(pop, top_k=5)
         assert len(selected) == 5

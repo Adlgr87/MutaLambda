@@ -4,6 +4,7 @@ Comprehensive Benchmark Runner for MutaLambda.
 Runs benchmark suites including GPU vs CPU comparison,
 statistical significance testing, and performance reporting.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class BenchmarkResult:
     """Result from a single benchmark run."""
+
     benchmark_name: str
     method: str  # "cpu", "gpu", "ray"
     duration_sec: float
@@ -44,6 +46,7 @@ class BenchmarkResult:
 @dataclass
 class BenchmarkConfig:
     """Configuration for benchmark runs."""
+
     num_repeats: int = 3
     num_generations: int = 10
     population_size: int = 20
@@ -110,6 +113,7 @@ class BenchmarkRunner:
         try:
             if method == "gpu":
                 from gpu_optimizer import GPUOptimizer, get_gpu_optimizer  # noqa: PLC0415
+
                 opt = get_gpu_optimizer()
                 result = opt.nsga2_gpu(
                     population,
@@ -123,11 +127,15 @@ class BenchmarkRunner:
             else:
                 # CPU baseline
                 from evolution_engine import CoreEvolutionEngine  # noqa: PLC0415
+
                 # Simple CPU fallback: evaluate fitness directly
                 scores = np.array([fitness_fn(ind) for ind in population])
                 score = float(np.min(scores)) if len(scores) > 0 else float("inf")
-                throughput = self.config.num_generations * self.config.population_size / max(
-                    self.config.num_generations * 0.01, 0.001)
+                throughput = (
+                    self.config.num_generations
+                    * self.config.population_size
+                    / max(self.config.num_generations * 0.01, 0.001)
+                )
                 mem_mb = 0.0
 
             success = True
@@ -149,8 +157,10 @@ class BenchmarkRunner:
             memory_mb=mem_mb,
             success=success,
             error=error,
-            details={"generations": self.config.num_generations,
-                     "population_size": self.config.population_size},
+            details={
+                "generations": self.config.num_generations,
+                "population_size": self.config.population_size,
+            },
         )
 
         self._results.append(result)
@@ -232,7 +242,8 @@ class BenchmarkRunner:
 
         logger.info(
             "Comparison: CPU=%.3fs, GPU=%.3fs, Speedup=%.2fx",
-            cpu_result.duration_sec, gpu_result.duration_sec,
+            cpu_result.duration_sec,
+            gpu_result.duration_sec,
             comparison.get("speedup", "N/A"),
         )
 
@@ -285,6 +296,7 @@ class BenchmarkRunner:
         """Check if GPU is available."""
         try:
             from gpu_optimizer import GPUOptimizer  # noqa: PLC0415
+
             info = GPUOptimizer.detect()
             return info.get("cuda_available", False)
         except Exception:
@@ -311,9 +323,13 @@ class BenchmarkRunner:
 
         summary = self._compute_summary()
         print("Summary:")
-        print(f"  Total: {summary['total_runs']} runs, {summary['successful']} OK, {summary['failed']} failed")
+        print(
+            f"  Total: {summary['total_runs']} runs, {summary['successful']} OK, {summary['failed']} failed"
+        )
         for method, data in summary.get("by_method", {}).items():
-            print(f"  {method}: mean_dur={data['duration_mean']:.3f}s, mean_score={data['score_mean']:.4f}")
+            print(
+                f"  {method}: mean_dur={data['duration_mean']:.3f}s, mean_score={data['score_mean']:.4f}"
+            )
         print("=" * 60 + "\n")
 
 
@@ -340,7 +356,7 @@ def run_phase6_benchmark(
 
     # Simple quadratic fitness function for benchmarking
     def fitness(ind: np.ndarray) -> float:
-        return float(np.sum(ind ** 2))
+        return float(np.sum(ind**2))
 
     # Generate random population
     population = np.random.randn(population_size, 10)
@@ -359,6 +375,7 @@ def run_phase6_benchmark(
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="MutaLambda Benchmark Runner")
     parser.add_argument("--num-generations", type=int, default=10)
     parser.add_argument("--population-size", type=int, default=20)

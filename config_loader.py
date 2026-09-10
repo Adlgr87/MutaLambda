@@ -7,6 +7,7 @@ Provides validation and conversion to EvolveConfig dataclass.
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -159,7 +160,9 @@ def _set_nested(cfg: Dict, path: str, value: Any) -> None:
     d[keys[-1]] = value
 
 
-def validate_config(raw: Dict[str, Any]) -> list:
+def validate_config(  # noqa: C901
+    raw: Dict[str, Any],
+) -> list:
     """
     Validate raw config dict against schema.
 
@@ -180,10 +183,7 @@ def validate_config(raw: Dict[str, Any]) -> list:
     for path, valid in _VALID_VALUES.items():
         val = _get_nested(raw, path)
         if val is not None and val not in valid:
-            errors.append(
-                f"Invalid value for '{path}': '{val}'. "
-                f"Must be one of {valid}"
-            )
+            errors.append(f"Invalid value for '{path}': '{val}'. " f"Must be one of {valid}")
 
     # Numeric bounds
     alpha = _get_nested(raw, "evolution.novelty_alpha")
@@ -213,10 +213,28 @@ def validate_config(raw: Dict[str, Any]) -> list:
         errors.append("sandbox.max_workers must be > 0")
     runner = _get_nested(raw, "sandbox.runner")
     if runner is not None and runner not in (
-        "subprocess", "container", "microvm", "docker", "podman", "local", "dev"
+        "subprocess",
+        "container",
+        "microvm",
+        "docker",
+        "podman",
+        "local",
+        "dev",
+    ):
+        errors.append("sandbox.runner must be subprocess|container|microvm|docker|podman")
+    # ML-002: fail-closed isolation. A hardened runner whose tooling is missing
+    # must surface as a config error instead of silently degrading.
+    if runner in ("container", "docker", "podman") and not (
+        shutil.which("docker") or shutil.which("podman")
     ):
         errors.append(
-            "sandbox.runner must be subprocess|container|microvm|docker|podman"
+            "sandbox.runner=container requires docker or podman; install a "
+            "container engine or set sandbox.runner=subprocess for local dev"
+        )
+    if runner == "microvm" and not shutil.which("bwrap"):
+        errors.append(
+            "sandbox.runner=microvm requires bwrap (bubblewrap); install "
+            "bubblewrap or set sandbox.runner=subprocess for local dev"
         )
 
     prompt_pop_size = _get_nested(raw, "prompt_evolution.pop_size")
@@ -314,9 +332,7 @@ def load_yaml(path: str | Path) -> Dict[str, Any]:
     Raises ValueError on validation errors.
     """
     if yaml is None:
-        raise ImportError(
-            "YAML support requires PyYAML: pip install pyyaml"
-        )
+        raise ImportError("YAML support requires PyYAML: pip install pyyaml")
 
     path = Path(path)
     if not path.exists():
@@ -334,8 +350,6 @@ def load_yaml(path: str | Path) -> Dict[str, Any]:
     # Validate
     errors = validate_config(cfg)
     if errors:
-        raise ValueError(
-            "Config validation failed:\n  - " + "\n  - ".join(errors)
-        )
+        raise ValueError("Config validation failed:\n  - " + "\n  - ".join(errors))
 
     return cfg

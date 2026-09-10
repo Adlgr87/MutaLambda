@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CacheStats:
     """Estadísticas de uso del caché."""
+
     hits: int = 0
     misses: int = 0
     sandbox_saves: int = 0  # evaluaciones evitadas
@@ -52,6 +53,7 @@ class CanonicalCache:
     max_size : int
         Tamaño máximo del caché. LRU eviction cuando se excede.
     """
+
     def __init__(self, max_size: int = 10000):
         self._cache: Dict[str, dict] = {}
         self._lock = threading.RLock()
@@ -88,9 +90,11 @@ class CanonicalCache:
 
                 def visit_arg(self, node):
                     self._counter += 1
-                    return ast.arg(arg=f"a{self._counter}",
-                                   annotation=node.annotation,
-                                   type_comment=node.type_comment)
+                    return ast.arg(
+                        arg=f"a{self._counter}",
+                        annotation=node.annotation,
+                        type_comment=node.type_comment,
+                    )
 
                 def visit_FunctionDef(self, node):
                     self._counter += 1

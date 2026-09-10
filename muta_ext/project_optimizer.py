@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Multi-file/Project-level optimization for MutaLambda."""
+
 from __future__ import annotations
 import os
 from pathlib import Path
@@ -16,6 +17,7 @@ from muta_ext.uast.adapters import get_adapter
 @dataclass
 class FileAnalysis:
     """Analysis result for a single file."""
+
     path: str
     functions: List[Dict] = field(default_factory=list)
     imports: List[str] = field(default_factory=list)
@@ -28,6 +30,7 @@ class FileAnalysis:
 @dataclass
 class CrossFileHotspot:
     """Cross-file function call hotspot."""
+
     caller_file: str
     callee_file: str
     function_name: str
@@ -38,6 +41,7 @@ class CrossFileHotspot:
 @dataclass
 class InliningOpportunity:
     """Opportunity for interprocedural inlining."""
+
     caller_file: str
     caller_function: str
     callee_file: str
@@ -49,6 +53,7 @@ class InliningOpportunity:
 @dataclass
 class RedundancyPattern:
     """Detected redundant logic between files."""
+
     file1: str
     file2: str
     pattern_description: str
@@ -124,15 +129,17 @@ class ProjectAnalyzer:
 
         for node in uast.body:
             if isinstance(node, Function):
-                functions.append({
-                    "name": node.name.name,
-                    "params": [p.name for p in node.params],
-                    "return_type": node.return_type,
-                    "body_length": len(node.body),
-                    "line_number": self._get_line_number(source, node.name.name)
-                })
+                functions.append(
+                    {
+                        "name": node.name.name,
+                        "params": [p.name for p in node.params],
+                        "return_type": node.return_type,
+                        "body_length": len(node.body),
+                        "line_number": self._get_line_number(source, node.name.name),
+                    }
+                )
                 complexity += self._estimate_complexity(node)
-            elif hasattr(node, 'original_text') and 'import' in getattr(node, 'original_text', ''):
+            elif hasattr(node, "original_text") and "import" in getattr(node, "original_text", ""):
                 imports.append(node.original_text)
 
         return FileAnalysis(
@@ -140,29 +147,29 @@ class ProjectAnalyzer:
             functions=functions,
             imports=imports,
             dependencies=[],
-            call_count=sum(1 for f in functions for _ in f.get('params', [])),
-            lines_of_code=len(source.split('\n')),
-            complexity_score=complexity
+            call_count=sum(1 for f in functions for _ in f.get("params", [])),
+            lines_of_code=len(source.split("\n")),
+            complexity_score=complexity,
         )
 
     def _ext_to_language(self, ext: str) -> Optional[str]:
         """Map file extension to language."""
         mapping = {
-            '.go': 'go',
-            '.py': 'python',
-            '.rs': 'rust',
-            '.cpp': 'cpp',
-            '.c': 'cpp',
-            '.h': 'cpp',
-            '.hpp': 'cpp',
+            ".go": "go",
+            ".py": "python",
+            ".rs": "rust",
+            ".cpp": "cpp",
+            ".c": "cpp",
+            ".h": "cpp",
+            ".hpp": "cpp",
         }
         return mapping.get(ext)
 
     def _get_line_number(self, source: str, func_name: str) -> int:
         """Get line number of function definition."""
-        lines = source.split('\n')
+        lines = source.split("\n")
         for i, line in enumerate(lines, 1):
-            if f'func {func_name}' in line or f'def {func_name}' in line:
+            if f"func {func_name}" in line or f"def {func_name}" in line:
                 return i
         return 0
 
@@ -170,9 +177,9 @@ class ProjectAnalyzer:
         """Estimate cyclomatic complexity of a function."""
         complexity = 1.0
         for node in func.body:
-            if hasattr(node, 'condition'):
+            if hasattr(node, "condition"):
                 complexity += 1
-            if hasattr(node, 'arms'):
+            if hasattr(node, "arms"):
                 complexity += len(node.arms)
         return complexity
 
@@ -181,9 +188,9 @@ class ProjectAnalyzer:
         for func in analysis.functions:
             caller = f"{analysis.path}:{func['name']}"
             self.function_registry[caller] = {
-                'file': analysis.path,
-                'name': func['name'],
-                'complexity': func.get('complexity', 0)
+                "file": analysis.path,
+                "name": func["name"],
+                "complexity": func.get("complexity", 0),
             }
 
     def _detect_cross_file_hotspots(self) -> List[CrossFileHotspot]:
@@ -203,7 +210,7 @@ class ProjectAnalyzer:
                     if other_path == path:
                         continue
                     for other_func in other_analysis.functions:
-                        func_name = other_func['name']
+                        func_name = other_func["name"]
                         if func_name in source:
                             call_count = source.count(f"{func_name}(")
                             if call_count > 0:
@@ -214,13 +221,15 @@ class ProjectAnalyzer:
             for callee_file, funcs in callees.items():
                 for func_name, count in funcs.items():
                     hotness = count / max(1, len(self.file_analyses))
-                    hotspots.append(CrossFileHotspot(
-                        caller_file=caller_file,
-                        callee_file=callee_file,
-                        function_name=func_name,
-                        call_count=count,
-                        hotness_score=hotness
-                    ))
+                    hotspots.append(
+                        CrossFileHotspot(
+                            caller_file=caller_file,
+                            callee_file=callee_file,
+                            function_name=func_name,
+                            call_count=count,
+                            hotness_score=hotness,
+                        )
+                    )
 
         return sorted(hotspots, key=lambda x: x.hotness_score, reverse=True)
 
@@ -231,19 +240,21 @@ class ProjectAnalyzer:
         for path, analysis in self.file_analyses.items():
             for func in analysis.functions:
                 # Small functions are good inline candidates
-                if func['body_length'] < 20:  # Less than 20 lines
+                if func["body_length"] < 20:  # Less than 20 lines
                     # Check call frequency
                     source = Path(path).read_text(encoding="utf-8")
                     call_count = source.count(f"{func['name']}(")
                     if call_count > 5:  # Frequently called
-                        opportunities.append(InliningOpportunity(
-                            caller_file=path,
-                            caller_function=func['name'],
-                            callee_file=path,
-                            callee_function=func['name'],
-                            size_reduction_estimate=func['body_length'] * 2,
-                            call_frequency=call_count
-                        ))
+                        opportunities.append(
+                            InliningOpportunity(
+                                caller_file=path,
+                                caller_function=func["name"],
+                                callee_file=path,
+                                callee_function=func["name"],
+                                size_reduction_estimate=func["body_length"] * 2,
+                                call_frequency=call_count,
+                            )
+                        )
 
         return sorted(opportunities, key=lambda x: x.call_frequency, reverse=True)
 
@@ -256,54 +267,56 @@ class ProjectAnalyzer:
         for path, analysis in self.file_analyses.items():
             for func in analysis.functions:
                 source = Path(path).read_text(encoding="utf-8")
-                func_source = self._extract_function_source(source, func['name'])
+                func_source = self._extract_function_source(source, func["name"])
                 if func_source:
                     func_hash = hashlib.md5(func_source.encode()).hexdigest()[:16]
                     key = f"{path}:{func['name']}"
                     file_hashes[key] = {
-                        'hash': func_hash,
-                        'source': func_source,
-                        'path': path,
-                        'name': func['name']
+                        "hash": func_hash,
+                        "source": func_source,
+                        "path": path,
+                        "name": func["name"],
                     }
 
         # Find similar hashes across files
         hash_groups = defaultdict(list)
         for key, info in file_hashes.items():
-            hash_groups[info['hash']].append({**info, 'key': key})
+            hash_groups[info["hash"]].append({**info, "key": key})
 
         for hash_val, items in hash_groups.items():
             if len(items) > 1:
                 # Check if from different files
-                unique_files = set(item['path'] for item in items)
+                unique_files = set(item["path"] for item in items)
                 if len(unique_files) > 1:
                     for i in range(len(items)):
                         for j in range(i + 1, len(items)):
-                            patterns.append(RedundancyPattern(
-                                file1=items[i]['path'],
-                                file2=items[j]['path'],
-                                pattern_description=f"Similar implementation of '{items[i]['name']}'",
-                                similarity_score=0.95,  # Hash match is strong signal
-                                suggested_action="Extract common logic to shared utility"
-                            ))
+                            patterns.append(
+                                RedundancyPattern(
+                                    file1=items[i]["path"],
+                                    file2=items[j]["path"],
+                                    pattern_description=f"Similar implementation of '{items[i]['name']}'",
+                                    similarity_score=0.95,  # Hash match is strong signal
+                                    suggested_action="Extract common logic to shared utility",
+                                )
+                            )
 
         return patterns
 
     def _extract_function_source(self, source: str, func_name: str) -> Optional[str]:
         """Extract function source code."""
-        lines = source.split('\n')
+        lines = source.split("\n")
         in_function = False
         brace_count = 0
         func_lines = []
 
         for line in lines:
-            if f'func {func_name}' in line or f'def {func_name}' in line:
+            if f"func {func_name}" in line or f"def {func_name}" in line:
                 in_function = True
             if in_function:
                 func_lines.append(line)
-                brace_count += line.count('{') - line.count('}')
+                brace_count += line.count("{") - line.count("}")
                 if in_function and brace_count == 0 and len(func_lines) > 1:
-                    return '\n'.join(func_lines)
+                    return "\n".join(func_lines)
 
         return None
 
@@ -323,7 +336,7 @@ class ProjectAnalyzer:
                     "callee": h.callee_file,
                     "function": h.function_name,
                     "calls": h.call_count,
-                    "hotness": h.hotness_score
+                    "hotness": h.hotness_score,
                 }
                 for h in self.cross_file_hotspots[:10]
             ],
@@ -332,7 +345,7 @@ class ProjectAnalyzer:
                     "file": o.caller_file,
                     "function": o.caller_function,
                     "size_reduction": o.size_reduction_estimate,
-                    "call_frequency": o.call_frequency
+                    "call_frequency": o.call_frequency,
                 }
                 for o in self.inline_opportunities[:10]
             ],
@@ -342,7 +355,7 @@ class ProjectAnalyzer:
                     "file2": r.file2,
                     "description": r.pattern_description,
                     "similarity": r.similarity_score,
-                    "action": r.suggested_action
+                    "action": r.suggested_action,
                 }
                 for r in self.redundancy_patterns[:10]
             ],
@@ -351,16 +364,16 @@ class ProjectAnalyzer:
                     "path": a.path,
                     "functions": len(a.functions),
                     "lines": a.lines_of_code,
-                    "complexity": a.complexity_score
+                    "complexity": a.complexity_score,
                 }
                 for a in self.file_analyses.values()
-            ]
+            ],
         }
 
     def save_report(self, output_path: str):
         """Save analysis report to JSON file."""
         report = self._generate_report()
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(report, f, indent=2, default=str)
         return output_path
 
@@ -376,6 +389,7 @@ def analyze_project(project_root: str, output_path: Optional[str] = None, **kwar
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) > 1:
         project = sys.argv[1]
         report = analyze_project(project)

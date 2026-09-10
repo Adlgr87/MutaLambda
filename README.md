@@ -20,9 +20,17 @@
 | Tests | **664 passed, 6 skipped** | ✅ 670 collected | 2026-09-02 |
 | Cobertura | **61%** | ✅ FASE 8 completada | 2026-09-02 |
 | Versión git | **v5.0.0-phase7-8** | ✅ Tag oficial | 2026-08-23 |
-| Fases completadas | **FASE 0–7** | ✅ Workflow cerrado | 2026-08-23 |
-| Fases pendientes | — | — | — |
+| Fases completadas | **FASE 0–8** | ✅ Workflow cerrado | 2026-09-10 |
+| Lockfile | **`uv.lock` sincronizado** | ✅ `uv sync --locked` | 2026-09-10 |
+| Hardening producción | **ML-001…ML-016** | ✅ Remediation aplicada | 2026-09-10 |
 | Repositorio | [github.com/Adlgr87/MutaLambda](https://github.com/Adlgr87/MutaLambda) | Active | — |
+
+> 🔒 **Nota de seguridad (producción).** MutaLambda ejecuta código generado como
+> parte de su función central. Para entradas **no confiables** usa
+> `sandbox.runner=container` (Docker/Podman) o `sandbox.runner=microvm` (bwrap):
+> ambos **fallan cerrado** si el motor de aislamiento no está disponible. El modo
+> `subprocess` es solo para desarrollo local. Ver [Seguridad](#-seguridad-y-configuracin)
+> y `docs/deployment_guide.md`.
 
 ## Áreas Vanguardistas
 
@@ -116,6 +124,19 @@ Enfoque científico con trazabilidad completa:
 
 ## 🔐 Seguridad y Configuración
 
+- **Sandbox fail-closed (ML-002)**: `sandbox.runner=microvm` exige `bwrap` y
+  `sandbox.runner=container` exige Docker/Podman; si el motor no está disponible,
+  la ejecución **aborta** (no degrada a un camino sin aislamiento). Con
+  `MUTALAMBDA_REQUIRE_ISOLATION=1` el modo `subprocess` también queda prohibido.
+- **Ejecución guardada (ML-001)**: los caminos `exec`/`eval`/`pickle` del proceso
+  principal (differential, metrics-injector, benchmarks, scheduler Ray) pasan por
+  `secure_exec.py`: pre-scan AST + builtins restringidos. El límite de aislamiento
+  real sigue siendo el runner subprocess/container/microvm.
+- **SCA bloqueante (ML-003)**: `pip-audit` audita el entorno bloqueado en el PR
+  gate y el workflow de package; Trivy escanea la imagen Docker antes del push.
+- **Redacción de secretos en prompts (ML-014)**: `llm_backend.redact_prompt`
+  elimina patrones de claves/tokens antes de enviar a un proveedor externo, y
+  `privacy.allow_external_llm=false` impide inicializar backends externos.
 - **API keys**: se pasan via variables de entorno, nunca hardcodeadas en el repo. `benchmarks/market_comparison_harness.py` consume `OPENROUTER_API_KEY`, `AGNES_API_KEY`, `POOLSIDE_API_KEY`, `GITHUB_TOKEN` (Copilot), `GITLAB_TOKEN` (CodeWhisperer) según el tool configurado en `TOOL_REGISTRY`.
 - **.gitignore**: incluye patrones `benchmarks/results_*.json` y `benchmarks/output/` para no commitear artefactos de runs ni tokens logs.
 - **Auditoría de secretos**: validada con gitleaks (workflow `secret-scan`) → GREEN en rama principal y en el commit de typo-fix `5062a65`.
@@ -128,36 +149,47 @@ Enfoque científico con trazabilidad completa:
 git clone https://github.com/Adlgr87/MutaLambda.git
 cd MutaLambda
 
-# Install
-pip install -e ".[dev]"
+# Install (locked, reproducible). The single source of truth is uv.lock.
+uv sync --extra cli --extra uast --extra dev
+#    alternative (pip, only if uv is not available):
+#    pip install -e ".[cli,uast,dev]"
 
 # Run tests
-pytest tests/ -v
+uv run pytest tests/ -q
 
 # Initialize project
-mutalambda init --name my_project
+uv run mutalambda init --name my_project
 
-# Execute optimization
-mutalambda run --config mutation_optimizer.yaml
+# Execute optimization (local dev sandbox)
+uv run mutalambda run --config mutation_optimizer.yaml
+
+# Production: hardened isolation (container / microvm) — fails closed if the
+# engine is missing. See "Seguridad y Configuración" below.
+MUTALAMBDA_REQUIRE_ISOLATION=1 uv run mutalambda run --config mutation_optimizer.yaml
 
 # GPU mode
-CUDA_VISIBLE_DEVICES=0 mutalambda run --config mutation_optimizer_gpu.yaml
+CUDA_VISIBLE_DEVICES=0 uv run mutalambda run --config mutation_optimizer_gpu.yaml
 ```
 
 ## Testing
 
 ```bash
-# All tests
-pytest tests/ -v
+# All tests (single locked environment)
+uv sync --extra cli --extra uast --extra dev
+uv run pytest tests/ -v
+
+# Lint & format (the CI gates run the same commands)
+uv run flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+uv run black --check . --line-length 100
 
 # With coverage
-pytest tests/ --cov=muta_lambda --cov-report=html
+uv run pytest tests/ --cov=muta_lambda --cov-report=html
 
 # E2E only
-pytest tests/e2e/ -v
+uv run pytest tests/e2e/ -v
 
 # Stress tests
-pytest tests/stress/ -v
+uv run pytest tests/stress/ -v
 ```
 
 **Test Results**: `664 passed, 6 skipped` ✅ (670 collected, 2026-09-02)
@@ -213,7 +245,8 @@ Integra providers LLM OpenAI-compatible (Agnes AI, Poolside) y herramientas de m
 | FASE 5 | GPU Expansión (Batch) | ✅ | Distributed batch processing | — |
 | FASE 6 | Benchmarking Científico | ✅ | bench_phase6.py, cached_parse, msgpack | — |
 | FASE 7 | Documentación y Deploy | ✅ | 22 docs, install scripts, CI/CD | — |
-| FASE 8 | Metrics Exporter (OTel/Prometheus) | 🔄 En progreso | metrics_exporter.py (parcial) | — |
+| FASE 8 | Metrics Exporter (OTel/Prometheus) | ✅ | metrics_exporter.py | — |
+| ML-Hardening | Producción: sandbox fail-closed, exec guardado, SCA, CI bloqueante | ✅ | secure_exec.py, runners.py, workflows | — |
 
 ## Documentation
 
@@ -238,8 +271,11 @@ Integra providers LLM OpenAI-compatible (Agnes AI, Poolside) y herramientas de m
 - [x] FASES 0–7: Pipeline completo con GPU, benchmarking y documentación
 - [x] FASE 6: Benchmarking científico (EffiBench smoke + identity validation)
 - [x] FASE 8: Metrics exporter (Prometheus/OTel) para despliegues en producción
+- [x] Hardening de producción (ML-001…ML-016): sandbox fail-closed, exec guardado,
+      `uv sync --locked`, SCA bloqueante, black/unit-tests obligatorios en CI
 - [ ] src-layout packaging migration
 - [x] Market-comparison harness: Agnes AI + Poolside integrados (2026-09-02)
+- [ ] Reducir deuda de estilo restante (F401/E402/E741) y ratchetear complejidad C901 < 20
 - [ ] Soporte para más lenguajes (Java, Kotlin, Swift)
 - [ ] Integración con plataformas de MLOps (MLflow, Weights & Biases)
 

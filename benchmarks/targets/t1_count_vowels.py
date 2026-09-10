@@ -14,5 +14,5 @@ test_cases = [
     {"function": "count_vowels", "args": ["xyz"], "expected": 0, "comparison": "equal"},
     {"function": "count_vowels", "args": ["AEIOU"], "expected": 5, "comparison": "equal"},
 ]
-invariants = ['0 <= out <= len(x)']
+invariants = ["0 <= out <= len(x)"]
 input_strategy = "st.text(alphabet='abcdefghijklmnopqrstuvwxyz ', min_size=0, max_size=30)"

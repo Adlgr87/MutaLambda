@@ -68,12 +68,10 @@ class TestVectorizer:
 
 # ── Einsum ──────────────────────────────────────────────────────────────────
 
+
 class TestEinsum:
     def test_adds_optimize_true(self):
-        src = (
-            "import numpy as np\n"
-            "def g(A, B):\n    return np.einsum('ij,jk->ik', A, B)\n"
-        )
+        src = "import numpy as np\n" "def g(A, B):\n    return np.einsum('ij,jk->ik', A, B)\n"
         out = NumPyMutator().apply_mutation(src, "einsum_matmul")
         assert "optimize=True" in out
 
@@ -126,6 +124,7 @@ class TestBroadcast:
 
 # ── Memory layout ───────────────────────────────────────────────────────────
 
+
 class TestMemoryLayout:
     def test_pins_c_order(self):
         src = "import numpy as np\ndef k(n):\n    a = np.zeros((n, n))\n    return a\n"
@@ -139,6 +138,7 @@ class TestMemoryLayout:
 
 
 # ── Analysis & variants ─────────────────────────────────────────────────────
+
 
 class TestAnalyzeAndVariants:
     def test_analyze_detects_vectorizable_loop(self):
@@ -163,6 +163,7 @@ class TestAnalyzeAndVariants:
 
 
 # ── Transformer classes are independently usable ────────────────────────────
+
 
 class TestTransformerInstances:
     def test_vectorizer_records_changes(self):

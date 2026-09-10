@@ -1,4 +1,5 @@
 """Tests for THC Engine - cross-language transfer blocking and integration."""
+
 import pytest
 from unittest.mock import Mock, MagicMock
 
@@ -44,7 +45,9 @@ class TestTHCCrossLanguageBlocking:
 
         # Run transfer_population
         evaluator = Mock()
-        evaluator.evaluate_batch = Mock(return_value=[Mock(score=2.0, fitness=Mock(correctness=1.0), passed=True)])
+        evaluator.evaluate_batch = Mock(
+            return_value=[Mock(score=2.0, fitness=Mock(correctness=1.0), passed=True)]
+        )
 
         result = engine.apply(population, evaluator, generation=0)
 
@@ -110,7 +113,7 @@ class TestTHCEngineIntegration:
             name="rust-frag",
             donor_id="donor-2",
             donor_score=1.0,
-            code="println!(\"hello\")",
+            code='println!("hello")',
             donor_language="rust",
         )
         assert record2.donor_language == "rust"

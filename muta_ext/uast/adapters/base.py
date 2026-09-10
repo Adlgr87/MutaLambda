@@ -1,4 +1,5 @@
 """Base adapter interface for parsing source to CoreUAST."""
+
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 

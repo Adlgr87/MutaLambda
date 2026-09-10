@@ -1,9 +1,22 @@
 """UAST validators for mutation safety and correctness."""
+
 from typing import List, Optional
 
 from muta_ext.uast.core_uast import (
-    CoreUAST, Node, Opaque, LiteralNode, Identifier, BinaryOp, UnaryOp,
-    Call, Assign, If, For, While, Return, Function
+    CoreUAST,
+    Node,
+    Opaque,
+    LiteralNode,
+    Identifier,
+    BinaryOp,
+    UnaryOp,
+    Call,
+    Assign,
+    If,
+    For,
+    While,
+    Return,
+    Function,
 )
 
 
@@ -23,13 +36,13 @@ class UASTValidator:
         """Validate a single node."""
         if node is None:
             return []
-        
+
         errors = []
-        
+
         # Check for Opaque nodes that shouldn't be mutated
         if isinstance(node, Opaque):
             errors.append(f"Unrecognized construct: {node.original_text[:50]}...")
-        
+
         # Recursively validate children
         if isinstance(node, BinaryOp):
             errors.extend(UASTValidator._validate_node(node.left))
@@ -53,7 +66,7 @@ class UASTValidator:
         elif isinstance(node, Function):
             for n in node.body:
                 errors.extend(UASTValidator._validate_node(n))
-        
+
         return errors
 
     @staticmethod

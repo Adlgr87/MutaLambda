@@ -1,4 +1,5 @@
 """Fixtures compartidas para tests científicos."""
+
 import sys
 from pathlib import Path
 from typing import Dict, Any

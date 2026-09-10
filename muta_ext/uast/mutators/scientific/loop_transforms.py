@@ -8,6 +8,7 @@ from muta_ext.uast.mutators.scientific.base_mutator import BaseScientificMutator
 
 class LoopFusionMutator(BaseScientificMutator):
     """Fusiona bucles adyacentes con el mismo rango."""
+
     name = "loop_fusion"
     strength = 0.2
 
@@ -27,14 +28,15 @@ class LoopFusionMutator(BaseScientificMutator):
 
         if not changed:
             return MutationResult(
-                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)),
-                applied=False
+                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)), applied=False
             )
 
         return MutationResult(
             CoreUAST(new_body, uast.language, dict(uast.metadata)),
-            applied=True, description="; ".join(descs),
-            score_impact=0.2, confidence=0.6
+            applied=True,
+            description="; ".join(descs),
+            score_impact=0.2,
+            confidence=0.6,
         )
 
     def _fuse_in_func(self, func: Function, rng: random.Random, descs: list) -> Function:
@@ -53,8 +55,12 @@ class LoopFusionMutator(BaseScientificMutator):
             i += 1
         if changed:
             return Function(
-                func.name, list(func.params), new_body,
-                list(func.decorators), func.return_type, func.tag
+                func.name,
+                list(func.params),
+                new_body,
+                list(func.decorators),
+                func.return_type,
+                func.tag,
             )
         return func
 
@@ -68,14 +74,12 @@ class LoopFusionMutator(BaseScientificMutator):
             return None
         if rng.random() >= 0.4:
             return None
-        return For(
-            loop1.var, loop1.iterable,
-            loop1.body + loop2.body, loop1.is_traditional
-        )
+        return For(loop1.var, loop1.iterable, loop1.body + loop2.body, loop1.is_traditional)
 
 
 class LoopFissionMutator(BaseScientificMutator):
     """Divide bucles con múltiples estamentos."""
+
     name = "loop_fission"
     strength = 0.15
 
@@ -96,17 +100,20 @@ class LoopFissionMutator(BaseScientificMutator):
 
         if not changed:
             return MutationResult(
-                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)),
-                applied=False
+                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)), applied=False
             )
 
         return MutationResult(
             CoreUAST(new_body, uast.language, dict(uast.metadata)),
-            applied=True, description="; ".join(descs),
-            score_impact=0.15, confidence=0.5
+            applied=True,
+            description="; ".join(descs),
+            score_impact=0.15,
+            confidence=0.5,
         )
 
-    def _fission_in_func(self, func: Function, rng: random.Random, descs: list) -> Optional[Function]:
+    def _fission_in_func(
+        self, func: Function, rng: random.Random, descs: list
+    ) -> Optional[Function]:
         """Aplica fission a bucles en una función."""
         new_body, changed = list(func.body), False
         insert_offset = 0
@@ -124,7 +131,11 @@ class LoopFissionMutator(BaseScientificMutator):
 
         if changed:
             return Function(
-                func.name, list(func.params), new_body,
-                list(func.decorators), func.return_type, func.tag
+                func.name,
+                list(func.params),
+                new_body,
+                list(func.decorators),
+                func.return_type,
+                func.tag,
             )
         return func

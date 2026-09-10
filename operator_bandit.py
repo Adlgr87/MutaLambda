@@ -78,9 +78,7 @@ class OperatorBandit:
         self.epsilon = float(epsilon)
         self.strategy = strategy
         self.rng = rng or random.Random()
-        self.stats: Dict[str, OperatorStats] = {
-            name: OperatorStats() for name in self.operators
-        }
+        self.stats: Dict[str, OperatorStats] = {name: OperatorStats() for name in self.operators}
         self._total_pulls = 0
 
     def register(self, name: str) -> None:

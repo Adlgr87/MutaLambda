@@ -25,11 +25,12 @@ logger = logging.getLogger("MutaLambda")
 @dataclass
 class IslandSnapshot:
     """Fotografía del estado de una isla tras un paso evolutivo."""
+
     island_id: int
     generation: int
     pop_size: int
     best_score: float
-    diversity: float          # 0..1, mayor = más diversa
+    diversity: float  # 0..1, mayor = más diversa
     mean_code_len: float
     num_migrants_sent: int = 0
     num_migrants_received: int = 0
@@ -45,7 +46,9 @@ class IslandFailure:
     generation: int
     error_type: str
     message: str
-    policy: str = "continue_with_warning"  # retry | replace_island | abort_run | continue_with_warning
+    policy: str = (
+        "continue_with_warning"  # retry | replace_island | abort_run | continue_with_warning
+    )
 
     def to_dict(self) -> dict:
         return {
@@ -60,9 +63,10 @@ class IslandFailure:
 @dataclass
 class IslandDiversity:
     """Métricas de diversidad para una isla."""
-    code_length_variance: float   # varianza en longitud de código
-    unique_ratio: float           # fracción de individuos únicos
-    score_variance: float         # varianza en scores
+
+    code_length_variance: float  # varianza en longitud de código
+    unique_ratio: float  # fracción de individuos únicos
+    score_variance: float  # varianza en scores
     mean_code_length: float
     mean_score: float
 
@@ -143,16 +147,12 @@ class IslandPool:
         out = GenerationBarriersResult()
 
         snapshots: Dict[int, IslandSnapshot] = {}
-        ExecutorClass = (
-            ProcessPoolExecutor if self.backend == "process"
-            else ThreadPoolExecutor
-        )
+        ExecutorClass = ProcessPoolExecutor if self.backend == "process" else ThreadPoolExecutor
 
         # ── Phase A/B: local evolution only ─────────────────────────────
         with ExecutorClass(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(self._step_island_local, island): island.id
-                for island in islands
+                executor.submit(self._step_island_local, island): island.id for island in islands
             }
 
             for future in as_completed(futures):
@@ -173,7 +173,10 @@ class IslandPool:
                         self._failures.append(failure)
                     logger.warning(
                         "Island %d failed at gen %d (%s): %s",
-                        island_id, generation, failure.error_type, failure.message,
+                        island_id,
+                        generation,
+                        failure.error_type,
+                        failure.message,
                     )
                     snapshots[island_id] = IslandSnapshot(
                         island_id=island_id,

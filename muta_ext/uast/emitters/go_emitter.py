@@ -1,15 +1,37 @@
 #!/usr/bin/env python3
 """CoreUAST → Go source emitter."""
+
 import shutil
 import subprocess
 import tempfile
 from typing import Any, Optional, List
 
 from muta_ext.uast.core_uast import (
-    CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
-    Assign, If, For, While, Return, Function, Comment, Opaque,
-    TryExcept, ExceptClause, StructDef, FieldDef, TypeAnnotation,
-    Match, MatchArm, Reference, Break, ParallelFor, Node
+    CoreUAST,
+    LiteralNode,
+    Identifier,
+    BinaryOp,
+    UnaryOp,
+    Call,
+    Assign,
+    If,
+    For,
+    While,
+    Return,
+    Function,
+    Comment,
+    Opaque,
+    TryExcept,
+    ExceptClause,
+    StructDef,
+    FieldDef,
+    TypeAnnotation,
+    Match,
+    MatchArm,
+    Reference,
+    Break,
+    ParallelFor,
+    Node,
 )
 
 
@@ -39,11 +61,7 @@ class GoEmitter:
         if shutil.which("gofmt"):
             try:
                 result = subprocess.run(
-                    ["gofmt"],
-                    input=code,
-                    capture_output=True,
-                    text=True,
-                    timeout=10
+                    ["gofmt"], input=code, capture_output=True, text=True, timeout=10
                 )
                 if result.returncode == 0:
                     return result.stdout
@@ -52,7 +70,7 @@ class GoEmitter:
 
         return code
 
-    def _emit_node(self, node: Optional[Any], indent: int = 0) -> list:
+    def _emit_node(self, node: Optional[Any], indent: int = 0) -> list:  # noqa: C901
         """Emit a single node to source lines."""
         if node is None:
             return []

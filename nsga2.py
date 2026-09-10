@@ -53,6 +53,7 @@ except NameError:  # pragma: no cover - numpy is a hard dep
 @dataclass
 class ParetoFront:
     """A non-dominated front with rank and crowding distances."""
+
     rank: int
     individuals: List[Individual]
     crowding: List[float] = field(default_factory=list)
@@ -83,7 +84,7 @@ def non_dominated_sort(population: List[Individual]) -> List[ParetoFront]:
     fitnesses: List[FitnessVector] = [_get_fitness(ind) for ind in population]
 
     # Dominance counts
-    dominated_by: List[int] = [0] * n         # how many dominate this ind
+    dominated_by: List[int] = [0] * n  # how many dominate this ind
     dominates: List[List[int]] = [[] for _ in range(n)]  # which inds this dominates
 
     for i in range(n):
@@ -102,15 +103,15 @@ def non_dominated_sort(population: List[Individual]) -> List[ParetoFront]:
     front_indices: List[int] = [i for i, d in enumerate(dominated_by) if d == 0]
 
     while front_indices:
-        front_inds = [
-            population[i] for i in front_indices
-        ]
+        front_inds = [population[i] for i in front_indices]
         crowding = _crowding_distance(front_inds)
-        fronts.append(ParetoFront(
-            rank=len(fronts),
-            individuals=front_inds,
-            crowding=crowding,
-        ))
+        fronts.append(
+            ParetoFront(
+                rank=len(fronts),
+                individuals=front_inds,
+                crowding=crowding,
+            )
+        )
 
         next_front: List[int] = []
         for i in front_indices:
@@ -146,7 +147,7 @@ def _non_dominated_sort_numpy(population: List[Individual]) -> List[ParetoFront]
 
     # all_pairs[i, j] = whether i dominates j (broadcasted comparison).
     # greater-or-equal on every objective, strictly greater on at least one.
-    greater_eq = objectives[:, None, :] >= objectives[None, :, :]   # (N, N, 3)
+    greater_eq = objectives[:, None, :] >= objectives[None, :, :]  # (N, N, 3)
     strictly_greater = objectives[:, None, :] > objectives[None, :, :]  # (N, N, 3)
     dominance_matrix = greater_eq.all(axis=2) & strictly_greater.any(axis=2)
 
@@ -174,11 +175,13 @@ def _non_dominated_sort_numpy(population: List[Individual]) -> List[ParetoFront]
         processed[frontier] = True
         front_inds = [population[i] for i in frontier]
         crowding = _crowding_distance(front_inds)
-        fronts.append(ParetoFront(
-            rank=len(fronts),
-            individuals=front_inds,
-            crowding=crowding,
-        ))
+        fronts.append(
+            ParetoFront(
+                rank=len(fronts),
+                individuals=front_inds,
+                crowding=crowding,
+            )
+        )
 
         # Decrement dominator counts for everyone this front dominates.
         dominated_by -= dominance_matrix[frontier].sum(axis=0)
@@ -255,9 +258,7 @@ def nsga2_tournament_select(
 
     _rng = rng if rng is not None else random
     for _ in range(num_parents):
-        tournament = _rng.sample(
-            elites, min(tournament_size, len(elites))
-        )
+        tournament = _rng.sample(elites, min(tournament_size, len(elites)))
         # Winner: lower rank, break ties with higher crowding
         winner = min(
             tournament,
@@ -270,12 +271,13 @@ def nsga2_tournament_select(
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
+
 def _get_fitness(ind: Individual) -> FitnessVector:
     """Extract FitnessVector from Individual, optimized for hot path.
-    
+
     Optimized: use getattr with default None instead of hasattr() check.
     """
-    fitness = getattr(ind, 'fitness', None)
+    fitness = getattr(ind, "fitness", None)
     if fitness is not None:
         return fitness
     # Fallback: treat scalar score as correctness, rest unknown
@@ -305,13 +307,18 @@ def _crowding_distance(individuals: List[Individual]) -> List[float]:
     fitnesses: List[FitnessVector] = [_get_fitness(ind) for ind in individuals]
 
     # For each objective dimension
-    dims = ["correctness", "latency_p50", "latency_p99",
-            "throughput", "memory_peak_mb", "parsimony"]
+    dims = [
+        "correctness",
+        "latency_p50",
+        "latency_p99",
+        "throughput",
+        "memory_peak_mb",
+        "parsimony",
+    ]
 
     for dim in dims:
         # Sort by this dimension
-        values = [(i, getattr(fitnesses[i], dim, 0.0))
-                   for i in range(n)]
+        values = [(i, getattr(fitnesses[i], dim, 0.0)) for i in range(n)]
         values.sort(key=lambda x: x[1])
 
         min_val = values[0][1]
@@ -327,9 +334,7 @@ def _crowding_distance(individuals: List[Individual]) -> List[float]:
 
         # Interior points
         for k in range(1, n - 1):
-            distances[values[k][0]] += (
-                (values[k + 1][1] - values[k - 1][1]) / obj_range
-            )
+            distances[values[k][0]] += (values[k + 1][1] - values[k - 1][1]) / obj_range
 
     return distances
 
@@ -351,6 +356,7 @@ def get_nsga2_stats(population: List[Individual]) -> Dict:
         "pareto_frontier_size": frontier_size,
         "mean_crowding": (
             sum(fronts[0].crowding) / max(1, len(fronts[0].crowding))
-            if fronts and fronts[0].crowding else 0.0
+            if fronts and fronts[0].crowding
+            else 0.0
         ),
     }

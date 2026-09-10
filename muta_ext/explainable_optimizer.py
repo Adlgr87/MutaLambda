@@ -7,6 +7,7 @@ Generates LLM-powered explanations for optimization decisions, including:
 - Complexity impact
 - Alternative considerations
 """
+
 from __future__ import annotations
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
@@ -15,6 +16,7 @@ import hashlib
 from enum import Enum
 
 from muta_ext.uast.core_uast import CoreUAST, Function, Node
+
 try:
     from llm_backend import LLMBackend
 except ImportError:
@@ -44,6 +46,7 @@ class OptimizationType(str, Enum):
 @dataclass
 class ComplexityAnalysis:
     """Before/after complexity analysis."""
+
     time_before: str
     time_after: str
     space_before: str
@@ -54,6 +57,7 @@ class ComplexityAnalysis:
 @dataclass
 class OptimizationExplanation:
     """Complete explanation for an optimization decision."""
+
     optimization_type: OptimizationType
     target_function: str
     justification: str
@@ -106,9 +110,7 @@ class ExplanationGenerator:
         alternatives = self._find_alternatives(optimization_type)
 
         # Calculate confidence
-        confidence = self._calculate_confidence(
-            fitness_change, complexity, risk_level
-        )
+        confidence = self._calculate_confidence(fitness_change, complexity, risk_level)
 
         explanation = OptimizationExplanation(
             optimization_type=optimization_type,
@@ -120,38 +122,32 @@ class ExplanationGenerator:
             alternatives_considered=alternatives,
             confidence=confidence,
             code_diff_summary=self._summarize_diff(original_code, optimized_code),
-            expected_impact=fitness_change
+            expected_impact=fitness_change,
         )
 
         self._cache[cache_key] = explanation
         return explanation
 
     def explain_mutations_batch(
-        self,
-        mutations: List[Dict[str, Any]],
-        results: List[Dict[str, Any]]
+        self, mutations: List[Dict[str, Any]], results: List[Dict[str, Any]]
     ) -> List[OptimizationExplanation]:
         """Generate explanations for multiple mutations."""
         explanations = []
         for mutation, result in zip(mutations, results):
             explanation = self.explain_optimization(
-                original_code=mutation.get('original', ''),
-                optimized_code=mutation.get('optimized', ''),
-                optimization_type=OptimizationType(mutation.get('type', 'algorithm_change')),
-                target_function=mutation.get('function', 'unknown'),
-                fitness_change=result.get('fitness_change', {}),
-                uast_before=mutation.get('uast_before'),
-                uast_after=mutation.get('uast_after')
+                original_code=mutation.get("original", ""),
+                optimized_code=mutation.get("optimized", ""),
+                optimization_type=OptimizationType(mutation.get("type", "algorithm_change")),
+                target_function=mutation.get("function", "unknown"),
+                fitness_change=result.get("fitness_change", {}),
+                uast_before=mutation.get("uast_before"),
+                uast_after=mutation.get("uast_after"),
             )
             explanations.append(explanation)
         return explanations
 
     def _generate_justification(
-        self,
-        original: str,
-        optimized: str,
-        opt_type: OptimizationType,
-        func_name: str
+        self, original: str, optimized: str, opt_type: OptimizationType, func_name: str
     ) -> str:
         """Generate human-readable justification for the optimization."""
         # Use LLM if available
@@ -167,11 +163,7 @@ class ExplanationGenerator:
         return self._heuristic_explanation(opt_type, func_name, original, optimized)
 
     def _heuristic_explanation(
-        self,
-        opt_type: OptimizationType,
-        func_name: str,
-        original: str,
-        optimized: str
+        self, opt_type: OptimizationType, func_name: str, original: str, optimized: str
     ) -> str:
         """Generate explanation using rule-based heuristics."""
         explanations = {
@@ -218,55 +210,54 @@ class ExplanationGenerator:
                 f"or bit shifts for powers of 2."
             ),
         }
-        return explanations.get(opt_type, f"Applied {opt_type.value} optimization to '{func_name}'.")
+        return explanations.get(
+            opt_type, f"Applied {opt_type.value} optimization to '{func_name}'."
+        )
 
     def _assess_risks(
-        self,
-        original: str,
-        optimized: str,
-        opt_type: OptimizationType
+        self, original: str, optimized: str, opt_type: OptimizationType
     ) -> tuple[RiskLevel, str]:
         """Assess risks of the optimization."""
         risks = {
             OptimizationType.VECTORIZATION: (
                 RiskLevel.MEDIUM,
                 "Vectorization may increase memory usage by 10-30% due to temporary arrays. "
-                "Not all operations can be vectorized."
+                "Not all operations can be vectorized.",
             ),
             OptimizationType.LOOP_FUSION: (
                 RiskLevel.LOW,
-                "Loop fusion is generally safe. May increase register pressure slightly."
+                "Loop fusion is generally safe. May increase register pressure slightly.",
             ),
             OptimizationType.LOOP_FISSION: (
                 RiskLevel.LOW,
-                "Loop fission improves cache behavior. Minimal risk."
+                "Loop fission improves cache behavior. Minimal risk.",
             ),
             OptimizationType.INLINE: (
                 RiskLevel.MEDIUM,
                 "Inlining increases code size, which may cause instruction cache misses. "
-                "Excessive inlining can bloat binary size."
+                "Excessive inlining can bloat binary size.",
             ),
             OptimizationType.ALGORITHM_CHANGE: (
                 RiskLevel.HIGH,
                 "Algorithm changes may alter numerical precision or behavior for edge cases. "
-                "Thorough testing required."
+                "Thorough testing required.",
             ),
             OptimizationType.PARALLELIZATION: (
                 RiskLevel.HIGH,
                 "Parallelization introduces race conditions if not carefully implemented. "
-                "Memory overhead scales with thread count."
+                "Memory overhead scales with thread count.",
             ),
             OptimizationType.MEMORY_OPTIMIZATION: (
                 RiskLevel.LOW,
-                "Memory optimizations are generally safe. May reduce readability."
+                "Memory optimizations are generally safe. May reduce readability.",
             ),
             OptimizationType.CONCURRENCY: (
                 RiskLevel.MEDIUM,
-                "Concurrency adds complexity in debugging. Channel deadlocks possible."
+                "Concurrency adds complexity in debugging. Channel deadlocks possible.",
             ),
             OptimizationType.STRENGTH_REDUCTION: (
                 RiskLevel.LOW,
-                "Strength reduction is mathematically equivalent. Safe transformation."
+                "Strength reduction is mathematically equivalent. Safe transformation.",
             ),
         }
         return risks.get(opt_type, (RiskLevel.MEDIUM, "Unknown risk profile."))
@@ -278,27 +269,25 @@ class ExplanationGenerator:
                 "Use SIMD intrinsics directly",
                 "Employ GPU acceleration via CUDA/OpenCL",
                 "Use library routines (e.g., BLAS)",
-                "Rewrite algorithm to avoid the pattern"
+                "Rewrite algorithm to avoid the pattern",
             ],
             OptimizationType.ALGORITHM_CHANGE: [
                 "Use different data structure (tree vs hash)",
                 "Apply divide-and-conquer strategy",
                 "Use approximation for accuracy trade-off",
-                "Precompute values if called repeatedly"
+                "Precompute values if called repeatedly",
             ],
             OptimizationType.PARALLELIZATION: [
                 "Use work-stealing runtime",
                 "Apply GPU computation",
                 "Use async I/O for I/O-bound workloads",
-                "Pipeline the computation"
+                "Pipeline the computation",
             ],
         }
         return alternatives.get(opt_type, ["Review manually for alternatives"])
 
     def _analyze_complexity(
-        self,
-        before: Optional[CoreUAST],
-        after: Optional[CoreUAST]
+        self, before: Optional[CoreUAST], after: Optional[CoreUAST]
     ) -> ComplexityAnalysis:
         """Analyze complexity changes."""
         if not before or not after:
@@ -307,7 +296,7 @@ class ExplanationGenerator:
                 time_after="unknown",
                 space_before="unknown",
                 space_after="unknown",
-                notes="UAST not available for complexity analysis"
+                notes="UAST not available for complexity analysis",
             )
 
         # Count operations
@@ -319,7 +308,7 @@ class ExplanationGenerator:
             time_after=f"~{after_ops} operations",
             space_before=self._estimate_space(before),
             space_after=self._estimate_space(after),
-            notes=f"Operation count {'decreased' if after_ops < before_ops else 'increased'} by {abs(after_ops - before_ops)}"
+            notes=f"Operation count {'decreased' if after_ops < before_ops else 'increased'} by {abs(after_ops - before_ops)}",
         )
 
     def _count_operations(self, uast: CoreUAST) -> int:
@@ -333,8 +322,10 @@ class ExplanationGenerator:
         """Count operations in a single node."""
         if isinstance(node, Function):
             return sum(self._count_node_ops(child) for child in node.body)
-        if hasattr(node, 'body'):
-            return sum(self._count_node_ops(child) for child in node.body if isinstance(child, Node))
+        if hasattr(node, "body"):
+            return sum(
+                self._count_node_ops(child) for child in node.body if isinstance(child, Node)
+            )
         return 1
 
     def _estimate_space(self, uast: CoreUAST) -> str:
@@ -342,21 +333,18 @@ class ExplanationGenerator:
         # Simple heuristic: count allocations
         alloc_count = 0
         for node in uast.body:
-            if hasattr(node, 'value') and isinstance(node.value, list):
+            if hasattr(node, "value") and isinstance(node.value, list):
                 alloc_count += 1
         return f"~{alloc_count} heap allocations"
 
     def _calculate_confidence(
-        self,
-        fitness_change: Dict[str, float],
-        complexity: ComplexityAnalysis,
-        risk: RiskLevel
+        self, fitness_change: Dict[str, float], complexity: ComplexityAnalysis, risk: RiskLevel
     ) -> float:
         """Calculate confidence score for the optimization."""
         base_confidence = 0.7
 
         # Adjust based on fitness improvement
-        speedup = fitness_change.get('latency_p50', 0)
+        speedup = fitness_change.get("latency_p50", 0)
         if speedup > 0:
             base_confidence += min(0.2, speedup * 0.1)
 
@@ -379,8 +367,8 @@ class ExplanationGenerator:
 
     def _summarize_diff(self, original: str, optimized: str) -> str:
         """Generate diff summary."""
-        orig_lines = set(original.split('\n'))
-        opt_lines = set(optimized.split('\n'))
+        orig_lines = set(original.split("\n"))
+        opt_lines = set(optimized.split("\n"))
 
         added = opt_lines - orig_lines
         removed = orig_lines - opt_lines
@@ -394,11 +382,7 @@ class ExplanationGenerator:
         return ", ".join(summary_parts) if summary_parts else "Minimal changes"
 
     def _build_explanation_prompt(
-        self,
-        original: str,
-        optimized: str,
-        opt_type: OptimizationType,
-        func_name: str
+        self, original: str, optimized: str, opt_type: OptimizationType, func_name: str
     ) -> str:
         """Build LLM prompt for explanation generation."""
         return f"""Analyze this code optimization and explain:
@@ -438,7 +422,7 @@ class ExplainableOptimizer:
         optimized_code: str,
         optimization_type: str,
         function_name: str,
-        fitness_results: Dict[str, float]
+        fitness_results: Dict[str, float],
     ) -> Dict[str, Any]:
         """Run optimization and generate comprehensive explanation."""
         opt_type = OptimizationType(optimization_type)
@@ -448,7 +432,7 @@ class ExplainableOptimizer:
             optimized_code=optimized_code,
             optimization_type=opt_type,
             target_function=function_name,
-            fitness_change=fitness_results
+            fitness_change=fitness_results,
         )
 
         return {
@@ -462,12 +446,12 @@ class ExplainableOptimizer:
                 "time_after": explanation.complexity.time_after,
                 "space_before": explanation.complexity.space_before,
                 "space_after": explanation.complexity.space_after,
-                "notes": explanation.complexity.notes
+                "notes": explanation.complexity.notes,
             },
             "alternatives_considered": explanation.alternatives_considered,
             "confidence": explanation.confidence,
             "code_changes": explanation.code_diff_summary,
-            "expected_impact": explanation.expected_impact
+            "expected_impact": explanation.expected_impact,
         }
 
 

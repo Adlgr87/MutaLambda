@@ -59,7 +59,11 @@ def _acquire_shared_pool(key: tuple) -> ProcessPoolExecutor:
                     ctx = multiprocessing.get_context("forkserver")
                 except ValueError:
                     ctx = None
-            pool = ProcessPoolExecutor(max_workers=key[0], mp_context=ctx) if ctx else ProcessPoolExecutor(max_workers=key[0])
+            pool = (
+                ProcessPoolExecutor(max_workers=key[0], mp_context=ctx)
+                if ctx
+                else ProcessPoolExecutor(max_workers=key[0])
+            )
             _POOL_REGISTRY[key] = pool
             _POOL_REF_COUNTS[key] = 0
             logger.debug("Shared pool created for key=%s", key)
@@ -120,10 +124,14 @@ def _pkg_version(name: str) -> str:
         return "unknown"
 
 
-def evaluation_key(code: str, test_cases: Sequence[dict], *,
-                   benchmark_hash: str = "",
-                   _tests_hash: Optional[str] = None,
-                   _env_hash: Optional[str] = None) -> str:
+def evaluation_key(
+    code: str,
+    test_cases: Sequence[dict],
+    *,
+    benchmark_hash: str = "",
+    _tests_hash: Optional[str] = None,
+    _env_hash: Optional[str] = None,
+) -> str:
     """Composite key: code + tests + benchmark + environment.
 
     Args:
@@ -246,8 +254,11 @@ class EvaluationService:
                 workers = max(1, int(self.max_workers or 1))
                 # Use persistent shared pool to avoid re-spawning workers.
                 self._pool_key = _pool_key(
-                    workers, self.timeout_sec, self.memory_mb,
-                    self.enforce_ast_scan, self.allow_expression_eval,
+                    workers,
+                    self.timeout_sec,
+                    self.memory_mb,
+                    self.enforce_ast_scan,
+                    self.allow_expression_eval,
                 )
                 self._pool = _acquire_shared_pool(self._pool_key)
                 logger.debug("EvaluationService pool started with %d workers (shared)", workers)
@@ -272,8 +283,11 @@ class EvaluationService:
                 workers = max(1, int(self.max_workers or 1))
                 # Use persistent shared pool to avoid re-spawning workers.
                 self._pool_key = _pool_key(
-                    workers, self.timeout_sec, self.memory_mb,
-                    self.enforce_ast_scan, self.allow_expression_eval,
+                    workers,
+                    self.timeout_sec,
+                    self.memory_mb,
+                    self.enforce_ast_scan,
+                    self.allow_expression_eval,
                 )
                 self._pool = _acquire_shared_pool(self._pool_key)
                 logger.debug("EvaluationService pool started with %d workers (shared)", workers)
@@ -328,7 +342,8 @@ class EvaluationService:
 
         keys = [
             evaluation_key(
-                code, self.test_cases,
+                code,
+                self.test_cases,
                 benchmark_hash=self.benchmark_hash,
                 _tests_hash=self._tests_hash,
                 _env_hash=self._env_hash,
@@ -356,7 +371,8 @@ class EvaluationService:
             self.last_mode = "cache-only"
             logger.debug(
                 "evaluate_batch: all %d cached (mode=cache-only, runner_mode=%s)",
-                len(codes), self.runner_mode,
+                len(codes),
+                self.runner_mode,
             )
             return results  # type: ignore[return-value]
 
@@ -391,8 +407,7 @@ class EvaluationService:
                 for i in pending_idx
             ]
             future_map = {
-                pool.submit(_pool_worker, args): idx
-                for args, idx in zip(args_list, pending_idx)
+                pool.submit(_pool_worker, args): idx for args, idx in zip(args_list, pending_idx)
             }
             for future in as_completed(future_map):
                 idx = future_map[future]
@@ -456,7 +471,11 @@ class EvaluationService:
             correctness=base.fitness.correctness,
             latency_p50=stats["p50"],
             latency_p99=stats["p99"],
-            throughput=br.throughput_ops_per_sec if br.throughput_ops_per_sec > 0 else base.fitness.throughput,
+            throughput=(
+                br.throughput_ops_per_sec
+                if br.throughput_ops_per_sec > 0
+                else base.fitness.throughput
+            ),
             memory_peak_mb=base.fitness.memory_peak_mb,
             parsimony=base.fitness.parsimony,
         )
@@ -487,7 +506,8 @@ class EvaluationService:
                 self._cache.clear()
             else:
                 key = evaluation_key(
-                    code, self.test_cases,
+                    code,
+                    self.test_cases,
                     benchmark_hash=self.benchmark_hash,
                     _tests_hash=self._tests_hash,
                     _env_hash=self._env_hash,

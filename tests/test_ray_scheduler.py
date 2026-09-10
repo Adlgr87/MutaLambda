@@ -39,10 +39,11 @@ class TestRayScheduler:
         scheduler._ray_initialized = False
 
         import numpy as np
+
         population = np.array([[1.0, 2.0], [3.0, 4.0]])
 
         def fitness(ind):
-            return float(np.sum(ind ** 2))
+            return float(np.sum(ind**2))
 
         result = scheduler.evaluate_batch(population, fitness)
         assert len(result["scores"]) == 2
@@ -53,10 +54,11 @@ class TestRayScheduler:
         scheduler._ray_initialized = True
 
         import numpy as np
+
         population = np.array([[1.0, 0.0], [0.0, 1.0]])
 
         def fitness(ind):
-            return float(np.sum(ind ** 2))
+            return float(np.sum(ind**2))
 
         result = scheduler.evaluate_batch(population, fitness)
         assert "scores" in result
@@ -88,16 +90,18 @@ class TestRaySchedulerWithMock:
 
         with patch.dict("sys.modules", {"ray": mock_ray}):
             import sys
+
             sys.modules["ray"] = mock_ray
 
             scheduler = RayScheduler()
             scheduler._ray_initialized = True
 
             import numpy as np
+
             population = np.array([[1.0, 2.0]])
 
             def fitness(ind):
-                return float(np.sum(ind ** 2))
+                return float(np.sum(ind**2))
 
             # Should use local fallback since we can't truly mock Ray tasks
             result = scheduler.evaluate_batch(population, fitness)

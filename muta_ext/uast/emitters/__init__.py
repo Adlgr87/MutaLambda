@@ -1,4 +1,5 @@
 """UAST emitters for different languages."""
+
 from muta_ext.uast.emitters.base import BaseEmitter
 from muta_ext.uast.emitters.python_emitter import PythonEmitter, emit_from_uast
 from muta_ext.uast.emitters.rust_emitter import RustEmitter
@@ -21,4 +22,12 @@ def get_emitter(language: str) -> BaseEmitter:
     return _EMITTERS[language]()
 
 
-__all__ = ["BaseEmitter", "PythonEmitter", "RustEmitter", "CppEmitter", "GoEmitter", "emit_from_uast", "get_emitter"]
+__all__ = [
+    "BaseEmitter",
+    "PythonEmitter",
+    "RustEmitter",
+    "CppEmitter",
+    "GoEmitter",
+    "emit_from_uast",
+    "get_emitter",
+]

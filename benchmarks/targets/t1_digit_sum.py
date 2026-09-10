@@ -14,5 +14,5 @@ test_cases = [
     {"function": "digit_sum", "args": [0], "expected": 0, "comparison": "equal"},
     {"function": "digit_sum", "args": [-567], "expected": 18, "comparison": "equal"},
 ]
-invariants = ['out == sum(int(d) for d in str(abs(x))) if x != 0 else out == 0']
+invariants = ["out == sum(int(d) for d in str(abs(x))) if x != 0 else out == 0"]
 input_strategy = "st.integers(min_value=-1000000, max_value=1000000)"

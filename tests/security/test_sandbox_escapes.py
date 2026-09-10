@@ -7,6 +7,7 @@ patterns and that the subprocess runner refuses to execute them.
 These patterns come directly from the remediation plan and must ALL be
 blocked — a single miss indicates a sandbox regression.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -20,7 +21,6 @@ from runners import (
     scan_findings,
 )
 from mutation_filters import check_no_critical_patterns
-
 
 # ── The six documented evasion vectors ────────────────────────────────────────
 
@@ -63,6 +63,7 @@ EXTRA_ESCAPES = [
 
 # ── scan_code_security blocks the six core escapes ────────────────────────────
 
+
 @pytest.mark.parametrize("code", ESCAPE_PATTERNS)
 def test_scan_blocks_escape(code):
     findings = scan_code_security(code)
@@ -77,6 +78,7 @@ def test_scan_blocks_extra_escapes(code):
 
 # ── The subprocess runner must reject every escape ────────────────────────────
 
+
 @pytest.mark.parametrize("code", ESCAPE_PATTERNS + EXTRA_ESCAPES)
 def test_subprocess_runner_rejects_escape(code):
     result = SubprocessRunner(timeout_sec=5.0, enforce_ast_scan=True).run(code, [])
@@ -86,6 +88,7 @@ def test_subprocess_runner_rejects_escape(code):
 
 
 # ── Detailed findings carry source positions ─────────────────────────────────
+
 
 def test_findings_have_positions():
     findings = scan_findings('import os; os.system("ls")')
@@ -107,6 +110,7 @@ def test_syntax_error_reported():
 
 # ── Mutation filter layer closes the regex-evasion class ───────────────────────
 
+
 @pytest.mark.parametrize("code", ESCAPE_PATTERNS + EXTRA_ESCAPES)
 def test_mutation_filter_blocks_escape(code):
     """The regex filter in mutation_filters must be backed by the AST visitor
@@ -123,8 +127,7 @@ SAFE_PATTERNS = [
     "import math\nimport collections\nimport re\n"
     "d = collections.Counter([1,2,2,3])\n"
     "return math.sqrt(16) if re.match('a', 'abc') else 0\n",
-    "x = [i for i in range(10)]\ny = sorted(x, reverse=True)\n"
-    "return sum(y)\n",
+    "x = [i for i in range(10)]\ny = sorted(x, reverse=True)\n" "return sum(y)\n",
 ]
 
 
@@ -134,6 +137,7 @@ def test_safe_code_not_flagged(code):
 
 
 # ── Container runner applies the same AST gate ──────────────────────────────
+
 
 def test_container_runner_scans_before_run():
     """ContainerRunner shares the enforce_ast_scan gate; escape must be blocked
@@ -146,6 +150,7 @@ def test_container_runner_scans_before_run():
 
 
 # ── SecurityVisitor is reusable / deterministic ─────────────────────────────
+
 
 def test_visitor_deterministic():
     code = 'import subprocess; subprocess.Popen(["ls"])'

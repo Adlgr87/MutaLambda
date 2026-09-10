@@ -264,8 +264,13 @@ class LineageGraph:
     def stats(self) -> Dict[str, Any]:
         """Estadísticas resumidas del grafo genealógico."""
         if not self.nodes:
-            return {"total_nodes": 0, "max_depth": 0, "branches": 0,
-                    "resurrections": 0, "generations": 0}
+            return {
+                "total_nodes": 0,
+                "max_depth": 0,
+                "branches": 0,
+                "resurrections": 0,
+                "generations": 0,
+            }
         depths = [len(self.get_ancestors(n.id)) for n in self.nodes.values()]
         return {
             "total_nodes": len(self.nodes),
@@ -367,9 +372,7 @@ class IslandConfig:
                 f"top_k ({self.top_k}) must be <= population_size ({self.population_size})"
             )
         if self.population_size < MIN_POPULATION_SIZE:
-            raise ValueError(
-                f"population_size must be >= {MIN_POPULATION_SIZE}"
-            )
+            raise ValueError(f"population_size must be >= {MIN_POPULATION_SIZE}")
 
 
 @dataclass
@@ -404,11 +407,7 @@ class PromptGenome:
         parent_b: "PromptGenome",
     ) -> "PromptGenome":
         """Uniform crossover between two prompt genomes."""
-        sys_prompt = (
-            parent_a.system_prompt
-            if random.random() < 0.5
-            else parent_b.system_prompt
-        )
+        sys_prompt = parent_a.system_prompt if random.random() < 0.5 else parent_b.system_prompt
         instr = (
             parent_a.mutation_instructions
             if random.random() < 0.5
@@ -420,7 +419,7 @@ class PromptGenome:
 
         all_fewshot = list(set(parent_a.few_shot_examples + parent_b.few_shot_examples))
         random.shuffle(all_fewshot)
-        fewshot = all_fewshot[:max(1, len(all_fewshot) // 2)]
+        fewshot = all_fewshot[: max(1, len(all_fewshot) // 2)]
 
         return cls(
             system_prompt=sys_prompt,
@@ -454,22 +453,24 @@ class PromptGenome:
             if mutant.few_shot_examples:
                 mutant.few_shot_examples.pop(random.randrange(len(mutant.few_shot_examples)))
         elif op == 4:
-            mutant.few_shot_examples.append((
-                "def solve(n): return n * (n + 1) // 2",
-                "def solve(n):\n    return n * (n + 1) // 2\n",
-            ))
+            mutant.few_shot_examples.append(
+                (
+                    "def solve(n): return n * (n + 1) // 2",
+                    "def solve(n):\n    return n * (n + 1) // 2\n",
+                )
+            )
         elif op == 5:
             synonyms = {
-                "optimize": "enhance", "ensure": "guarantee",
-                "avoid": "prevent", "use": "employ",
+                "optimize": "enhance",
+                "ensure": "guarantee",
+                "avoid": "prevent",
+                "use": "employ",
             }
             words = mutant.mutation_instructions.split()
             for i, w in enumerate(words):
                 low = w.lower().rstrip(",.;")
                 if low in synonyms:
-                    words[i] = synonyms[low] + (
-                        w[len(low):] if len(w) > len(low) else ""
-                    )
+                    words[i] = synonyms[low] + (w[len(low) :] if len(w) > len(low) else "")
                     break
             mutant.mutation_instructions = " ".join(words)
         return mutant
@@ -485,16 +486,16 @@ class ArchivedSolution:
     timestamp: float = field(default_factory=time.time)
 
 
-
-
 # ── Profile Mode Enum ──────────────────────────────────────────────────────────
+
 
 class ProfileMode(str, enum.Enum):
     """Profile mode for evolution filters."""
-    HOTFIX = "hotfix"       # Conservative: prioritize correctness and security
-    BALANCED = "balanced"   # Default: balance between speed and safety
-    DEBT = "debt"           # Permissive: allow technical debt for experimentation
-    RELEASE = "release"     # Strict: maximum validation, no risky patterns
+
+    HOTFIX = "hotfix"  # Conservative: prioritize correctness and security
+    BALANCED = "balanced"  # Default: balance between speed and safety
+    DEBT = "debt"  # Permissive: allow technical debt for experimentation
+    RELEASE = "release"  # Strict: maximum validation, no risky patterns
 
     @classmethod
     def from_str(cls, value: str) -> "ProfileMode":
@@ -508,6 +509,7 @@ class ProfileMode(str, enum.Enum):
 
 
 # ── Fitness Report (ML-F01) ────────────────────────────────────────────────────
+
 
 @dataclass
 class FitnessReport:

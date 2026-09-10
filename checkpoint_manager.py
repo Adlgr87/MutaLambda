@@ -41,7 +41,6 @@ from muta_lambda import (
     SolutionArchive,
 )
 
-
 # Below this many total individuals, use JSON (fast, human-readable);
 # above it, msgpack is typically more compact and faster.
 MSGPACK_THRESHOLD: int = 256
@@ -50,6 +49,7 @@ MSGPACK_THRESHOLD: int = 256
 @dataclass
 class CheckpointData:
     """Full experiment state snapshot."""
+
     generation: int
     timestamp: float = field(default_factory=time.time)
     config_hash: str = ""
@@ -108,6 +108,7 @@ Checkpoint = CheckpointData
 
 # ── Save ──────────────────────────────────────────────────────────────
 
+
 def save_full_checkpoint(
     agent: MutaLambdaAgent,
     generation: int,
@@ -133,7 +134,9 @@ def save_full_checkpoint(
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
             cwd=config.checkpoint_dir,
         )
         if result.returncode == 0:
@@ -155,9 +158,15 @@ def save_full_checkpoint(
     # ── Island populations (ALL individuals) ─────────────────────────
     for island in agent.islands:
         pop_data = [
-            {"id": ind.id, "code": ind.code, "score": ind.score,
-             "parent_ids": ind.parent_ids or [], "tier": ind.tier,
-             "passed": ind.passed, "record_lineage": ind.record_lineage}
+            {
+                "id": ind.id,
+                "code": ind.code,
+                "score": ind.score,
+                "parent_ids": ind.parent_ids or [],
+                "tier": ind.tier,
+                "passed": ind.passed,
+                "record_lineage": ind.record_lineage,
+            }
             for ind in island.population
         ]
         checkpoint.island_populations.append(pop_data)
@@ -211,7 +220,7 @@ def save_full_checkpoint(
         checkpoint.early_stop_no_improve = int(getattr(early, "_no_improve", 0))
 
     # ── Lineage graph (Fase 7) ────────────────────────────────────────
-    if hasattr(agent, '_lineage') and agent._lineage.nodes:
+    if hasattr(agent, "_lineage") and agent._lineage.nodes:
         checkpoint.lineage = agent._lineage.to_dict()
 
     for attr, target in (
@@ -234,7 +243,7 @@ def save_full_checkpoint(
 
     # ── Serialise ────────────────────────────────────────────────────
     ckpt_path = chk_dir / "checkpoint.json"
-    
+
     # Determine serialization format.
     # - 'auto': use msgpack for populations > MSGPACK_THRESHOLD individuals,
     #   otherwise JSON (fast, human-readable).
@@ -242,17 +251,17 @@ def save_full_checkpoint(
     # The threshold (256) captures production preset range (e.g. 6 islands x 8 pop = 48).
     format_mode = getattr(config, "checkpoint_format", "auto") or "auto"
     total_individuals = sum(len(pop) for pop in checkpoint.island_populations)
-    
-    use_msgpack = (
-        format_mode == "msgpack"
-        or (format_mode == "auto" and total_individuals > MSGPACK_THRESHOLD)
+
+    use_msgpack = format_mode == "msgpack" or (
+        format_mode == "auto" and total_individuals > MSGPACK_THRESHOLD
     )
-    
+
     if use_msgpack:
         # msgpack for large/parallel populations (60-70% smaller, 2-3x faster)
         try:
             import msgpack
             import zlib
+
             ckpt_path = chk_dir / "checkpoint.msgpack"
             serialised = _serialise_checkpoint(checkpoint)
             packed = msgpack.packb(serialised, use_bin_type=True, default=_msgpack_default)
@@ -260,7 +269,9 @@ def save_full_checkpoint(
             ckpt_path.write_bytes(compressed)
             logger.debug(
                 "Saved compressed msgpack checkpoint: %s (%d bytes, %d individuals)",
-                ckpt_path, len(compressed), total_individuals
+                ckpt_path,
+                len(compressed),
+                total_individuals,
             )
         except ImportError:
             # Fall back to JSON if msgpack unavailable
@@ -272,9 +283,10 @@ def save_full_checkpoint(
             json.dump(_serialise_checkpoint(checkpoint), f, indent=2, ensure_ascii=False)
 
     logger.info(
-        "Full checkpoint saved: %s (gen %d, %d islands, "
-        "archive=%d, config_hash=%s, git=%s)",
-        ckpt_path, generation, len(checkpoint.island_populations),
+        "Full checkpoint saved: %s (gen %d, %d islands, " "archive=%d, config_hash=%s, git=%s)",
+        ckpt_path,
+        generation,
+        len(checkpoint.island_populations),
         agent.archive.size if agent.archive else 0,
         checkpoint.config_hash,
         checkpoint.git_commit,
@@ -299,13 +311,13 @@ def _serialise_checkpoint(cp: CheckpointData) -> Dict[str, Any]:
     np_state_tuple = cp.numpy_state
     if np_state_tuple and len(np_state_tuple) >= 2:
         np_version = np_state_tuple[0]  # 'MT19937'
-        np_core = np_state_tuple[1]      # (624,) ndarray
+        np_core = np_state_tuple[1]  # (624,) ndarray
         np_pos = np_state_tuple[2] if len(np_state_tuple) > 2 else 0
         np_has_gauss = np_state_tuple[3] if len(np_state_tuple) > 3 else 0
         np_gauss = np_state_tuple[4] if len(np_state_tuple) > 4 else 0.0
         numpy_serialised = [
             np_version,
-            np_core.tolist() if hasattr(np_core, 'tolist') else np_core,
+            np_core.tolist() if hasattr(np_core, "tolist") else np_core,
             np_pos,
             np_has_gauss,
             np_gauss,
@@ -340,9 +352,7 @@ def _serialise_checkpoint(cp: CheckpointData) -> Dict[str, Any]:
         "pattern_memory": cp.pattern_memory,
         "generation_completed": cp.generation_completed,
         "current_generation": cp.current_generation,
-        "early_stop_best": (
-            None if cp.early_stop_best == float("-inf") else cp.early_stop_best
-        ),
+        "early_stop_best": (None if cp.early_stop_best == float("-inf") else cp.early_stop_best),
         "early_stop_no_improve": cp.early_stop_no_improve,
         "run_id": cp.run_id,
         "task": cp.task,
@@ -352,6 +362,7 @@ def _serialise_checkpoint(cp: CheckpointData) -> Dict[str, Any]:
 
 
 # ── Serialisation helpers ──────────────────────────────────────────────
+
 
 def _to_json_safe(obj):
     """Convert tuples and numpy arrays to JSON-serialisable lists."""
@@ -390,6 +401,7 @@ def _restore_state(state_data):
         return tuple(_restore_state(x) for x in state_data)
     return state_data
 
+
 def load_checkpoint(path: str | Path) -> CheckpointData:
     """Load a checkpoint from disk.
 
@@ -412,6 +424,7 @@ def load_checkpoint(path: str | Path) -> CheckpointData:
     if path.suffix == ".msgpack":
         import msgpack
         import zlib
+
         compressed = path.read_bytes()
         packed = zlib.decompress(compressed)
         data = msgpack.unpackb(packed, raw=False, strict_map_key=False)
@@ -493,14 +506,16 @@ def resume_agent(
     Use to continue an interrupted experiment exactly.
     """
     cp = load_checkpoint(checkpoint_path)
-    chk_dir = Path(checkpoint_path).parent if Path(checkpoint_path).is_file() else Path(checkpoint_path)
+    chk_dir = (
+        Path(checkpoint_path).parent if Path(checkpoint_path).is_file() else Path(checkpoint_path)
+    )
 
     # Create fresh agent
     agent = MutaLambdaAgent(
         config=config,
         test_cases=test_cases,
         llm_fn=llm_fn,
-        timeout_sec=config._timeout_sec if hasattr(config, '_timeout_sec') else 10.0,
+        timeout_sec=config._timeout_sec if hasattr(config, "_timeout_sec") else 10.0,
     )
 
     # Restore island populations
@@ -538,9 +553,8 @@ def resume_agent(
     # Restore prompt evolver
     if cp.prompt_population and agent.prompt_evolver:
         from muta_lambda import PromptGenome
-        agent.prompt_evolver.population = [
-            PromptGenome(**pd) for pd in cp.prompt_population
-        ]
+
+        agent.prompt_evolver.population = [PromptGenome(**pd) for pd in cp.prompt_population]
 
     # Restore HFC tiered evolution
     if cp.hfc_populations and hasattr(agent, "_hfc") and agent._hfc is not None:
@@ -574,14 +588,18 @@ def resume_agent(
         early._no_improve = cp.early_stop_no_improve
 
     # Restore lineage graph (Fase 7)
-    if cp.lineage and hasattr(agent, '_lineage'):
+    if cp.lineage and hasattr(agent, "_lineage"):
         agent._lineage = LineageGraph.from_dict(cp.lineage)
         agent.migration_bus.lineage_graph = agent._lineage
         advanced = getattr(agent, "_advanced_selection", None)
         if advanced is not None:
             advanced.lineage_graph = agent._lineage
 
-    if cp.pattern_memory and hasattr(agent, "_pattern_memory") and agent._pattern_memory is not None:
+    if (
+        cp.pattern_memory
+        and hasattr(agent, "_pattern_memory")
+        and agent._pattern_memory is not None
+    ):
         try:
             from muta_ext.pattern_memory import PatternMemory
 

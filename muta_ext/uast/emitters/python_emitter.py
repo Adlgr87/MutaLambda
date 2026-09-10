@@ -1,12 +1,33 @@
 """CoreUAST → Python source emitter."""
+
 import ast
 from typing import Optional
 
 from muta_ext.uast.core_uast import (
-    CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
-    Assign, If, For, While, Return, Function, ParallelFor,
-    Comment, Opaque, Node, TryExcept, ExceptClause, StructDef,
-    FieldDef, TypeAnnotation, MatchArm, Match, Reference
+    CoreUAST,
+    LiteralNode,
+    Identifier,
+    BinaryOp,
+    UnaryOp,
+    Call,
+    Assign,
+    If,
+    For,
+    While,
+    Return,
+    Function,
+    ParallelFor,
+    Comment,
+    Opaque,
+    Node,
+    TryExcept,
+    ExceptClause,
+    StructDef,
+    FieldDef,
+    TypeAnnotation,
+    MatchArm,
+    Match,
+    Reference,
 )
 
 
@@ -26,12 +47,12 @@ class PythonEmitter:
             lines.extend(self._emit_node(node, indent=0))
         return "\n".join(lines)
 
-    def _emit_node(self, node: Optional[Node], indent: int = 0) -> list:
+    def _emit_node(self, node: Optional[Node], indent: int = 0) -> list:  # noqa: C901
         """Emit a single node to source lines."""
         if node is None:
             return []
         indent_str = "    " * indent
-        
+
         if isinstance(node, LiteralNode):
             return [repr(node.value)]
         if isinstance(node, Identifier):
@@ -124,20 +145,23 @@ class PythonEmitter:
             var = " ".join(self._emit_node(node.var, indent))
             start_code = " ".join(self._emit_node(node.start, indent)) if node.start else "0"
             end_code = " ".join(self._emit_node(node.end, indent)) if node.end else "len(iterable)"
-            
+
             # Emit body as lambda expression
             body_lines = []
             for child in node.body:
                 body_lines.extend(self._emit_node(child, indent + 1))
             body_str = " ".join(body_lines) if body_lines else "pass"
-            
+
             if node.reduction:
                 # Map-reduce pattern for parallel execution
                 map_expr = f"map(lambda {var}: ({body_str}), range({start_code}, {end_code}))"
                 if node.reduction == "sum":
                     return [f"{indent_str}{var} = sum({map_expr})"]
                 elif node.reduction == "prod":
-                    return [f"{indent_str}import math", f"{indent_str}{var} = math.prod({map_expr})"]
+                    return [
+                        f"{indent_str}import math",
+                        f"{indent_str}{var} = math.prod({map_expr})",
+                    ]
                 elif node.reduction == "max":
                     return [f"{indent_str}{var} = max({map_expr})"]
                 elif node.reduction == "min":

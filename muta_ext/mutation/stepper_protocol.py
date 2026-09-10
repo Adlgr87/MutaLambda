@@ -41,6 +41,7 @@ class MutationResult:
     metadata : dict
         Información adicional (tipo de operador, diff stats, etc.).
     """
+
     code: str
     stepper_name: str = "unknown"
     success: bool = True

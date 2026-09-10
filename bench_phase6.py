@@ -7,6 +7,7 @@ Matches EMPIRICAL_EVIDENCE.md philosophy: real wall-clock timing,
 Run:
   python bench_phase6.py
 """
+
 from __future__ import annotations
 
 import ast
@@ -22,6 +23,7 @@ from pathlib import Path
 
 import numpy as np
 from muta_lambda import EvolveConfig, MutaLambdaAgent
+
 # Pre-existing bug (independent of Phase 6): muta_lambda.py uses the global
 # name ``_filter_mutant`` but never imports it from mutation_filters. This
 # only triggers when num_islands > 1 (differentiated seeding). We inject the
@@ -29,11 +31,13 @@ from muta_lambda import EvolveConfig, MutaLambdaAgent
 # populations, isolating ONLY the Phase 6 changes.
 import muta_lambda as _ml
 from mutation_filters import _filter_mutant
+
 if not hasattr(_ml, "_filter_mutant"):
     _ml._filter_mutant = _filter_mutant
 
 
 from checkpoint_manager import CheckpointData, save_full_checkpoint, load_checkpoint
+
 try:
     from checkpoint_manager import MSGPACK_THRESHOLD  # Phase 6 addition
 except ImportError:
@@ -61,11 +65,24 @@ SEED = (
 def mock_llm_fn(prompt: str) -> str:
     """Fast in-process 'LLM' that applies an AST mutation; avoids network/ollama."""
     from evolution_engine import ASTMutator
+
     lines = prompt.split("\n")
     code_lines = [
-        l for l in lines
+        l
+        for l in lines
         if l.strip()
-        and not l.startswith(("You are", "Task:", "Improve", "Return", "Instructions:", "Constraints:", "Evaluation", "Scoring"))
+        and not l.startswith(
+            (
+                "You are",
+                "Task:",
+                "Improve",
+                "Return",
+                "Instructions:",
+                "Constraints:",
+                "Evaluation",
+                "Scoring",
+            )
+        )
     ]
     code = "\n".join(code_lines).strip()
     if not code:
@@ -81,8 +98,8 @@ def make_config(gens=5, islands=2, pop=4):
         seed_codes=[SEED],
         topology="ring",
         top_k=3,
-        checkpoint_enabled=False,         # isolate end-to-end gen timing
-        prompt_evolution=False,            # avoid extra LLM calls
+        checkpoint_enabled=False,  # isolate end-to-end gen timing
+        prompt_evolution=False,  # avoid extra LLM calls
         hfc_enabled=False,
         thc_enabled=False,
         spatial_enabled=False,
@@ -102,9 +119,7 @@ def run_evolution_once(gens=5, islands=2, pop=4):
         agent = MutaLambdaAgent(
             config=cfg,
             llm_fn=mock_llm_fn,
-            test_cases=[
-                {"test": "compute_stats(np.array([1,2,3,4,5]))", "pass": True}
-            ],
+            test_cases=[{"test": "compute_stats(np.array([1,2,3,4,5]))", "pass": True}],
             task="Optimize compute_stats for speed",
         )
         agent.run(task="Optimize compute_stats for speed")
@@ -122,6 +137,7 @@ def bench_end_to_end(reps=3):
 
 # ── Parse cache isolation ─────────────────────────────────────────────
 
+
 def bench_parse_cache(code: str, iters=20000, reps=3):
     """Compare ast.parse vs cached_parse in isolation.
 
@@ -130,6 +146,7 @@ def bench_parse_cache(code: str, iters=20000, reps=3):
     we additionally measure the cached path.
     """
     import code_hash
+
     has_cache = hasattr(code_hash, "cached_parse")
 
     # Baseline: raw ast.parse (the 'before' behaviour everywhere)
@@ -182,19 +199,22 @@ def bench_parse_cache(code: str, iters=20000, reps=3):
 
 # ── Checkpoint serialization isolation ────────────────────────────────
 
+
 def make_checkpoint_data(n_islands=6, pop_per=80):
     """Build ~500-individual population checkpoint (matches phase-6 claim)."""
     populations = []
     for isl in range(n_islands):
         pop = []
         for ind in range(pop_per):
-            pop.append({
-                "id": f"ind-{isl}-{ind}",
-                "code": SEED,
-                "score": 0.5 + (ind % 100) / 200.0,
-                "generation": ind,
-                "fitness": {"primary": 0.5, "novelty": 0.1, "entropy": 0.0},
-            })
+            pop.append(
+                {
+                    "id": f"ind-{isl}-{ind}",
+                    "code": SEED,
+                    "score": 0.5 + (ind % 100) / 200.0,
+                    "generation": ind,
+                    "fitness": {"primary": 0.5, "novelty": 0.1, "entropy": 0.0},
+                }
+            )
         populations.append(pop)
     total = sum(len(p) for p in populations)
     cp = CheckpointData(
@@ -223,6 +243,7 @@ def bench_checkpoint_serialization(reps=3):
     """
     cp, total = make_checkpoint_data(n_islands=6, pop_per=80)
     from checkpoint_manager import _serialise_checkpoint
+
     try:
         from checkpoint_manager import MSGPACK_THRESHOLD
     except ImportError:
@@ -246,14 +267,16 @@ def bench_checkpoint_serialization(reps=3):
     try:
         import msgpack
         import zlib
+
         msgpack_times = []
         msgpack_sizes = []
         for _ in range(reps):
             t0 = time.perf_counter()
             for _ in range(reps):
                 packed = msgpack.packb(
-                    serialised, use_bin_type=True,
-                    default=lambda o: o.tolist() if hasattr(o, 'tolist') else o,
+                    serialised,
+                    use_bin_type=True,
+                    default=lambda o: o.tolist() if hasattr(o, "tolist") else o,
                 )
                 compressed = zlib.compress(packed, level=6)
             msgpack_times.append((time.perf_counter() - t0) / reps)
@@ -263,7 +286,7 @@ def bench_checkpoint_serialization(reps=3):
 
     return {
         "total_individuals": total,
-        "MSGPACK_THRESHOLD": MSGPACK_THRESHOLD if 'MSGPACK_THRESHOLD' in globals() else None,
+        "MSGPACK_THRESHOLD": MSGPACK_THRESHOLD if "MSGPACK_THRESHOLD" in globals() else None,
         "json": (json_sizes, json_times),
         "msgpack": (msgpack_sizes, msgpack_times),
     }
@@ -274,7 +297,9 @@ def main():
     print(f"\n=== Phase 6 Benchmark — STATE={label} ===")
     print(f"Python {sys.version.split()[0]}  msgpack available", end=" ")
     try:
-        import msgpack; print(f"({msgpack.version})")
+        import msgpack
+
+        print(f"({msgpack.version})")
     except ImportError:
         print("(MISSING)")
 
@@ -289,10 +314,14 @@ def main():
     print("\n--- 2. Parse cache isolation (ast.parse vs cached_parse, 20000 iters) ---")
     results = bench_parse_cache(SEED, iters=20000, reps=3)
     raw_min_us = results["raw_ast_parse"][1] * 1e6
-    print(f"  raw_ast_parse    : min={raw_min_us:.2f} us/op  avg={statistics.mean(results['raw_ast_parse'][0])*1e6:.2f} us/op")
+    print(
+        f"  raw_ast_parse    : min={raw_min_us:.2f} us/op  avg={statistics.mean(results['raw_ast_parse'][0])*1e6:.2f} us/op"
+    )
     if results["cached_warm_min"] is not None:
         cmin = results["cached_warm_min"] * 1e6
-        print(f"  cached_parse(warm): min={cmin:.4f} us/op  (speedup vs raw: {raw_min_us/cmin:.0f}x)")
+        print(
+            f"  cached_parse(warm): min={cmin:.4f} us/op  (speedup vs raw: {raw_min_us/cmin:.0f}x)"
+        )
     else:
         print(f"  cached_parse: NOT AVAILABLE in this state (no Phase 6 AST cache)")
 
@@ -303,11 +332,19 @@ def main():
     json_sizes, json_times = ck_results["json"]
     msgpack_sizes, msgpack_times = ck_results["msgpack"]
     print(f"  population: {total} individuals")
-    print(f"  JSON   : avg_size={statistics.mean(json_sizes)/1024:.1f} KB  avg_time={statistics.mean(json_times)*1000:.3f} ms")
+    print(
+        f"  JSON   : avg_size={statistics.mean(json_sizes)/1024:.1f} KB  avg_time={statistics.mean(json_times)*1000:.3f} ms"
+    )
     if msgpack_sizes is not None:
-        print(f"  Msgpack: avg_size={statistics.mean(msgpack_sizes)/1024:.1f} KB  avg_time={statistics.mean(msgpack_times)*1000:.3f} ms")
+        print(
+            f"  Msgpack: avg_size={statistics.mean(msgpack_sizes)/1024:.1f} KB  avg_time={statistics.mean(msgpack_times)*1000:.3f} ms"
+        )
         ratio = statistics.mean(msgpack_sizes) / statistics.mean(json_sizes)
-        tspeed = statistics.mean(json_times) / statistics.mean(msgpack_times) if statistics.mean(msgpack_times)>0 else 0
+        tspeed = (
+            statistics.mean(json_times) / statistics.mean(msgpack_times)
+            if statistics.mean(msgpack_times) > 0
+            else 0
+        )
         print(f"  msgpack: {ratio*100:.1f}% of JSON size  |  {tspeed:.2f}x faster")
     else:
         print(f"  Msgpack: N/A (msgpack not available in this state)")
@@ -316,22 +353,38 @@ def main():
     print(f"\n  [state={label}] done")
     out = os.environ.get("PHASE6_OUT", "/tmp/phase6_bench.json")
     with open(out, "w") as f:
-        json.dump({
-            "state": label,
-            "end_to_end": {"min": mn, "avg": avg, "stderr": se, "samples": samples},
-            "parse": {
-                "raw_ast_parse_min_us": results["raw_ast_parse"][1]*1e6,
-                "cached_warm_min_us": (results["cached_warm_min"]*1e6 if results["cached_warm_min"] is not None else None),
-                "has_cache": results["has_cache"],
+        json.dump(
+            {
+                "state": label,
+                "end_to_end": {"min": mn, "avg": avg, "stderr": se, "samples": samples},
+                "parse": {
+                    "raw_ast_parse_min_us": results["raw_ast_parse"][1] * 1e6,
+                    "cached_warm_min_us": (
+                        results["cached_warm_min"] * 1e6
+                        if results["cached_warm_min"] is not None
+                        else None
+                    ),
+                    "has_cache": results["has_cache"],
+                },
+                "checkpoint": {
+                    "individuals": total,
+                    "json_avg_kb": statistics.mean(json_sizes) / 1024,
+                    "msgpack_avg_kb": (
+                        (statistics.mean(msgpack_sizes) / 1024)
+                        if msgpack_sizes is not None
+                        else None
+                    ),
+                    "json_avg_ms": statistics.mean(json_times) * 1000,
+                    "msgpack_avg_ms": (
+                        (statistics.mean(msgpack_times) * 1000)
+                        if msgpack_times is not None
+                        else None
+                    ),
+                },
             },
-            "checkpoint": {
-                "individuals": total,
-                "json_avg_kb": statistics.mean(json_sizes)/1024,
-                "msgpack_avg_kb": (statistics.mean(msgpack_sizes)/1024) if msgpack_sizes is not None else None,
-                "json_avg_ms": statistics.mean(json_times)*1000,
-                "msgpack_avg_ms": (statistics.mean(msgpack_times)*1000) if msgpack_times is not None else None,
-            },
-        }, f, indent=2)
+            f,
+            indent=2,
+        )
     print(f"  results -> {out}")
 
 

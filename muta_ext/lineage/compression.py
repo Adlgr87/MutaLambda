@@ -38,6 +38,7 @@ class CompressedNode:
         compresor principalmente adjunta los campos comprimidos al nodo
         original.
     """
+
     id: str
     compressed_code: bytes
     is_diff: bool = False
@@ -150,14 +151,13 @@ class LineageCompressor:
         """Estadísticas de compresión."""
         total = len(self.graph.nodes)
         compressed = sum(
-            1 for n in self.graph.nodes.values()
+            1
+            for n in self.graph.nodes.values()
             if getattr(n, self._COMPRESSED_CODE_ATTR, None) is not None
         )
         return {
             "total_nodes": total,
             "compressed_nodes": compressed,
             "active_nodes": total - compressed,
-            "compression_ratio_pct": round(
-                (compressed / total * 100) if total > 0 else 0, 1
-            ),
+            "compression_ratio_pct": round((compressed / total * 100) if total > 0 else 0, 1),
         }

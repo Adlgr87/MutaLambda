@@ -39,6 +39,7 @@ console = Console()
 @dataclass
 class ProfileResult:
     """Resultados de profiling para una función/método crítico."""
+
     module: str
     function_name: str
     total_calls: int
@@ -54,7 +55,7 @@ def profile_nsga2(iterations: int = 1000) -> ProfileResult:
     from nsga2 import non_dominated_sort, _get_fitness
     from models import Individual
     from fitness_vector import FitnessVector
-    
+
     # Setup population with FitnessVectors
     population = []
     for i in range(100):
@@ -62,37 +63,35 @@ def profile_nsga2(iterations: int = 1000) -> ProfileResult:
             code=f"def f{i}(): return {i}",
             score=float(i),
             fitness=FitnessVector(
-                correctness=0.8 + (i * 0.001),
-                latency_p50=0.001 * i,
-                memory_peak_mb=0.001 * i
-            )
+                correctness=0.8 + (i * 0.001), latency_p50=0.001 * i, memory_peak_mb=0.001 * i
+            ),
         )
         population.append(ind)
-    
+
     # Profiling
     pr = cProfile.Profile()
     pr.enable()
-    
+
     for _ in range(iterations):
         # Estos son los hot paths identificados
         non_dominated_sort(population)
         for ind in population[:10]:
             _get_fitness(ind)
-    
+
     pr.disable()
-    
+
     # Analysis
     s = io.StringIO()
-    ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
+    ps = pstats.Stats(pr, stream=s).sort_stats("cumulative")
     ps.print_stats(20)
-    
+
     stats_output = s.getvalue()
-    
+
     # Extract metrics
-    lines = stats_output.strip().split('\n')
+    lines = stats_output.strip().split("\n")
     total_calls = 0
     cum_time = 0.0
-    
+
     for line in lines[5:10]:  # Top 5 functions
         parts = line.split()
         if len(parts) >= 4:
@@ -101,7 +100,7 @@ def profile_nsga2(iterations: int = 1000) -> ProfileResult:
                 cum_time += float(parts[3])
             except (ValueError, IndexError):
                 pass
-    
+
     return ProfileResult(
         module="nsga2",
         function_name="non_dominated_sort + _get_fitness",
@@ -114,26 +113,26 @@ def profile_nsga2(iterations: int = 1000) -> ProfileResult:
             "_get_fitness() - O(N²) calls in dominance checks",
             "non_dominated_sort() - sorting overhead",
             "FitnessVector creation - object instantiation",
-        ]
+        ],
     )
 
 
 def profile_sandbox(iterations: int = 500) -> ProfileResult:
     """Profile sandbox operations - subprocess overhead."""
     from sandbox import SandboxEvaluator
-    
+
     # Test code
     test_code = "def add(a, b):\n    return a + b\n"
-    
+
     sandbox = SandboxEvaluator(
         test_cases=[{"input": {"a": 1, "b": 2}, "expected": 3}],
         timeout_sec=5.0,
     )
-    
+
     pr = cProfile.Profile()
     start_time = time.time()
     pr.enable()
-    
+
     for _ in range(iterations):
         # Simulate eval calls
         try:
@@ -143,14 +142,14 @@ def profile_sandbox(iterations: int = 500) -> ProfileResult:
             )
         except Exception:
             pass  # Expected in some environments
-    
+
     pr.disable()
     elapsed = time.time() - start_time
-    
+
     s = io.StringIO()
-    ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
+    ps = pstats.Stats(pr, stream=s).sort_stats("cumulative")
     ps.print_stats(15)
-    
+
     return ProfileResult(
         module="sandbox",
         function_name="evaluate_code_sync",
@@ -163,7 +162,7 @@ def profile_sandbox(iterations: int = 500) -> ProfileResult:
             "subprocess.Popen spawn overhead",
             "JSON serialization/deserialization",
             "Timeout enforcement (signal/threading)",
-        ]
+        ],
     )
 
 
@@ -173,24 +172,24 @@ def profile_checkpoint_manager(iterations: int = 100) -> ProfileResult:
     from models import Individual
     from fitness_vector import FitnessVector
     import tempfile
-    
+
     # Create minimal population
     population = []
     for i in range(10):
         ind = Individual(
             code=f"def f{i}(): return {i}",
             score=float(i),
-            fitness=FitnessVector(correctness=0.9, latency_p50=0.001, memory_peak_mb=0.5)
+            fitness=FitnessVector(correctness=0.9, latency_p50=0.001, memory_peak_mb=0.5),
         )
         population.append(ind)
-    
+
     # Setup lineage
     lineage = [{"generation": 0, "mutation": "init"}]
-    
+
     pr = cProfile.Profile()
     start_time = time.time()
     pr.enable()
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         for i in range(iterations):
             ckpt_path = f"{tmpdir}/checkpoint_{i}.json"
@@ -205,10 +204,10 @@ def profile_checkpoint_manager(iterations: int = 100) -> ProfileResult:
                 )
             except Exception:
                 pass
-    
+
     pr.disable()
     elapsed = time.time() - start_time
-    
+
     return ProfileResult(
         module="checkpoint_manager",
         function_name="save/load checkpoint",
@@ -221,7 +220,7 @@ def profile_checkpoint_manager(iterations: int = 100) -> ProfileResult:
             "JSON serialization (json.dumps)",
             "File I/O (disk write)",
             "Path resolution",
-        ]
+        ],
     )
 
 
@@ -229,7 +228,7 @@ def profile_evolution_engine(iterations: int = 200) -> ProfileResult:
     """Profile evolution engine key operations."""
     from evolution_engine import ASTMutator
     import ast
-    
+
     test_code = """
 def calculate(x, y):
     result = x + y
@@ -237,28 +236,28 @@ def calculate(x, y):
         return result * 2
     return result
 """
-    
+
     try:
         tree = ast.parse(test_code)
         mutator = ASTMutator()
-        rng = type('RNG', (), {'mutation_type': 'arithmetic'})()
+        rng = type("RNG", (), {"mutation_type": "arithmetic"})()
         rng.choice = lambda x: x[0]
         rng.uniform = lambda a, b: a
         rng.randint = lambda a, b: a
-        
+
         pr = cProfile.Profile()
         start_time = time.time()
         pr.enable()
-        
+
         for _ in range(iterations):
             try:
                 mutator.apply_random_mutation(tree, rng)
             except Exception:
                 pass  # Expected - mutation is stochastic
-        
+
         pr.disable()
         elapsed = time.time() - start_time
-        
+
         return ProfileResult(
             module="evolution_engine",
             function_name="ASTMutator.apply_random_mutation",
@@ -271,7 +270,7 @@ def calculate(x, y):
                 "AST node copying (copy.deepcopy)",
                 "Tree traversal (ast.walk)",
                 "Mutation point selection",
-            ]
+            ],
         )
     except Exception as e:
         return ProfileResult(
@@ -289,14 +288,14 @@ def calculate(x, y):
 def run_profiling(module: str = "all", iterations: int = 500) -> Dict[str, Any]:
     """Run profiling on specified modules."""
     results = {}
-    
+
     profiles = {
         "nsga2": lambda: profile_nsga2(iterations),
         "sandbox": lambda: profile_sandbox(iterations),
         "checkpoint_manager": lambda: profile_checkpoint_manager(iterations),
         "evolution_engine": lambda: profile_evolution_engine(iterations),
     }
-    
+
     if module == "all":
         for name, prof_func in profiles.items():
             console.print(f"\n[bold cyan]Profiling {name}...[/bold cyan]")
@@ -317,7 +316,7 @@ def run_profiling(module: str = "all", iterations: int = 500) -> Dict[str, Any]:
                 results[module] = {"error": str(e)}
         else:
             console.print(f"[red]Unknown module: {module}[/red]")
-    
+
     return results
 
 
@@ -330,7 +329,7 @@ def display_results(results: Dict[str, Any]):
     table.add_column("Time/call (ms)", justify="right")
     table.add_column("Total Time (s)", justify="right")
     table.add_column("Hotspots", style="magenta")
-    
+
     for module, data in results.items():
         if "error" in data:
             table.add_row(module, "ERROR", "-", "-", "-", data["error"])
@@ -343,9 +342,9 @@ def display_results(results: Dict[str, Any]):
                 f"{data['total_time']:.4f}",
                 "\n".join(data["hotspots"][:2]),
             )
-    
+
     console.print(table)
-    
+
     # Show detailed hotspots
     console.print("\n[bold]Hotspot Details:[/bold]")
     for module, data in results.items():
@@ -356,103 +355,100 @@ def display_results(results: Dict[str, Any]):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="SWE-Agent Style Profiling for MutaLambda"
-    )
+    parser = argparse.ArgumentParser(description="SWE-Agent Style Profiling for MutaLambda")
     parser.add_argument(
-        "--module", "-m",
+        "--module",
+        "-m",
         choices=["nsga2", "sandbox", "checkpoint_manager", "evolution_engine", "all"],
         default="all",
-        help="Module to profile"
+        help="Module to profile",
     )
     parser.add_argument(
-        "--iterations", "-i",
-        type=int,
-        default=500,
-        help="Number of iterations for profiling"
+        "--iterations", "-i", type=int, default=500, help="Number of iterations for profiling"
     )
     parser.add_argument(
-        "--output", "-o",
-        type=str,
-        default=None,
-        help="Output JSON file for results"
+        "--output", "-o", type=str, default=None, help="Output JSON file for results"
     )
     parser.add_argument(
-        "--recommend",
-        action="store_true",
-        help="Generate optimization recommendations"
+        "--recommend", action="store_true", help="Generate optimization recommendations"
     )
-    
+
     args = parser.parse_args()
-    
-    console.print(Panel(
-        "[bold]SWE-Agent Style Profiling[/bold]\n"
-        f"Module: {args.module} | Iterations: {args.iterations}",
-        border_style="cyan"
-    ))
-    
+
+    console.print(
+        Panel(
+            "[bold]SWE-Agent Style Profiling[/bold]\n"
+            f"Module: {args.module} | Iterations: {args.iterations}",
+            border_style="cyan",
+        )
+    )
+
     results = run_profiling(args.module, args.iterations)
     display_results(results)
-    
+
     # Save to JSON if requested
     if args.output:
-        with open(args.output, 'w') as f:
+        with open(args.output, "w") as f:
             json.dump(results, f, indent=2)
         console.print(f"\n[green]✓ Results saved to {args.output}[/green]")
-    
+
     # Generate recommendations
     if args.recommend:
         console.print("\n[bold yellow]=== Optimization Recommendations ===[/bold yellow]")
         generate_recommendations(results)
-    
+
     return 0 if all("error" not in v for v in results.values()) else 1
 
 
 def generate_recommendations(results: Dict[str, Any]):
     """Generate optimization recommendations based on profiling results."""
     recommendations = []
-    
+
     for module, data in results.items():
         if "error" in data:
             continue
-        
+
         if data["time_per_call_ms"] > 5.0:
-            recommendations.append({
-                "priority": "HIGH",
-                "module": module,
-                "issue": f"{data['function_name']} takes {data['time_per_call_ms']:.2f}ms per call",
-                "suggestions": [
-                    "Consider caching results",
-                    "Use faster serialization (msgpack)",
-                    "Batch operations to reduce per-call overhead",
-                ]
-            })
+            recommendations.append(
+                {
+                    "priority": "HIGH",
+                    "module": module,
+                    "issue": f"{data['function_name']} takes {data['time_per_call_ms']:.2f}ms per call",
+                    "suggestions": [
+                        "Consider caching results",
+                        "Use faster serialization (msgpack)",
+                        "Batch operations to reduce per-call overhead",
+                    ],
+                }
+            )
         elif data["time_per_call_ms"] > 1.0:
-            recommendations.append({
-                "priority": "MEDIUM",
-                "module": module,
-                "issue": f"{data['function_name']} takes {data['time_per_call_ms']:.2f}ms per call",
-                "suggestions": [
-                    "Profile in more detail with flamegraph",
-                    "Consider async alternatives",
-                ]
-            })
-    
+            recommendations.append(
+                {
+                    "priority": "MEDIUM",
+                    "module": module,
+                    "issue": f"{data['function_name']} takes {data['time_per_call_ms']:.2f}ms per call",
+                    "suggestions": [
+                        "Profile in more detail with flamegraph",
+                        "Consider async alternatives",
+                    ],
+                }
+            )
+
     if recommendations:
         table = Table(title="Recommendations (based on empirical evidence)", border_style="yellow")
         table.add_column("Priority", style="bold")
         table.add_column("Module", style="cyan")
         table.add_column("Issue", style="yellow")
         table.add_column("Suggestions", style="green")
-        
+
         for rec in recommendations:
             table.add_row(
                 rec["priority"],
                 rec["module"],
                 rec["issue"],
-                "\n".join(f"• {s}" for s in rec["suggestions"])
+                "\n".join(f"• {s}" for s in rec["suggestions"]),
             )
-        
+
         console.print(table)
     else:
         console.print("[green]✓ No critical bottlenecks detected[/green]")

@@ -1,4 +1,5 @@
 """Demo ejecutable de la Scientific Extension."""
+
 import sys
 import time
 from pathlib import Path
@@ -16,8 +17,10 @@ def demo_profiling():
     """Demuestra hot-path profiling."""
     print("=" * 60)
     print("DEMO: Hot-path profiling")
+
     def workload():
         run_simulation(num_particles=500, steps=50)
+
     config = ProfileConfig(min_cumulative_pct=1.0, max_hot_functions=10)
     start = time.perf_counter()
     result = profile_workload("run_simulation", workload, config=config)
@@ -33,8 +36,7 @@ def demo_invariants():
     print("\n" + "=" * 60)
     print("DEMO: Scientific Validation")
     result = evaluate_invariants(
-        {"total_energy": 15420.5, "mass_delta": 1e-12}, {},
-        invariants=BASE_INVARIANTS
+        {"total_energy": 15420.5, "mass_delta": 1e-12}, {}, invariants=BASE_INVARIANTS
     )
     print(f"Result: {'PASS' if result.passed else 'FAIL'} (score={result.scientific_score:.4f})")
 

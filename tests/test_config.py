@@ -24,21 +24,23 @@ class TestConfigValidation:
     """Unit tests for YAML schema validation."""
 
     def test_valid_minimal_config(self):
-        cfg = apply_defaults({
-            "evolution": {
-                "num_islands": 4,
-                "generations": 50,
-                "topology": "ring",
-            },
-            "population": {
-                "size": 8,
-                "top_k": 3,
-                "migration_interval": 10,
-            },
-            "sandbox": {
-                "timeout_sec": 10.0,
-            },
-        })
+        cfg = apply_defaults(
+            {
+                "evolution": {
+                    "num_islands": 4,
+                    "generations": 50,
+                    "topology": "ring",
+                },
+                "population": {
+                    "size": 8,
+                    "top_k": 3,
+                    "migration_interval": 10,
+                },
+                "sandbox": {
+                    "timeout_sec": 10.0,
+                },
+            }
+        )
         errors = validate_config(cfg)
         assert errors == []
 
@@ -49,43 +51,51 @@ class TestConfigValidation:
         assert any("sandbox" in e for e in errors)
 
     def test_invalid_topology(self):
-        cfg = apply_defaults({
-            "evolution": {"num_islands": 2, "generations": 10, "topology": "star"},
-            "population": {"size": 5, "top_k": 2, "migration_interval": 5},
-            "sandbox": {"timeout_sec": 5.0},
-        })
+        cfg = apply_defaults(
+            {
+                "evolution": {"num_islands": 2, "generations": 10, "topology": "star"},
+                "population": {"size": 5, "top_k": 2, "migration_interval": 5},
+                "sandbox": {"timeout_sec": 5.0},
+            }
+        )
         errors = validate_config(cfg)
         assert any("topology" in e for e in errors)
 
     def test_top_k_exceeds_population(self):
-        cfg = apply_defaults({
-            "evolution": {"num_islands": 2, "generations": 10, "topology": "ring"},
-            "population": {"size": 4, "top_k": 10, "migration_interval": 5},
-            "sandbox": {"timeout_sec": 5.0},
-        })
+        cfg = apply_defaults(
+            {
+                "evolution": {"num_islands": 2, "generations": 10, "topology": "ring"},
+                "population": {"size": 4, "top_k": 10, "migration_interval": 5},
+                "sandbox": {"timeout_sec": 5.0},
+            }
+        )
         errors = validate_config(cfg)
         assert any("top_k" in e.lower() for e in errors)
 
     def test_novelty_alpha_out_of_bounds(self):
-        cfg = apply_defaults({
-            "evolution": {
-                "num_islands": 2,
-                "generations": 10,
-                "topology": "ring",
-                "novelty_alpha": 2.5,
-            },
-            "population": {"size": 5, "top_k": 2, "migration_interval": 5},
-            "sandbox": {"timeout_sec": 5.0},
-        })
+        cfg = apply_defaults(
+            {
+                "evolution": {
+                    "num_islands": 2,
+                    "generations": 10,
+                    "topology": "ring",
+                    "novelty_alpha": 2.5,
+                },
+                "population": {"size": 5, "top_k": 2, "migration_interval": 5},
+                "sandbox": {"timeout_sec": 5.0},
+            }
+        )
         errors = validate_config(cfg)
         assert any("novelty_alpha" in e for e in errors)
 
     def test_apply_defaults_fills_missing(self):
-        cfg = apply_defaults({
-            "evolution": {"num_islands": 2, "generations": 10, "topology": "ring"},
-            "population": {"size": 5, "top_k": 2, "migration_interval": 5},
-            "sandbox": {"timeout_sec": 5.0},
-        })
+        cfg = apply_defaults(
+            {
+                "evolution": {"num_islands": 2, "generations": 10, "topology": "ring"},
+                "population": {"size": 5, "top_k": 2, "migration_interval": 5},
+                "sandbox": {"timeout_sec": 5.0},
+            }
+        )
         assert _get_nested(cfg, "checkpoint.interval") == 10
         assert _get_nested(cfg, "archive.enabled") is True
         assert _get_nested(cfg, "logging.level") == "INFO"
@@ -94,12 +104,14 @@ class TestConfigValidation:
         assert _get_nested(cfg, "llm.mutator_model") == "gpt-4o-mini"
 
     def test_defaults_do_not_overwrite_explicit(self):
-        cfg = apply_defaults({
-            "evolution": {"num_islands": 2, "generations": 10, "topology": "ring"},
-            "population": {"size": 5, "top_k": 2, "migration_interval": 5},
-            "sandbox": {"timeout_sec": 5.0},
-            "checkpoint": {"interval": 5},
-        })
+        cfg = apply_defaults(
+            {
+                "evolution": {"num_islands": 2, "generations": 10, "topology": "ring"},
+                "population": {"size": 5, "top_k": 2, "migration_interval": 5},
+                "sandbox": {"timeout_sec": 5.0},
+                "checkpoint": {"interval": 5},
+            }
+        )
         assert _get_nested(cfg, "checkpoint.interval") == 5
 
     def test_get_nested_deep_path(self):
@@ -189,22 +201,24 @@ hfc:
         assert config.hfc_tier1_size == 20
         assert config.hfc_tier2_size == 10
         assert config.hfc_tier3_size == 3
- 
+
     def test_llm_validation(self):
-        cfg = apply_defaults({
-            "evolution": {"num_islands": 2, "generations": 10, "topology": "ring"},
-            "population": {"size": 5, "top_k": 2, "migration_interval": 5},
-            "sandbox": {"timeout_sec": 5.0},
-            "llm": {
-                "backend": "not-a-provider",
-                "timeout_sec": 0,
-                "temperature": 3.0,
-            },
-            "prompt_evolution": {
-                "pop_size": 0,
-                "elite_frac": 1.5,
-            },
-        })
+        cfg = apply_defaults(
+            {
+                "evolution": {"num_islands": 2, "generations": 10, "topology": "ring"},
+                "population": {"size": 5, "top_k": 2, "migration_interval": 5},
+                "sandbox": {"timeout_sec": 5.0},
+                "llm": {
+                    "backend": "not-a-provider",
+                    "timeout_sec": 0,
+                    "temperature": 3.0,
+                },
+                "prompt_evolution": {
+                    "pop_size": 0,
+                    "elite_frac": 1.5,
+                },
+            }
+        )
         errors = validate_config(cfg)
         assert any("llm.backend" in e for e in errors)
         assert any("llm.timeout_sec" in e for e in errors)
@@ -213,16 +227,18 @@ hfc:
         assert any("prompt_evolution.elite_frac" in e for e in errors)
 
     def test_hfc_validation(self):
-        cfg = apply_defaults({
-            "evolution": {"num_islands": 2, "generations": 10, "topology": "ring"},
-            "population": {"size": 5, "top_k": 2, "migration_interval": 5},
-            "sandbox": {"timeout_sec": 5.0},
-            "hfc": {
-                "lambda_clones": -1,
-                "tier1_size": 0,
-                "promotion_correctness": 1.5,
-            },
-        })
+        cfg = apply_defaults(
+            {
+                "evolution": {"num_islands": 2, "generations": 10, "topology": "ring"},
+                "population": {"size": 5, "top_k": 2, "migration_interval": 5},
+                "sandbox": {"timeout_sec": 5.0},
+                "hfc": {
+                    "lambda_clones": -1,
+                    "tier1_size": 0,
+                    "promotion_correctness": 1.5,
+                },
+            }
+        )
         errors = validate_config(cfg)
         assert any("hfc.lambda_clones" in e for e in errors)
         assert any("hfc.tier1_size" in e for e in errors)

@@ -171,12 +171,17 @@ class HFCLeagueEngine:
     ) -> None:
         """Restore HFC populations from checkpoint data."""
         self.clear_caches()
-        self.tier1 = [self._individual_from_dict(data, TIER_LABORATORY)
-                      for data in populations.get(TIER_LABORATORY, [])]
-        self.tier2 = [self._individual_from_dict(data, TIER_FACTORY)
-                      for data in populations.get(TIER_FACTORY, [])]
-        self.tier3 = [self._individual_from_dict(data, TIER_ELITE)
-                      for data in populations.get(TIER_ELITE, [])]
+        self.tier1 = [
+            self._individual_from_dict(data, TIER_LABORATORY)
+            for data in populations.get(TIER_LABORATORY, [])
+        ]
+        self.tier2 = [
+            self._individual_from_dict(data, TIER_FACTORY)
+            for data in populations.get(TIER_FACTORY, [])
+        ]
+        self.tier3 = [
+            self._individual_from_dict(data, TIER_ELITE) for data in populations.get(TIER_ELITE, [])
+        ]
         self._dedupe_restored_populations()
         self._distilled_concept = distilled_concept
 
@@ -193,10 +198,7 @@ class HFCLeagueEngine:
         self._evaluate(current, evaluator)
 
         self._distilled_concept = self._maybe_distill(llm_fn, generation, task)
-        offspring = (
-            self._reproduce_laboratory(llm_fn)
-            + self._reproduce_factory(llm_fn)
-        )
+        offspring = self._reproduce_laboratory(llm_fn) + self._reproduce_factory(llm_fn)
 
         # Only evaluate laboratory offspring (score == -inf). Factory clones
         # inherit parent fitness and skip redundant evaluation.
@@ -481,10 +483,7 @@ RULES:
             if self._should_enter_elite(ind, next_tier3):
                 next_tier3.append(ind)
                 stats["promoted"] += 1
-                existing_elites = [
-                    elite for elite in self.tier3
-                    if elite.code != ind.code
-                ]
+                existing_elites = [elite for elite in self.tier3 if elite.code != ind.code]
                 if had_existing_elite:
                     demoted = self._remove_weakest(existing_elites)
                     if demoted is not None and demoted.id not in demoted_ids:
@@ -508,8 +507,7 @@ RULES:
             return True
         ind_fitness = ind.fitness or FitnessVector()
         return any(
-            ind_fitness.dominates(elite.fitness or FitnessVector())
-            for elite in current_elite
+            ind_fitness.dominates(elite.fitness or FitnessVector()) for elite in current_elite
         )
 
     @staticmethod
@@ -801,9 +799,13 @@ MODULE:
                     annotation_name = None
                     if isinstance(node.value, ast.Constant) and isinstance(node.value.value, int):
                         annotation_name = "int"
-                    elif isinstance(node.value, ast.Constant) and isinstance(node.value.value, float):
+                    elif isinstance(node.value, ast.Constant) and isinstance(
+                        node.value.value, float
+                    ):
                         annotation_name = "float"
-                    elif isinstance(node.value, ast.Constant) and isinstance(node.value.value, bool):
+                    elif isinstance(node.value, ast.Constant) and isinstance(
+                        node.value.value, bool
+                    ):
                         annotation_name = "bool"
                     if annotation_name is not None:
                         target = node.targets[0]

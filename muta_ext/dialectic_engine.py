@@ -83,6 +83,6 @@ class DialecticEngine:
             return False
 
     def _update_rates(self) -> None:
-        self.metrics.critique_rejection_rate = (
-            self.metrics.rejections / max(1, self.metrics.attempts)
+        self.metrics.critique_rejection_rate = self.metrics.rejections / max(
+            1, self.metrics.attempts
         )

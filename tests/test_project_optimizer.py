@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for project-level optimization in MutaLambda."""
+
 import pytest
 import sys
 from pathlib import Path
@@ -9,7 +10,12 @@ import json
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from muta_ext.project_optimizer import ProjectAnalyzer, CrossFileHotspot, InliningOpportunity, RedundancyPattern
+from muta_ext.project_optimizer import (
+    ProjectAnalyzer,
+    CrossFileHotspot,
+    InliningOpportunity,
+    RedundancyPattern,
+)
 
 
 class TestProjectAnalyzer:
@@ -22,13 +28,13 @@ class TestProjectAnalyzer:
             Path(tmpdir, "main.go").write_text("package main\n")
             Path(tmpdir, "utils.go").write_text("package utils\n")
             Path(tmpdir, "readme.md").write_text("# Readme\n")
-            
+
             analyzer = ProjectAnalyzer(tmpdir)
             files = analyzer._discover_source_files()
-            
+
             # Should find Go files but not markdown
             assert len(files) == 2
-            assert all(f.suffix == '.go' for f in files)
+            assert all(f.suffix == ".go" for f in files)
 
     def test_analyze_file(self):
         """Test single file analysis."""
@@ -46,14 +52,14 @@ func multiply(a int, b int) int {
 """
             file_path = Path(tmpdir, "test.go")
             file_path.write_text(source)
-            
+
             analyzer = ProjectAnalyzer(tmpdir)
             analysis = analyzer._analyze_file(file_path)
-            
+
             assert analysis is not None
             assert len(analysis.functions) == 2
-            assert analysis.functions[0]['name'] == 'add'
-            assert analysis.functions[1]['name'] == 'multiply'
+            assert analysis.functions[0]["name"] == "add"
+            assert analysis.functions[1]["name"] == "multiply"
             assert analysis.lines_of_code > 0
 
     def test_detect_hotspots(self):
@@ -62,7 +68,7 @@ func multiply(a int, b int) int {
             # Create two files that call each other
             file1 = Path(tmpdir, "a.go")
             file2 = Path(tmpdir, "b.go")
-            
+
             file1.write_text("""
 package main
 
@@ -79,22 +85,22 @@ func DoSomething() {
     // does something
 }
 """)
-            
+
             analyzer = ProjectAnalyzer(tmpdir)
             analyzer.file_analyses = {}
-            
+
             # Manually add analyses
             from muta_ext.project_optimizer import FileAnalysis
+
             analyzer.file_analyses[str(file1)] = FileAnalysis(
                 path=str(file1),
                 functions=[{"name": "callB", "params": [], "body_length": 5}],
-                imports=["myproject/pkg/b"]
+                imports=["myproject/pkg/b"],
             )
             analyzer.file_analyses[str(file2)] = FileAnalysis(
-                path=str(file2),
-                functions=[{"name": "DoSomething", "params": [], "body_length": 3}]
+                path=str(file2), functions=[{"name": "DoSomething", "params": [], "body_length": 3}]
             )
-            
+
             hotspots = analyzer._detect_cross_file_hotspots()
             # Should detect at least one hotspot
             assert len(hotspots) >= 0  # May be 0 if cross-references aren't detected
@@ -110,9 +116,9 @@ class TestHotspotDetection:
             callee_file="/path/to/b.go",
             function_name="DoSomething",
             call_count=10,
-            hotness_score=0.8
+            hotness_score=0.8,
         )
-        
+
         assert hotspot.caller_file == "/path/to/a.go"
         assert hotspot.callee_file == "/path/to/b.go"
         assert hotspot.function_name == "DoSomething"
@@ -131,9 +137,9 @@ class TestInliningDetection:
             callee_file="/path/to/file.go",
             callee_function="helper",
             size_reduction_estimate=50,
-            call_frequency=100
+            call_frequency=100,
         )
-        
+
         assert opportunity.caller_function == "main"
         assert opportunity.size_reduction_estimate == 50
         assert opportunity.call_frequency == 100
@@ -149,9 +155,9 @@ class TestRedundancyDetection:
             file2="/path/to/b.go",
             pattern_description="Duplicate sort implementation",
             similarity_score=0.95,
-            suggested_action="Extract to common utility"
+            suggested_action="Extract to common utility",
         )
-        
+
         assert pattern.similarity_score == 0.95
         assert "Extract" in pattern.suggested_action
 
@@ -164,7 +170,7 @@ class TestProjectAnalysis:
         with tempfile.TemporaryDirectory() as tmpdir:
             analyzer = ProjectAnalyzer(tmpdir)
             report = analyzer.analyze()
-            
+
             assert report["files_analyzed"] == 0
             assert report["total_functions"] == 0
 
@@ -186,10 +192,10 @@ func Helper() int {
     return 42
 }
 """)
-            
+
             analyzer = ProjectAnalyzer(tmpdir)
             report = analyzer.analyze()
-            
+
             assert report["files_analyzed"] >= 1
             assert report["total_functions"] >= 1
 
@@ -198,15 +204,15 @@ func Helper() int {
         with tempfile.TemporaryDirectory() as tmpdir:
             analyzer = ProjectAnalyzer(tmpdir)
             analyzer.analyze()
-            
+
             output_path = Path(tmpdir) / "report.json"
             saved_path = analyzer.save_report(str(output_path))
-            
+
             assert Path(saved_path).exists()
-            
+
             with open(saved_path) as f:
                 report = json.load(f)
-            
+
             assert "project_root" in report
             assert "files_analyzed" in report
 

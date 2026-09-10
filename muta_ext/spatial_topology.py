@@ -63,9 +63,13 @@ class SpatialTopology:
         diversities: List[float] = []
         for iid in ids:
             neighbors = self.neighbors(iid, ids)
-            own_codes = {getattr(ind, "code", "") for ind in getattr(islands[iid], "population", [])}
+            own_codes = {
+                getattr(ind, "code", "") for ind in getattr(islands[iid], "population", [])
+            }
             for nid in neighbors:
-                other_codes = {getattr(ind, "code", "") for ind in getattr(islands[nid], "population", [])}
+                other_codes = {
+                    getattr(ind, "code", "") for ind in getattr(islands[nid], "population", [])
+                }
                 union = own_codes | other_codes
                 if union:
                     diversities.append(1.0 - (len(own_codes & other_codes) / len(union)))

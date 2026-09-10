@@ -17,8 +17,16 @@ from code_hash import cached_parse
 class ASTMutator:
     """Mutaciones sobre el AST que garantizan código sintácticamente válido."""
 
-    _CONMUTATIVOS = {ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod,
-                     ast.BitAnd, ast.BitOr, ast.BitXor}
+    _CONMUTATIVOS = {
+        ast.Add,
+        ast.Sub,
+        ast.Mult,
+        ast.Div,
+        ast.Mod,
+        ast.BitAnd,
+        ast.BitOr,
+        ast.BitXor,
+    }
     _COMMUTATIVE_PAIRS = {ast.Add, ast.Mult, ast.BitAnd, ast.BitOr, ast.BitXor}
 
     _CONST_ALTERNATIVES = {
@@ -67,7 +75,8 @@ class ASTMutator:
     @classmethod
     def _swap_binary_ops(cls, tree: ast.Module) -> None:
         swaps = [
-            node for node in ast.walk(tree)
+            node
+            for node in ast.walk(tree)
             if isinstance(node, ast.BinOp) and type(node.op) in cls._COMMUTATIVE_PAIRS
         ]
         if swaps:
@@ -77,7 +86,8 @@ class ASTMutator:
     @classmethod
     def _replace_constant(cls, tree: ast.Module) -> None:
         constants = [
-            node for node in ast.walk(tree)
+            node
+            for node in ast.walk(tree)
             if isinstance(node, ast.Constant) and type(node.value) in cls._CONST_ALTERNATIVES
         ]
         if constants:
@@ -100,10 +110,7 @@ class ASTMutator:
 
     @staticmethod
     def _negate_condition(tree: ast.Module) -> None:
-        conditionals = [
-            node for node in ast.walk(tree)
-            if isinstance(node, (ast.If, ast.While))
-        ]
+        conditionals = [node for node in ast.walk(tree) if isinstance(node, (ast.If, ast.While))]
         if conditionals:
             node = random.choice(conditionals)
             node.test = ast.UnaryOp(op=ast.Not(), operand=node.test)
@@ -111,9 +118,12 @@ class ASTMutator:
     @staticmethod
     def _swap_comparison(tree: ast.Module) -> None:
         _INVERSE = {
-            ast.Lt: ast.Gt, ast.Gt: ast.Lt,
-            ast.LtE: ast.GtE, ast.GtE: ast.LtE,
-            ast.Eq: ast.Eq, ast.NotEq: ast.NotEq,
+            ast.Lt: ast.Gt,
+            ast.Gt: ast.Lt,
+            ast.LtE: ast.GtE,
+            ast.GtE: ast.LtE,
+            ast.Eq: ast.Eq,
+            ast.NotEq: ast.NotEq,
         }
         comps = [node for node in ast.walk(tree) if isinstance(node, ast.Compare)]
         if comps:
@@ -131,9 +141,7 @@ class ASTMutator:
             node.left, node.comparators[-1] = node.comparators[-1], node.left
 
     _PROTECTED_NAMES: frozenset = frozenset(
-        set(dir(builtins))
-        | {"True", "False", "None"}
-        | set(__import__("keyword").kwlist)
+        set(dir(builtins)) | {"True", "False", "None"} | set(__import__("keyword").kwlist)
     )
 
     @classmethod
@@ -146,7 +154,8 @@ class ASTMutator:
         protected = cls._PROTECTED_NAMES | locally_defined
 
         candidates = [
-            node for node in ast.walk(tree)
+            node
+            for node in ast.walk(tree)
             if isinstance(node, ast.Name)
             and isinstance(node.ctx, ast.Store)
             and isinstance(node.id, str)
@@ -484,7 +493,7 @@ RULES:
         end = text.find(marker, content_start + 1)
         if end == -1:
             return None
-        return text[content_start + 1:end]
+        return text[content_start + 1 : end]
 
 
 def ast_crossover(parent_a: str, parent_b: str, rng: random.Random = random) -> str:

@@ -33,9 +33,7 @@ def test_microvm_runner_basic_pass(simple_tests):
     if not shutil.which("bwrap"):
         pytest.skip("bwrap not installed")
     code = "def add(a, b):\n    return a + b\n"
-    result = MicroVMRunner(timeout_sec=5.0, enforce_ast_scan=False).run(
-        code, simple_tests
-    )
+    result = MicroVMRunner(timeout_sec=5.0, enforce_ast_scan=False).run(code, simple_tests)
     assert result.passed == 1
     assert result.metrics.get("correctness") == 1.0
 
@@ -65,22 +63,22 @@ def test_microvm_runner_quick_task():
 
 def test_microvm_runner_blocks_import_os(simple_tests):
     """AST scan must block dangerous code before execution."""
+    if not shutil.which("bwrap"):
+        pytest.skip("bwrap not installed (MicroVMRunner now fails closed without it)")
     runner = MicroVMRunner(enforce_ast_scan=True, timeout_sec=5.0)
     code = "import os\n" + "def add(a, b):\n    return a + b\n"
     result = runner.run(code, simple_tests)
-    assert (
-        "security_scan" in result.stderr or "security" in (result.stderr or "").lower()
-    )
+    assert "security_scan" in result.stderr or "security" in (result.stderr or "").lower()
 
 
 def test_microvm_runner_blocks_exec(simple_tests):
     """AST scan must block exec() calls."""
+    if not shutil.which("bwrap"):
+        pytest.skip("bwrap not installed (MicroVMRunner now fails closed without it)")
     runner = MicroVMRunner(enforce_ast_scan=True, timeout_sec=5.0)
     code = 'def add(a, b):\n    exec("import os")\n    return a + b\n'
     result = runner.run(code, simple_tests)
-    assert (
-        "security_scan" in result.stderr or "security" in (result.stderr or "").lower()
-    )
+    assert "security_scan" in result.stderr or "security" in (result.stderr or "").lower()
 
 
 def test_microvm_runner_ast_scan_disabled_allows(simple_tests):
@@ -96,11 +94,31 @@ def test_microvm_runner_ast_scan_disabled_allows(simple_tests):
 # ── bwrap availability ────────────────────────────────────────────────────────
 
 
+def test_microvm_runner_fails_closed_when_bwrap_missing(monkeypatch):
+    """ML-002 / ADR-0038: missing bwrap must raise (fail closed), not warn."""
+    import runners
+
+    monkeypatch.setattr(runners.shutil, "which", lambda _name: None)
+
+    # Hardened default (enforce_ast_scan=True) refuses to be constructed.
+    with pytest.raises(RuntimeError):
+        MicroVMRunner(enforce_ast_scan=True, timeout_sec=5.0)
+
+    # Dev opt-out (enforce_ast_scan=False) still constructs and surfaces a
+    # graceful per-candidate error instead of executing without isolation.
+    runner = MicroVMRunner(enforce_ast_scan=False, timeout_sec=5.0)
+    code = "def f(): pass\n"
+    tests = [{"function": "f", "args": [], "expected": None}]
+    result = runner.run(code, tests)
+    assert not result.passed
+    assert "bwrap" in (result.stderr or "").lower()
+
+
 def test_microvm_runner_bwrap_missing():
     """When bwrap is missing, runner should return graceful error."""
-    runner = MicroVMRunner(timeout_sec=5.0)
-    # The __post_init__ warns but doesn't raise. We test that the runner
-    # handles bwrap not found gracefully via the FileNotFoundError path.
+    if not shutil.which("bwrap"):
+        pytest.skip("bwrap not installed (fail-closed behavior covered above)")
+    runner = MicroVMRunner(enforce_ast_scan=False, timeout_sec=5.0)
     # We simulate by patching the bwrap command to a non-existent path.
     import runners
 
@@ -154,6 +172,8 @@ def test_microvm_runner_multiple_test_cases():
 
 def test_evaluation_service_last_mode_microvm_serial():
     """EvaluationService.last_mode reflects the active runner/serial mode."""
+    if not shutil.which("bwrap"):
+        pytest.skip("bwrap not installed (microvm runner now fails closed without it)")
     from evaluation_service import EvaluationService
 
     svc = EvaluationService(
@@ -165,9 +185,7 @@ def test_evaluation_service_last_mode_microvm_serial():
     # Trigger evaluate_batch (single code forces serial microvm path).
     svc.evaluate_batch(["def add(a,b): return a+b"])
     assert svc.last_mode is not None
-    assert (
-        "microvm" in svc.last_mode
-    ), f"expected microvm in mode, got {svc.last_mode!r}"
+    assert "microvm" in svc.last_mode, f"expected microvm in mode, got {svc.last_mode!r}"
 
 
 def test_evaluation_service_last_mode_cache_only():

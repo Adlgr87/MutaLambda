@@ -12,6 +12,7 @@ Measures optimization quality (vs known optimal/heuristic) and
 demonstrates open-weight (Qwen3-Coder-30B) cost efficiency vs
 proprietary models.
 """
+
 import ast
 import json
 import os
@@ -23,6 +24,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 from dataclasses import dataclass, asdict
+
+from secure_exec import exec_guarded
 
 
 @dataclass
@@ -108,13 +111,13 @@ def circle_packing_circ_greedy(n: int) -> float:
     # Use hexagonal packing
     rows = math.ceil(math.sqrt(n))
     cols = math.ceil(n / rows)
-    radius = (rows * r * math.sqrt(3) / 2 + r)
+    radius = rows * r * math.sqrt(3) / 2 + r
     return radius
 
 
 def circle_packing_random(n: int, attempts: int = 1000) -> float:
     """Randomized greedy packing."""
-    best_side = float('inf')
+    best_side = float("inf")
     for _ in range(attempts):
         side = circle_packing_rect_greedy(n, 0)
         best_side = min(best_side, side)
@@ -188,28 +191,28 @@ def tsp_nearest_neighbor(points: list[tuple[float, float]]) -> list[int]:
     tour = [0]
     unvisited = set(range(1, n))
     current = 0
-    
+
     while unvisited:
         nearest = min(unvisited, key=lambda i: dist(points[current], points[i]))
         tour.append(nearest)
         unvisited.remove(nearest)
         current = nearest
-    
+
     return tour
 
 
 def dist(a: tuple[float, float], b: tuple[float, float]) -> float:
-    return math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
+    return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
 
 
 def tsp_2opt(points: list[tuple[float, float]], initial_tour: list[int]) -> list[int]:
     """2-opt TSP improvement."""
     tour = initial_tour[:]
     n = len(tour)
-    
+
     def tour_length():
-        return sum(dist(points[tour[i]], points[tour[(i+1) % n]]) for i in range(n))
-    
+        return sum(dist(points[tour[i]], points[tour[(i + 1) % n]]) for i in range(n))
+
     improved = True
     while improved:
         improved = False
@@ -217,17 +220,19 @@ def tsp_2opt(points: list[tuple[float, float]], initial_tour: list[int]) -> list
             for j in range(i + 2, n):
                 if j - i == 1:
                     continue
-                old = (dist(points[tour[i]], points[tour[i+1]]) +
-                       dist(points[tour[j]], points[tour[(j+1) % n]]))
-                new = (dist(points[tour[i]], points[tour[j]]) +
-                       dist(points[tour[i+1]], points[tour[(j+1) % n]]))
+                old = dist(points[tour[i]], points[tour[i + 1]]) + dist(
+                    points[tour[j]], points[tour[(j + 1) % n]]
+                )
+                new = dist(points[tour[i]], points[tour[j]]) + dist(
+                    points[tour[i + 1]], points[tour[(j + 1) % n]]
+                )
                 if new < old - 1e-9:
-                    tour[i+1:j+1] = reversed(tour[i+1:j+1])
+                    tour[i + 1 : j + 1] = reversed(tour[i + 1 : j + 1])
                     improved = True
                     break
             if improved:
                 break
-    
+
     return tour
 
 
@@ -288,7 +293,7 @@ def _fitness_bin_packing(n_circles: int) -> float:
     return float(len(bins))
 
 
-def run_comparison_with_mutalambda(
+def run_comparison_with_mutalambda(  # noqa: C901
     tasks: list["EoHTask"] | None = None,
     n_generations: int = 25,
     budget_secs: int = 180,
@@ -374,7 +379,9 @@ solution = pack_circles
             variant = _ast_mutate(seed_code, rng)
             ns: dict = {}
             try:
-                exec(variant, ns)
+                # ML-001: mutated candidate code is executed through the
+                # guarded, AST-scanned loader instead of a bare in-process exec.
+                exec_guarded(variant, ns)
                 val = ns.get("solution")()
                 if val is not None and not (isinstance(val, float) and math.isnan(val)):
                     best_fit = min(best_fit, float(val))
@@ -395,11 +402,16 @@ solution = pack_circles
             out_dir = Path(td) / "out"
             out_dir.mkdir()
             cmd = [
-                "mutalambda", "run",
-                "--source", str(seed_path),
-                "--tests", str(test_path),
-                "--task", t.description,
-                "--generations", str(n_generations),
+                "mutalambda",
+                "run",
+                "--source",
+                str(seed_path),
+                "--tests",
+                str(test_path),
+                "--task",
+                t.description,
+                "--generations",
+                str(n_generations),
                 "--allow-untested",
             ]
             start = time.perf_counter()
@@ -407,7 +419,9 @@ solution = pack_circles
                 subprocess.run(
                     cmd,
                     cwd="/home/adlg/MutaLambda",
-                    capture_output=True, text=True, timeout=budget,
+                    capture_output=True,
+                    text=True,
+                    timeout=budget,
                     env={**os.environ, "MUTALAMBDA_UNSAFE_LOCAL": "1"},
                 )
                 elapsed = time.perf_counter() - start
@@ -417,6 +431,7 @@ solution = pack_circles
             mut_fit = None
             if best_code_path.exists():
                 import importlib.util as _ilu
+
                 spec = _ilu.spec_from_file_location("ml_sol", best_code_path)
                 mod = _ilu.module_from_spec(spec)
                 try:
@@ -448,43 +463,47 @@ solution = pack_circles
             if mut_fit is None:
                 mut_fit = baseline_fit
             speedup = (baseline_fit / mut_fit) if mut_fit and mut_fit > 0 else 1.0
-            results["results"].append({
-                "name": name,
-                "n_dimensions": t.n_dimensions,
-                "baseline_fitness": round(baseline_fit, 4),
-                "mutalambda_fitness": round(mut_fit, 4),
-                "speedup_ratio": round(speedup, 4),
-                "elapsed_sec": round(elapsed, 2),
-                "mode": "llm-subprocess",
-                "status": "complete",
-            })
+            results["results"].append(
+                {
+                    "name": name,
+                    "n_dimensions": t.n_dimensions,
+                    "baseline_fitness": round(baseline_fit, 4),
+                    "mutalambda_fitness": round(mut_fit, 4),
+                    "speedup_ratio": round(speedup, 4),
+                    "elapsed_sec": round(elapsed, 2),
+                    "mode": "llm-subprocess",
+                    "status": "complete",
+                }
+            )
         else:
             mut_fit, elapsed = _run_offline(name, t, n_circles, seed_code, tests)
             speedup = (baseline_fit / mut_fit) if mut_fit and mut_fit > 0 else 1.0
-            results["results"].append({
-                "name": name,
-                "n_dimensions": t.n_dimensions,
-                "baseline_fitness": round(baseline_fit, 4),
-                "mutalambda_fitness": round(mut_fit, 4),
-                "speedup_ratio": round(speedup, 4),
-                "elapsed_sec": round(elapsed, 2),
-                "mode": "offline-ast",
-                "status": "complete",
-            })
+            results["results"].append(
+                {
+                    "name": name,
+                    "n_dimensions": t.n_dimensions,
+                    "baseline_fitness": round(baseline_fit, 4),
+                    "mutalambda_fitness": round(mut_fit, 4),
+                    "speedup_ratio": round(speedup, 4),
+                    "elapsed_sec": round(elapsed, 2),
+                    "mode": "offline-ast",
+                    "status": "complete",
+                }
+            )
 
     valid = [r for r in results["results"] if r.get("status") == "complete"]
     results["summary"] = {
         "n_tasks": len(tasks),
         "n_valid": len(valid),
-        "mean_speedup_ratio": round(
-            statistics.mean(r["speedup_ratio"] for r in valid), 4
-        ) if valid else 0,
+        "mean_speedup_ratio": (
+            round(statistics.mean(r["speedup_ratio"] for r in valid), 4) if valid else 0
+        ),
         "wins": sum(1 for r in valid if r["speedup_ratio"] > 1.0),
         "mode": "llm-subprocess" if use_llm else "offline-ast",
         "note": "Replicates CodeEvolve/OpenEvolve public EoH problems; "
-                 "speedup_ratio > 1.0 means MutaLambda beat the greedy baseline. "
-                 "offline-ast = deterministic AST mutator (no LLM); "
-                 "llm-subprocess = real ``mutalambda run`` via OpenRouter.",
+        "speedup_ratio > 1.0 means MutaLambda beat the greedy baseline. "
+        "offline-ast = deterministic AST mutator (no LLM); "
+        "llm-subprocess = real ``mutalambda run`` via OpenRouter.",
     }
     return results
 
@@ -495,28 +514,32 @@ def run_eoh_suite(n_circle: int = 100, seed: int = 42) -> dict:
     results = {"suite": "EoH", "tasks": [], "summary": {}}
     for n in [10, 20, 50, 100]:
         side = circle_packing_random(n, attempts=500)
-        results["tasks"].append({
-            "name": "circle_packing",
-            "n": n,
-            "result": round(side, 4),
-            "method": "random_greedy",
-            "status": "complete",
-        })
-    
+        results["tasks"].append(
+            {
+                "name": "circle_packing",
+                "n": n,
+                "result": round(side, 4),
+                "method": "random_greedy",
+                "status": "complete",
+            }
+        )
+
     # --- Bin Packing ---
     print("[EoH] Bin Packing...")
     for n_items in [50, 100, 200, 500]:
         items = [random.uniform(0.1, 0.9) for _ in range(n_items)]
         ff_bins = bin_packing_first_fit(items)
         bf_bins = bin_packing_best_fit(items)
-        results["tasks"].append({
-            "name": "bin_packing",
-            "n_items": n_items,
-            "first_fit": ff_bins,
-            "best_fit": bf_bins,
-            "status": "complete",
-        })
-    
+        results["tasks"].append(
+            {
+                "name": "bin_packing",
+                "n_items": n_items,
+                "first_fit": ff_bins,
+                "best_fit": bf_bins,
+                "status": "complete",
+            }
+        )
+
     # --- Knapsack ---
     print("[EoH] Knapsack...")
     for n in [20, 50, 100]:
@@ -524,52 +547,56 @@ def run_eoh_suite(n_circle: int = 100, seed: int = 42) -> dict:
         capacity = n * 30
         dp_val = knapsack_dp(items, capacity)
         relax_val = knapsack_relaxed(items, capacity)
-        results["tasks"].append({
-            "name": "knapsack",
-            "n": n,
-            "capacity": capacity,
-            "dp_optimal": dp_val,
-            "relaxed": round(relax_val, 2),
-            "status": "complete",
-        })
-    
+        results["tasks"].append(
+            {
+                "name": "knapsack",
+                "n": n,
+                "capacity": capacity,
+                "dp_optimal": dp_val,
+                "relaxed": round(relax_val, 2),
+                "status": "complete",
+            }
+        )
+
     # --- TSP ---
     print("[EoH] TSP...")
     for n in [20, 50, 100]:
         points = [(random.random() * 1000, random.random() * 1000) for _ in range(n)]
         nn_tour = tsp_nearest_neighbor(points)
         opt_tour = tsp_2opt(points, nn_tour)
-        
-        nn_len = sum(dist(points[nn_tour[i]], points[nn_tour[(i+1) % n]]) for i in range(n))
-        opt_len = sum(dist(points[opt_tour[i]], points[opt_tour[(i+1) % n]]) for i in range(n))
-        
-        results["tasks"].append({
-            "name": "tsp",
-            "n": n,
-            "nn_length": round(nn_len, 2),
-            "opt_length": round(opt_len, 2),
-            "improvement": round((nn_len - opt_len) / nn_len * 100, 1),
-            "status": "complete",
-        })
-    
+
+        nn_len = sum(dist(points[nn_tour[i]], points[nn_tour[(i + 1) % n]]) for i in range(n))
+        opt_len = sum(dist(points[opt_tour[i]], points[opt_tour[(i + 1) % n]]) for i in range(n))
+
+        results["tasks"].append(
+            {
+                "name": "tsp",
+                "n": n,
+                "nn_length": round(nn_len, 2),
+                "opt_length": round(opt_len, 2),
+                "improvement": round((nn_len - opt_len) / nn_len * 100, 1),
+                "status": "complete",
+            }
+        )
+
     # Summary
     tsp_tasks = [t for t in results["tasks"] if t["name"] == "tsp"]
     improvements = [t["improvement"] for t in tsp_tasks]
-    
+
     results["summary"] = {
         "n_tasks": len(results["tasks"]),
         "n_complete": len([t for t in results["tasks"] if t["status"] == "complete"]),
         "tsp_mean_improvement_pct": round(statistics.mean(improvements), 1) if improvements else 0,
         "note": "Qwen3-Coder-30B open-weight achieves ~80% of AlphaEvolve quality at 1/10 cost",
     }
-    
+
     return results
 
 
 if __name__ == "__main__":
     print("=== EoH Suite (Evolution of Heuristics) ===")
     results = run_eoh_suite()
-    
+
     for t in results["tasks"]:
         if t["name"] == "circle_packing":
             print(f"\n  Circle Packing (n={t['n']}): side={t['result']:.2f}")
@@ -578,11 +605,13 @@ if __name__ == "__main__":
         elif t["name"] == "knapsack":
             print(f"\n  Knapsack (n={t['n']}): DP={t['dp_optimal']}, Relax={t['relaxed']}")
         elif t["name"] == "tsp":
-            print(f"\n  TSP (n={t['n']}): NN={t['nn_length']:.0f}, OPT={t['opt_length']:.0f} ({t['improvement']}% better)")
-    
+            print(
+                f"\n  TSP (n={t['n']}): NN={t['nn_length']:.0f}, OPT={t['opt_length']:.0f} ({t['improvement']}% better)"
+            )
+
     print(f"\nMean TSP 2-opt improvement: {results['summary']['tsp_mean_improvement_pct']:.1f}%")
     print(f"Open-weight claim: ~80% AlphaEvolve quality at ~1/10 cost (Qwen3-Coder-30B)")
-    
+
     out = Path("benchmarks/results_eoh.json")
     with open(out, "w") as f:
         json.dump(results, f, indent=2)

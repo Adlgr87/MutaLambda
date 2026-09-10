@@ -25,7 +25,14 @@ class DummyEvaluator:
         for _ in codes:
             fv = FitnessVector(correctness=1.0, latency_p50=0.01, throughput=10.0, parsimony=0.5)
             out.append(
-                EvalResult(fitness=fv, passed=True, metrics={"correctness": 1.0}, stdout="", stderr="", timed_out=False)
+                EvalResult(
+                    fitness=fv,
+                    passed=True,
+                    metrics={"correctness": 1.0},
+                    stdout="",
+                    stderr="",
+                    timed_out=False,
+                )
             )
         return out
 

@@ -25,7 +25,9 @@ class PatternMemory:
     def __init__(self) -> None:
         self.records: Dict[str, PatternRecord] = {}
 
-    def observe(self, pattern_type: str, signature: str, success: bool, context: str, lineage_ref: str) -> None:
+    def observe(
+        self, pattern_type: str, signature: str, success: bool, context: str, lineage_ref: str
+    ) -> None:
         """Update pattern success statistics."""
         key = f"{pattern_type}:{signature}"
         rec = self.records.get(key)
