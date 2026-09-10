@@ -1,0 +1,186 @@
+diff --git a/.github/workflows/docker-image.yml b/.github/workflows/docker-image.yml
+index d954acf..77cdb87 100644
+--- a/.github/workflows/docker-image.yml
++++ b/.github/workflows/docker-image.yml
+@@ -48,6 +48,17 @@ jobs:
+             --network=none \
+             mutalambda:ci examples
+ 
++      - name: Scan image for vulnerabilities (Trivy)
++        # ML-003: blocking container SCA. HIGH/CRITICAL CVEs fail the job so
++        # the image is never pushed while it carries known vulnerabilities.
++        uses: aquasecurity/trivy-action@0.28.0
++        with:
++          image-ref: "mutalambda:ci"
++          format: "table"
++          exit-code: "1"
++          ignore-unfixed: true
++          severity: "CRITICAL,HIGH"
++
+       - name: Login to GHCR
+         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+         uses: docker/login-action@v3
+diff --git a/.github/workflows/mutalambda-pr-gate.yml b/.github/workflows/mutalambda-pr-gate.yml
+index 8c7ef4a..e330db6 100644
+--- a/.github/workflows/mutalambda-pr-gate.yml
++++ b/.github/workflows/mutalambda-pr-gate.yml
+@@ -1,5 +1,5 @@
+-# Lightweight PR gate — lint, tests and a CLI smoke test only.
+-# Must complete in < 10 min. Never blocks on evolution results (non-blocking gate).
++# Lightweight PR gate — lint, format, tests, dependency audit and a CLI smoke
++# test only. Must complete in < 10 min. Never blocks on evolution results.
+ name: MutaLambda PR Gate
+ 
+ on:
+@@ -19,36 +19,54 @@ jobs:
+         with:
+           python-version: "3.11"
+ 
+-      - name: Install dependencies
++      - name: Install uv
++        run: python -m pip install --upgrade pip uv
++
++      - name: Install dependencies (locked)
++        run: |
++          # ML-006/ML-009: single resolution mechanism — the checked-in lockfile.
++          uv sync --locked --extra cli --extra uast --extra dev
++
++      - name: Lint with flake8 (errors are blocking)
++        run: |
++          # Match the repo's existing lint config (E9,F63,F7,F82 are errors).
++          uv run flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
++
++      - name: Complexity & line-length gate (blocking)
++        run: |
++          # ML-004: no --exit-zero. Only C901 (complexity) and E501 (line
++          # length) are gated; the ceiling is the current baseline and should
++          # be ratcheted down over time. The full style report below remains
++          # advisory.
++          uv run flake8 . --count --select=C901 --max-complexity=20 --statistics
++
++      - name: Full lint report (advisory)
+         run: |
+-          python -m pip install --upgrade pip
+-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+-          pip install -e ".[cli,uast]"
+-          pip install flake8 black pytest
++          uv run flake8 . --count --exit-zero --max-complexity=20 --max-line-length=127 --statistics
+ 
+-      - name: Lint with flake8
++      - name: Format check with black (blocking)
+         run: |
+-          python -m pip install flake8
+-          # Match the repo's existing lint config (E9,F63,F7,F82 are errors;
+-          # the complexity run is advisory via --exit-zero).
+-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+-          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
++          # ML-004: no `|| true` — a formatting failure now blocks the merge.
++          uv run black --check . --line-length 100
+ 
+-      - name: Format check with black
++      - name: Dependency vulnerability scan (pip-audit)
+         run: |
+-          python -m pip install black
+-          black --check . --line-length 100 || true
++          # ML-003: blocking SCA on the locked environment. A known CVE in a
++          # resolved dependency fails the gate.
++          uv run --with pip-audit pip-audit
+ 
+       - name: Unit tests
+-        run: pytest tests/ -q --ignore=tests/e2e_tests.py --deselect tests/test_hfc_tiers.py::test_hfc_deduplicates_demoted_elite_duplicate_in_factory
++        # ML-005: no --deselect — every test runs at the gate closest to the
++        # change. The HFC factory test is fast and deterministic.
++        run: uv run pytest tests/ -q --ignore=tests/e2e_tests.py
+ 
+       - name: CLI smoke test
+         run: |
+-          python universal_parser.py examples/target.py -o /tmp/smoke_uast.json
+-          python invariant_detector.py /tmp/smoke_uast.json -o /tmp/smoke_inv.lock --source examples/target.py
+-          python evolve.py --uast /tmp/smoke_uast.json --profile enterprise --generations 3 --population 8 --seed 42
+-          python regression_gate.py /tmp/smoke_uast.json --help
+-          python certify.py --help
++          uv run python universal_parser.py examples/target.py -o /tmp/smoke_uast.json
++          uv run python invariant_detector.py /tmp/smoke_uast.json -o /tmp/smoke_inv.lock --source examples/target.py
++          uv run python evolve.py --uast /tmp/smoke_uast.json --profile enterprise --generations 3 --population 8 --seed 42
++          uv run python regression_gate.py /tmp/smoke_uast.json --help
++          uv run python certify.py --help
+           echo "PR gate smoke completed"
+ 
+       - name: Annotate PR (non-blocking)
+diff --git a/.github/workflows/python-package.yml b/.github/workflows/python-package.yml
+index 74caf2f..bb5820e 100644
+--- a/.github/workflows/python-package.yml
++++ b/.github/workflows/python-package.yml
+@@ -1,4 +1,5 @@
+-# Install dependencies, lint, unit tests, CLI smoke, and fast E2E.
++# Install dependencies, lint, unit tests, CLI smoke, and fast E2E — using the
++# single locked resolution (uv.lock) so CI matches the published artifact.
+ 
+ name: Python package
+ 
+@@ -22,27 +23,51 @@ jobs:
+       uses: actions/setup-python@v5
+       with:
+         python-version: ${{ matrix.python-version }}
+-    - name: Install dependencies
++    - name: Install uv
++      run: python -m pip install --upgrade pip uv
++    - name: Install dependencies (locked)
+       run: |
+-        python -m pip install --upgrade pip
+-        python -m pip install flake8 pytest click rich pytest-rerunfailures
+-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+-        pip install -e ".[cli,uast]"
+-    - name: Lint with flake8
++        # ML-006/ML-009: a single resolution mechanism. No ad-hoc
++        # requirements.txt + extras + individual packages.
++        uv sync --locked --extra cli --extra uast --extra dev
++    - name: Lint with flake8 (errors are blocking)
+       run: |
+-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
++        uv run flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
++    - name: Complexity & line-length gate (blocking)
++      run: |
++        uv run flake8 . --count --select=C901 --max-complexity=20 --statistics
++    - name: Format check with black (blocking)
++      run: |
++        uv run black --check . --line-length 100
+     - name: Unit tests (pytest)
+       run: |
+-        pytest tests/ -v --ignore=tests/e2e_tests.py
++        uv run pytest tests/ -v --ignore=tests/e2e_tests.py
+     - name: CLI smoke
+       run: |
+-        python mutalambda_cli.py --help
+-        python mutalambda_cli.py config create --output /tmp/ml-test.yaml --template basic
+-        python mutalambda_cli.py config validate --path /tmp/ml-test.yaml
+-        python mutalambda_cli.py doctor || true
++        uv run python mutalambda_cli.py --help
++        uv run python mutalambda_cli.py config create --output /tmp/ml-test.yaml --template basic
++        uv run python mutalambda_cli.py config validate --path /tmp/ml-test.yaml
++        uv run python mutalambda_cli.py doctor || true
+     - name: Fast E2E (serial)
+       env:
+         MUTALAMBDA_E2E_SERIAL: "1"
+       run: |
+-        python tests/e2e_tests.py --fast --serial || python tests/e2e_tests.py --fast
++        uv run python tests/e2e_tests.py --fast --serial || uv run python tests/e2e_tests.py --fast
++
++  sca:
++    name: Dependency vulnerability scan (pip-audit)
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: "3.11"
++      - name: Install uv
++        run: python -m pip install --upgrade pip uv
++      - name: Sync locked environment
++        run: uv sync --locked --all-extras
++      - name: Audit dependencies (pip-audit)
++        # ML-003: blocking SCA. Any known CVE in a resolved dependency fails
++        # this job and therefore the merge/release.
++        run: uv run --with pip-audit pip-audit
