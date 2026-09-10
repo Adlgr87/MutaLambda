@@ -1,6 +1,6 @@
 # MutaLambda — Optimized Multi-Agent Evolutionary System
 
-> **MutaLambda v5.0.0**: Sistema de optimización evolutiva multi-agente con integración GPU, pipeline CI/CD completo, benchmarking científico y 664 tests validados.
+> **MutaLambda v5.0.0**: Sistema de optimización evolutiva multi-agente con integración GPU, pipeline CI/CD completo, benchmarking científico, motor **UAST v2** (mutación in-situ con verificación por nanopass) y 902 tests validados.
 > Un framework de alta performance para optimización de código asistida por IA con aceleración hardware.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -17,12 +17,13 @@
 
 | Métrica | Valor | Estado | Última verificación |
 |---------|-------|--------|---------------------|
-| Tests | **664 passed, 6 skipped** | ✅ 670 collected | 2026-09-02 |
+| Tests | **902 passed, 19 skipped** | ✅ 921 collected | 2026-09-10 |
 | Cobertura | **61%** | ✅ FASE 8 completada | 2026-09-02 |
 | Versión git | **v5.0.0-phase7-8** | ✅ Tag oficial | 2026-08-23 |
-| Fases completadas | **FASE 0–8** | ✅ Workflow cerrado | 2026-09-10 |
+| Fases completadas | **FASE 0–8 + UAST v2 (F1–F3)** | ✅ Workflow cerrado | 2026-09-10 |
 | Lockfile | **`uv.lock` sincronizado** | ✅ `uv sync --locked` | 2026-09-10 |
 | Hardening producción | **ML-001…ML-016** | ✅ Remediation aplicada | 2026-09-10 |
+| UAST v2 | **opt-in (`uast.engine: v2`)** | ✅ Paridad shadow 0 diffs | 2026-09-10 |
 | Repositorio | [github.com/Adlgr87/MutaLambda](https://github.com/Adlgr87/MutaLambda) | Active | — |
 
 > 🔒 **Nota de seguridad (producción).** MutaLambda ejecuta código generado como
@@ -49,12 +50,46 @@ Integración completa de NSGA-II en CUDA via PyTorch con escalado distribuido me
 - **ray_scheduler.py**: Batch processing distribuido en cluster
 - **Auto fallback**: Detecta GPU disponible y degradea gracefully a CPU
 
-### 3. 🛡️ Code Intelligence
+### 3. 🛡️ Code Intelligence — UAST v2 (nuevo)
 
-**Important**: MutaLambda uses **language-specific AST parsers** (Python's `ast` module, etc.), **not** a universal UAST parser. The "UAST" terminology in this section is aspirational and should not be cited as a verified property.
+MutaLambda convierte código a un **UAST neutral** (nodos `Function`/`BinaryOp`/
+`LiteralNode`…, el mismo esquema en Python, Rust, C++ y Go) y muta ahí, no en el
+texto. Sobre los parsers específicos de cada lenguaje (`ast` de Python,
+tree-sitter para el resto) se apoya el motor **UAST v2**, activable con una sola
+bandera y con rollback trivial (`uast.engine: legacy`):
 
-Parser infrastructure with multi-language AST support for semantic code mutations:
-- Python AST-based mutation engine with 4 estrategias de mutación
+```yaml
+uast:
+  engine: v2      # legacy (por defecto) | v2
+  shadow: true    # compara ambos motores y registra diffs (nunca falla)
+  verify: true    # verificación tras cada nanopass (con rollback atómico)
+```
+
+- **Mutación in-situ**: arena con ids estables y parent pointers; los nanopasses
+  escriben en el slot, sin reconstruir el árbol.
+- **Nanopasses con verificación**: estructura, esquema, parent links, validador
+  legacy, sanidad numérica, puerta de seguridad y fidelidad aritmética. Las
+  guardas baratas se aplican solo al subárbol tocado (**27.7× más barato** que
+  verificar el documento entero).
+- **Hashes incrementales (Merkle)**: editar una hoja y re-hashear cuesta ~40×
+  menos que el hash completo; clonar + re-hashear un candidato es **5.5× más
+  rápido** que el `deepcopy` + hash del motor legacy.
+- **Persistencia plana**: msgpack + slab de referencias enteras → **4.0× más
+  rápido** que el JSON legacy y **0.44×** su tamaño (sin comprimir).
+- **Paridad verificable**: `uast2 check` compara legacy vs v2 sobre un corpus y
+  sale con código 2 si hay diferencias. Hoy: **0 diffs / 0 errores** sobre
+  `examples/`.
+
+```bash
+python mutalambda_cli.py uast2 check examples            # paridad legacy vs v2
+python mutalambda_cli.py uast2 parse examples/target.py  # árbol + canonical_hash
+python mutalambda_cli.py uast2 mutate examples/target.py --seed 42
+python mutalambda_cli.py run --target examples/target.py --uast-engine v2 --uast-verify
+python bench_uast2.py --reps 3                           # gates de rendimiento
+```
+
+Detalles, contrato de nanopasses y benchmarks: **[docs/uast2.md](docs/uast2.md)**.
+
 - Invariant detection para code quality assurance
 - Semantic-aware mutation strategies (not just text-based)
 
@@ -109,8 +144,14 @@ Enfoque científico con trazabilidad completa:
 │  ├── performance_monitor.py — Real-time monitoring              │
 │  └── utils/                  — Logging, metrics, config         │
 ├─────────────────────────────────────────────────────────────────┤
+│  UAST (representación neutral multi-lenguaje)                   │
+│  ├── muta_ext/uast/           — motor legacy (congelado)        │
+│  └── muta_ext/uast2/          — motor v2 opt-in: arena+Merkle,  │
+│                                 nanopasses con verificación,    │
+│                                 serialización msgpack, shadow   │
+├─────────────────────────────────────────────────────────────────┤
 │  Infrastructure                                                 │
-│  ├── tests/                    — 641 tests (unit/integration)   │
+│  ├── tests/                    — 902 tests (unit/integration)   │
 │  ├── scripts/                  — deploy, install, monitoring    │
 │  ├── docs/                     — Full documentation (22 files)  │
 │  └── PLANS/                    — Workflow documentation         │
@@ -247,6 +288,9 @@ Integra providers LLM OpenAI-compatible (Agnes AI, Poolside) y herramientas de m
 | FASE 7 | Documentación y Deploy | ✅ | 22 docs, install scripts, CI/CD | — |
 | FASE 8 | Metrics Exporter (OTel/Prometheus) | ✅ | metrics_exporter.py | — |
 | ML-Hardening | Producción: sandbox fail-closed, exec guardado, SCA, CI bloqueante | ✅ | secure_exec.py, runners.py, workflows | — |
+| UAST v2 — F1 | Núcleo: nodos+arena+visitantes+convertidores+adaptadores | ✅ | muta_ext/uast2/core.py, arena.py, convert.py | 126 tests |
+| UAST v2 — F2 | Rendimiento: Merkle incremental, serialización plana, coordenadas | ✅ | merkle.py, serialize.py, bench_uast2.py | 50 tests |
+| UAST v2 — F3 | Nanopasses + verificación + rollback atómico + CLI/flags | ✅ | passes.py, verify.py, mutators.py, engine.py | 71 tests |
 
 ## Documentation
 
@@ -257,6 +301,7 @@ Integra providers LLM OpenAI-compatible (Agnes AI, Poolside) y herramientas de m
 - [Test Execution Protocol](docs/TEST_EXECUTION_PROTOCOL.md)
 - [Production checklist](docs/PRODUCTION_CHECKLIST.md)
 - [First optimization walkthrough](docs/getting-started/first-optimization.md)
+- [UAST v2 (motor de mutación in-situ)](docs/uast2.md)
 - [Architecture v2](docs/architecture_v2.md)
 - [GPU Integration](docs/gpu_integration.md)
 - [Testing Guide](docs/testing_guide.md)
@@ -273,6 +318,9 @@ Integra providers LLM OpenAI-compatible (Agnes AI, Poolside) y herramientas de m
 - [x] FASE 8: Metrics exporter (Prometheus/OTel) para despliegues en producción
 - [x] Hardening de producción (ML-001…ML-016): sandbox fail-closed, exec guardado,
       `uv sync --locked`, SCA bloqueante, black/unit-tests obligatorios en CI
+- [x] UAST v2 (Fases 1–3): motor in-situ con nanopasses verificados, Merkle incremental
+      y serialización msgpack — opt-in y con paridad shadow 0 diffs (2026-09-10)
+- [ ] Graduación de UAST v2: `uast.engine: v2` como motor por defecto del pipeline evolutivo
 - [ ] src-layout packaging migration
 - [x] Market-comparison harness: Agnes AI + Poolside integrados (2026-09-02)
 - [ ] Reducir deuda de estilo restante (F401/E402/E741) y ratchetear complejidad C901 < 20
