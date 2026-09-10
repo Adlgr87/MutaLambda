@@ -18,10 +18,10 @@
 | Métrica | Valor | Estado | Última verificación |
 |---------|-------|--------|---------------------|
 | Tests | **664 passed, 6 skipped** | ✅ 670 collected | 2026-09-02 |
-| Cobertura | **61%** | 🔄 En progreso (FASE 8) | 2026-09-02 |
+| Cobertura | **61%** | ✅ FASE 8 completada | 2026-09-02 |
 | Versión git | **v5.0.0-phase7-8** | ✅ Tag oficial | 2026-08-23 |
 | Fases completadas | **FASE 0–7** | ✅ Workflow cerrado | 2026-08-23 |
-| Fases pendientes | **FASE 8** (Prometheus/OTel metrics) | 🔄 En progreso | — |
+| Fases pendientes | — | — | — |
 | Repositorio | [github.com/Adlgr87/MutaLambda](https://github.com/Adlgr87/MutaLambda) | Active | — |
 
 ## Áreas Vanguardistas
@@ -237,7 +237,7 @@ Integra providers LLM OpenAI-compatible (Agnes AI, Poolside) y herramientas de m
 
 - [x] FASES 0–7: Pipeline completo con GPU, benchmarking y documentación
 - [x] FASE 6: Benchmarking científico (EffiBench smoke + identity validation)
-- [ ] FASE 8: Metrics exporter (Prometheus/OTel) para despliegues en producción
+- [x] FASE 8: Metrics exporter (Prometheus/OTel) para despliegues en producción
 - [ ] src-layout packaging migration
 - [x] Market-comparison harness: Agnes AI + Poolside integrados (2026-09-02)
 - [ ] Soporte para más lenguajes (Java, Kotlin, Swift)
