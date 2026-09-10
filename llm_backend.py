@@ -62,6 +62,11 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+def estimate_tokens(text: str) -> int:
+    """Public token estimator (cost accounting, A5)."""
+    return _estimate_tokens(text)
+
+
 def _lookup_pricing(model: str) -> Optional[Dict[str, float]]:
     key = _normalize_model_key(model)
     if key in MODEL_PRICING:
@@ -145,6 +150,55 @@ def parse_structured_response(text: str) -> StructuredLLMResponse:
 
 def prompt_hash(prompt: str) -> str:
     return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+
+
+# ── O2: deterministic prompts (Fase 0) ─────────────────────────────────────
+# The wrapper guarantees that two identical logical requests produce
+# byte-identical prompts: no timestamps, no UUIDs, fixed section order
+# (see ``deterministic_prompt``).  Toggle with
+# ``deterministic_prompt.enabled`` in config/optimization.yaml.
+_UUID_RE = re.compile(
+    r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
+)
+_ISO_TS_RE = re.compile(
+    r"\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?\b"
+)
+_CTIME_RE = re.compile(
+    r"\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) [A-Z][a-z]{2} +\d{1,2} \d{2}:\d{2}:\d{2} "
+    r"[A-Z]{2,4} \d{4}\b"
+)
+
+
+def sanitize_prompt_for_determinism(prompt: str) -> str:
+    """Replace run-varying tokens (timestamps / UUIDs) with stable markers.
+
+    Idempotent: running the sanitizer twice yields the same bytes as once.
+    """
+    if not prompt:
+        return prompt
+    out = _UUID_RE.sub("[UUID]", prompt)
+    out = _ISO_TS_RE.sub("[TIMESTAMP]", out)
+    out = _CTIME_RE.sub("[TIMESTAMP]", out)
+    return out
+
+
+def deterministic_prompt(*blocks: Optional[str], sep: str = "\n") -> str:
+    """Compose a prompt from blocks in a FIXED order (Fase 0 O2).
+
+    No hidden state, no environment data: identical ``blocks`` ⇒ identical
+    bytes.  Use this (instead of ad-hoc f-strings) for any prompt section
+    whose content must stay stable across twin calls.
+    """
+    return sep.join(b for b in blocks if b is not None)
+
+
+def _deterministic_prompt_enabled() -> bool:
+    try:
+        from optimization_flags import get_optimization_flags
+
+        return get_optimization_flags().enabled("deterministic_prompt.enabled", True)
+    except Exception:  # pragma: no cover - flag layer must never break the wrapper
+        return True
 
 
 # ── Central prompt redaction (ML-014) ──────────────────────────────────────
@@ -356,6 +410,33 @@ class LLMBackend:
             ) / 1_000_000
             self._total_cost_usd += cost
 
+    def _call_cost_usd(self, prompt: str, completion: str) -> float:
+        """Estimated USD cost of a single call (0.0 for unpriced models)."""
+        if not self._pricing:
+            return 0.0
+        prompt_tokens = _estimate_tokens(prompt)
+        completion_tokens = _estimate_tokens(completion)
+        return (
+            prompt_tokens * self._pricing["prompt"]
+            + completion_tokens * self._pricing["completion"]
+        ) / 1_000_000
+
+    def _record_ledger(self, prompt: str, completion: str, kind: str = "generate") -> None:
+        """Feed the cost ledger (A5). Never raises — observability only."""
+        try:
+            from cost_ledger import record_llm_call
+
+            record_llm_call(
+                kind=kind,
+                prompt_tokens=_estimate_tokens(prompt),
+                completion_tokens=_estimate_tokens(completion),
+                cost_usd=self._call_cost_usd(prompt, completion),
+                model=self.model,
+                backend=self.backend,
+            )
+        except Exception:  # pragma: no cover - ledger must not break generation
+            pass
+
     def _check_budget(self) -> None:
         if self.max_total_calls and self._total_calls >= self.max_total_calls:
             raise LLMBudgetExceeded(f"max_total_calls={self.max_total_calls} exhausted")
@@ -496,6 +577,9 @@ class LLMBackend:
 
     def generate(self, prompt: str) -> str:
         """Genera texto con retries, budget y circuit breaker."""
+        # O2: strip run-varying tokens so twin calls are byte-identical.
+        if _deterministic_prompt_enabled():
+            prompt = sanitize_prompt_for_determinism(prompt)
         if self.privacy_redact_secrets:
             prompt = redact_prompt(prompt)
         self._check_budget()
@@ -515,6 +599,7 @@ class LLMBackend:
                 self._gen_calls += 1
                 self._consecutive_failures = 0
                 self._update_cost(prompt, text)
+                self._record_ledger(prompt, text, kind="generate")
                 self._log_replay(prompt, text, ok=True, attempts=attempts)
                 return text
             except Exception as exc:
@@ -595,12 +680,15 @@ class LLMBackend:
         results: List[str] = []
         for prompt in prompts:
             try:
+                if _deterministic_prompt_enabled():
+                    prompt = sanitize_prompt_for_determinism(prompt)
                 if self.privacy_redact_secrets:
                     prompt = redact_prompt(prompt)
                 text = self._single_request(prompt)
                 self._total_calls += 1
                 self._gen_calls += 1
                 self._update_cost(prompt, text)
+                self._record_ledger(prompt, text, kind="generate_batch")
                 results.append(text)
             except Exception:
                 # Per-item fallback to preserve order / budget semantics.
@@ -664,8 +752,11 @@ __all__ = [
     "parse_structured_response",
     "prompt_hash",
     "redact_prompt",
+    "sanitize_prompt_for_determinism",
+    "deterministic_prompt",
     "_resolve_llm_backend",
     "MODEL_PRICING",
     "_lookup_pricing",
+    "estimate_tokens",
     "_estimate_tokens",
 ]

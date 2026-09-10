@@ -67,6 +67,10 @@ class EvolveConfig:
     mutation_strategy: str = "ast"  # ast | llm
     allow_untested: bool = True
     timeout_sec: float = 5.0
+    # Fase 0 (A5): path to a prior checkpoint JSON to resume from.  When set,
+    # evolution continues from that checkpoint's generation with its
+    # population (see ``--resume-from`` in the CLI).
+    resume_from: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.profile not in SUPPORTED_PROFILES:
@@ -122,6 +126,9 @@ class EvolveResult:
     checkpoint_dir: str
     fitness_report: List[GenerationResult] = field(default_factory=list)
     details: Dict[str, Any] = field(default_factory=dict)
+    # Fase 0 (A2): fitness-cache hit/miss stats for this run (None when the
+    # cache was disabled by config/optimization.yaml).
+    fitness_cache_stats: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -133,6 +140,7 @@ class EvolveResult:
             "checkpoint_dir": self.checkpoint_dir,
             "fitness_report": [asdict(g) for g in self.fitness_report],
             "details": self.details,
+            "fitness_cache_stats": self.fitness_cache_stats,
         }
 
 
@@ -232,6 +240,139 @@ def _offline_llm_fn(prompt: str) -> str:
     return "# no LLM backend configured — AST-only mutations used\n"
 
 
+# ── Fase 0 (A2): canonical-hash fitness cache ───────────────────────────────
+
+
+def _serialize_eval_result(result: Any) -> Dict[str, Any]:
+    """Serialize an ``EvalResult`` (dataclass) to a JSON-safe dict."""
+    data = asdict(result)
+    return data
+
+
+def _restore_eval_result(data: Dict[str, Any]) -> Any:
+    """Rebuild an ``EvalResult`` from its JSON-safe dict form."""
+    from fitness_vector import FitnessVector
+    from models import EvalResult
+
+    payload = dict(data)
+    fitness = payload.pop("fitness", None)
+    return EvalResult(fitness=FitnessVector(**fitness), **payload)
+
+
+class CachedBatchEvaluator:
+    """Memoizes ``evaluate_batch`` results by canonical code hash (A2).
+
+    Transparent duck-type wrapper: exposes ``evaluate_batch`` and
+    ``cache_stats`` (the HFC engine already probes for ``cache_stats``) and
+    forwards everything else to the wrapped evaluator.  Scores are stored per
+    run namespace (profile + seed) so different scorers never cross-contaminate.
+    """
+
+    def __init__(self, base: Any, cache: Any, namespace: str) -> None:
+        self._base = base
+        self._cache = cache
+        self.namespace = namespace
+
+    def evaluate_batch(self, codes: List[str]) -> List[Any]:
+        from fitness_cache import fitness_cache_key
+
+        if not codes:
+            return []
+        out: List[Optional[Any]] = [None] * len(codes)
+        pending: List[tuple] = []
+        for i, code in enumerate(codes):
+            key = fitness_cache_key(self.namespace, code)
+            hit = self._cache.get(key)
+            if hit is not None:
+                out[i] = _restore_eval_result(hit)
+            else:
+                pending.append((i, code, key))
+        if pending:
+            fresh = self._base.evaluate_batch([code for _, code, _ in pending])
+            for (i, code, key), result in zip(pending, fresh):
+                out[i] = result
+                try:
+                    self._cache.put(key, _serialize_eval_result(result))
+                except (TypeError, ValueError):
+                    pass  # non-serializable result — skip memoization for it
+        return out  # type: ignore[return-value]
+
+    def cache_stats(self) -> Dict[str, Any]:
+        """Combined view: inner service cache + canonical-hash cache."""
+        inner = self._base.cache_stats() if hasattr(self._base, "cache_stats") else {}
+        outer = self._cache.stats()
+        combined = dict(outer)
+        combined["inner"] = inner
+        return combined
+
+    def __getattr__(self, name: str) -> Any:
+        # Forward unknown attributes (runner_mode, timeout_sec, ...) to base.
+        return getattr(self._base, name)
+
+
+def _make_fitness_cache(config: EvolveConfig) -> Optional[Any]:
+    """Open the fitness cache when enabled by config/optimization.yaml."""
+    from optimization_flags import get_optimization_flags
+
+    flags = get_optimization_flags()
+    if not flags.enabled("fitness_cache.enabled", True):
+        return None
+    from fitness_cache import FitnessCache
+
+    path = Path(str(flags.get("fitness_cache.path", ".mutalambda/fitness_cache.db")))
+    if not path.is_absolute():
+        path = config.output_dir / "fitness_cache" / path.name
+    return FitnessCache(
+        path=path,
+        backend=str(flags.get("fitness_cache.backend", "sqlite")),
+        max_entries=int(flags.get("fitness_cache.max_entries", 100000) or 100000),
+        namespace=f"{config.profile}:seed{config.seed}",
+    )
+
+
+def _top_up_population(
+    population: List[str], source: str, size: int, rng: random.Random
+) -> List[str]:
+    """Dedupe *population* and pad toward *size* with fresh source mutants.
+
+    Bounded: never loops forever when the target source yields duplicate
+    mutants (the evolution loop itself re-pads each generation).
+    """
+    from evolution_engine import ASTMutator
+
+    out: List[str] = []
+    seen: set = set()
+    for code in population:
+        h = hash(code)
+        if h not in seen:
+            seen.add(h)
+            out.append(code)
+    target = max(1, size)
+    attempts = 0
+    while len(out) < target and attempts < 200:
+        attempts += 1
+        mutant = ASTMutator.apply_random_mutation(source)
+        h = hash(mutant)
+        if h not in seen:
+            seen.add(h)
+            out.append(mutant)
+    return out[:target]
+
+
+def _load_resume_checkpoint(path: str | Path) -> Optional[Dict[str, Any]]:
+    """Load a checkpoint JSON for ``--resume-from`` (inline or HFC flavour)."""
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"resume checkpoint not found: {path}")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or "generation" not in data:
+        raise ValueError(f"not a MutaLambda checkpoint: {path}")
+    data.setdefault("population", [])
+    data.setdefault("best_code", "")
+    data.setdefault("best_score", 0.0)
+    return data
+
+
 def run_evolution(config: EvolveConfig) -> EvolveResult:
     """Run the unified evolution orchestrator and return a result + artefacts."""
     from evolution_engine import ASTMutator
@@ -244,19 +385,51 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
     checkpoint_dir = config.output_dir / "checkpoints" / str(timestamp)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    evaluator = _make_offline_evaluator(config.profile, config.seed)
+    # ── A5: resume from a prior checkpoint (``--resume-from``) ────────────
+    start_gen = 0
+    resumed_from: Optional[int] = None
+    best_score = 0.0
+    best_code = source
+    if config.resume_from:
+        ckpt = _load_resume_checkpoint(config.resume_from)
+        population_from_ckpt = [c for c in ckpt.get("population") or [] if isinstance(c, str) and c.strip()]
+        if population_from_ckpt:
+            # A checkpoint at generation N captures the state AFTER N, so the
+            # resumed run continues from N + 1.
+            resumed_from = int(ckpt.get("generation", 0))
+            start_gen = max(0, resumed_from + 1)
+            seed_codes = _top_up_population(
+                population_from_ckpt, source, config.population, rng
+            )
+            best_score = float(ckpt.get("best_score", 0.0) or 0.0)
+            best_code = str(ckpt.get("best_code") or "") or source
+        else:
+            raise ValueError(
+                f"checkpoint {config.resume_from} carries no population to resume from"
+            )
 
-    # Build a seed population of mutated variants of the original source.
-    seed_codes = [source]
-    seen: set[int] = {hash(source)}
-    for _ in range(config.population - 1):
-        mutant = ASTMutator.apply_random_mutation(source)
-        h = hash(mutant)
-        if h not in seen:
-            seen.add(h)
-            seed_codes.append(mutant)
-        if len(seed_codes) >= config.population:
-            break
+    # ── A2: fitness cache by canonical hash ───────────────────────────────
+    fitness_cache = _make_fitness_cache(config)
+    if fitness_cache is not None:
+        evaluator = _make_offline_evaluator(config.profile, config.seed)
+        evaluator = CachedBatchEvaluator(
+            evaluator, fitness_cache, namespace=f"{config.profile}:seed{config.seed}"
+        )
+    else:
+        evaluator = _make_offline_evaluator(config.profile, config.seed)
+
+    if not config.resume_from:
+        # Build a seed population of mutated variants of the original source.
+        seed_codes = [source]
+        seen: set[int] = {hash(source)}
+        for _ in range(config.population - 1):
+            mutant = ASTMutator.apply_random_mutation(source)
+            h = hash(mutant)
+            if h not in seen:
+                seen.add(h)
+                seed_codes.append(mutant)
+            if len(seed_codes) >= config.population:
+                break
 
     fitness_report: List[GenerationResult] = []
 
@@ -267,7 +440,7 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
         )
         engine.seed(seed_codes)
 
-        for gen in range(int(config.generations)):
+        for gen in range(start_gen, int(config.generations)):
             gen_start = time.perf_counter()
             engine.step(
                 llm_fn=_offline_llm_fn,
@@ -300,9 +473,10 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
     else:
         # Plain single-population evolution using ASTMutator directly.
         population = seed_codes[:]
-        best_code = source
-        best_score = 0.0
-        for gen in range(int(config.generations)):
+        if resumed_from is None:
+            best_code = source
+            best_score = 0.0
+        for gen in range(start_gen, int(config.generations)):
             # Score the population.
             evals = evaluator.evaluate_batch(population)
             scored = list(zip(population, evals))
@@ -351,6 +525,12 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
             "diversity": fitness_report[-1].diversity if fitness_report else 0.0,
         }
 
+    # A2: freeze and close the fitness cache before writing artefacts.
+    cache_stats_snapshot: Optional[Dict[str, Any]] = None
+    if fitness_cache is not None:
+        cache_stats_snapshot = fitness_cache.stats()
+        fitness_cache.close()
+
     # Always emit the final best code + fitness report.
     _write_artifacts(
         checkpoint_dir,
@@ -364,12 +544,19 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
     return EvolveResult(
         optimized_code=optimized_code,
         best_score=best_score,
-        generations=int(config.generations),
+        generations=len(fitness_report),
         profile=config.profile,
         seed=config.seed,
         checkpoint_dir=str(checkpoint_dir),
         fitness_report=fitness_report,
-        details={"engine_stats": engine_stats, "population_size": config.population},
+        details={
+            "engine_stats": engine_stats,
+            "population_size": config.population,
+            "resumed_from_generation": resumed_from,
+            "resumed_at_generation": start_gen if resumed_from is not None else None,
+            "resume_source": config.resume_from,
+        },
+        fitness_cache_stats=cache_stats_snapshot,
     )
 
 
@@ -389,6 +576,10 @@ def _write_checkpoint(
         "tier_counts": engine._tier_counts() if hasattr(engine, "_tier_counts") else {},
         "best_score": engine.best_score,
         "diversity": engine.diversity,
+        # A5 (resume): persist the full population so --resume-from can
+        # continue the exact same evolutionary line.
+        "best_code": engine.best_individual.code if engine.best_individual else "",
+        "population": [ind.code for ind in (engine.tier1 + engine.tier2 + engine.tier3)],
     }
     path = dir_path / f"checkpoint_gen{generation:04d}.json"
     with open(path, "w", encoding="utf-8") as f:
@@ -413,6 +604,8 @@ def _write_inline_checkpoint(
         "population_size": len(population),
         "best_score": best_score,
         "best_code": best_code,
+        # A5 (resume): full population so --resume-from continues the line.
+        "population": list(population),
     }
     path = dir_path / f"checkpoint_gen{generation:04d}.json"
     with open(path, "w", encoding="utf-8") as f:
@@ -476,8 +669,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--checkpoint-every",
         type=int,
-        default=10,
-        help="Checkpoint interval (default: 10). 0 disables.",
+        default=None,
+        help=(
+            "Checkpoint interval in generations (default: optimization.checkpoint.every "
+            "from config/optimization.yaml, typically 5). 0 disables."
+        ),
+    )
+    parser.add_argument(
+        "--resume-from",
+        type=str,
+        default=None,
+        help=(
+            "Path to a prior checkpoint JSON (checkpoint_genNNNN.json) to resume "
+            "evolution from its generation and population."
+        ),
     )
     parser.add_argument(
         "--islands",
@@ -499,6 +704,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 
+    # A5: default checkpoint cadence comes from config/optimization.yaml
+    # (checkpoint.every, typically 5) unless the caller pinned a value.
+    if args.checkpoint_every is None:
+        from optimization_flags import get_optimization_flags
+
+        args.checkpoint_every = int(get_optimization_flags().get("checkpoint.every", 5) or 5)
+
     try:
         config = EvolveConfig(
             uast_path=args.uast,
@@ -510,6 +722,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             islands=args.islands,
             seed=args.seed,
             output_dir=args.output_dir,
+            resume_from=args.resume_from,
         )
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)

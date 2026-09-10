@@ -1,0 +1,102 @@
+# MutaLambda — capa de optimización de costo (Headroom)
+# ======================================================
+# Cada palanca de optimización tiene su flag aquí. TODO cambio del motor
+# debe ser desactivable editando este archivo (regla 6).
+#
+# Precedencia de resolución:
+#   1. Variables de entorno  MUTALAMBDA_OPT_<SECCION>__<CLAVE>=1|0|<valor>
+#      (doble guion bajo separa sección de clave, p.ej.
+#       MUTALAMBDA_OPT_COST_LEDGER__ENABLED=0)
+#   2. Este archivo (ruta configurable con MUTALAMBDA_OPT_CONFIG)
+#   3. Valores por defecto embebidos en optimization_flags.py
+#
+# El loader vive en optimization_flags.py (get_optimization_flags()).
+
+optimization:
+  # ── FASE 0 ─────────────────────────────────────────────────────────────
+  # A5: libro de costos (tokens $ + GPU $). Interceptado en el wrapper LLM,
+  # en el servicio de evaluación y en la regression gate.
+  cost_ledger:
+    enabled: true
+    # Ruta del dump JSON (vacío = .mutalambda/cost_ledger.json).
+    path: ""
+    # Precio estimado por hora-GPU (A100 spot) para log_eval(gpu_seconds=...).
+    gpu_hour_usd: 0.5
+
+  # A5: checkpointing. `every` = generaciones entre checkpoints (default 5).
+  # `--resume-from` en el CLI de evolve.py continúa desde un checkpoint JSON.
+  checkpoint:
+    every: 5
+
+  # A2: cache de fitness por hash canónico del código (sqlite | json).
+  fitness_cache:
+    enabled: true
+    backend: sqlite            # sqlite | json
+    path: ".mutalambda/fitness_cache.db"
+    max_entries: 100000
+
+  # O2: prompts deterministas en el wrapper LLM (sin timestamps/UUIDs,
+  # orden fijo). Dos llamadas gemelas ⇒ prompt idéntico byte a byte.
+  deterministic_prompt:
+    enabled: true
+
+  # ── FASE 1 ─────────────────────────────────────────────────────────────
+  # Headroom (github.com/headroomlabs-ai/headroom): compresión de tracebacks,
+  # AST stubs con recuperación bajo demanda, salida por JSON Schema y
+  # batching N=5 con bandit UCB. Desactivado hasta que el paquete se
+  # verifique e instale (Setup Fase 1).
+  headroom:
+    enabled: false
+    package: "headroom"
+    smart_crusher:
+      enabled: false
+      max_traceback_chars: 4000
+      max_log_lines: 80
+    ast_stubs:
+      enabled: false
+      retrieve_tool: true      # expone headroom_retrieve(stub_id) al LLM
+    json_schema_output:
+      enabled: false
+      # max_tokens ajustado a la salida estructurada (op_type, location,
+      # unified_diff, rationale) — cero prosa libre.
+      max_tokens: 2048
+    batching:
+      enabled: false
+      batch_size: 5
+    bandit:
+      enabled: false
+      ucb_c: 1.414             # coeficiente de exploración UCB1
+
+  # ── FASE 2 ─────────────────────────────────────────────────────────────
+  # O4/AmdahlHeadroomFilter + O6 (3 niveles) + A4 (subset de tests).
+  profiling_filter:
+    enabled: false
+    profile_seconds: 10        # profiling bajo carga ~10s
+    min_cpu_pct: 0.5           # excluye funciones con <0.5% de CPU
+    nanopass_check:
+      enabled: false           # O6 N1: chequeo UAST Nanopass en memoria (<1ms)
+    test_subset:
+      enabled: false           # O6 N2 + A4: subset mínimo por cobertura
+      by_coverage: true
+      max_tests: 0             # 0 = auto (cubrir 100% de líneas del target)
+    sandbox_top_pct: 20.0      # O6 N3: solo ~20% top va a Docker + Ray
+
+  # ── FASE 3 ─────────────────────────────────────────────────────────────
+  # O5: EconomicHeadroomGate — early stop cuando el ΔH por generación no
+  # justifica el $GPU de seguir corriendo.
+  economic_gate:
+    enabled: false
+    delta_h_threshold: 0.005   # hipervolumen mínimo ganado por generación
+    stall_generations: 5       # generaciones consecutivas por debajo del umbral
+    gpu_hour_usd: 0.5
+    production_cpu_savings_hour_usd: 0.0   # 0 = solo criterio de estancamiento
+
+  # A3: bandit con reward en $ reales del ledger (mutate-strategy auto).
+  bandit_reward_usd:
+    enabled: false
+
+  # A5: pareto_archive/ indexado por hash de firma + warm-start.
+  pareto_archive:
+    enabled: false
+    dir: "pareto_archive"
+    warm_start: true           # --no-warm-start lo desactiva en CLI
