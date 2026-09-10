@@ -240,14 +240,14 @@ def invalidate_up(node: Optional[UASTNode], record: bool = True) -> int:
     return touched
 
 
-def begin_touch() -> List[UASTNode]:
+def begin_touch() -> T.List[UASTNode]:
     """Start recording the topmost node of every invalidation (see pipeline)."""
     global _TOUCHED
     _TOUCHED = []
     return _TOUCHED
 
 
-def end_touch() -> List[UASTNode]:
+def end_touch() -> T.List[UASTNode]:
     """Stop recording and return the touched scopes (topmost node per mutation)."""
     global _TOUCHED
     touched = _TOUCHED or []
