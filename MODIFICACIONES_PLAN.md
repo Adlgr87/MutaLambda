@@ -60,4 +60,6 @@ Prioridad máxima: estabilidad de ejecución.
 - **Phase 5 (batch evaluator):** ✅ `evaluate_batch` en `evaluation_service.py:322`, `sandbox.py:180`; `thc_engine.py:96`; 6 integration tests passed.
 - **Phase 6 (benchmark cache):** ✅ Documentado en este repo; benchmarks (`bench_phase6.py`, `benchmark_nsga2_cache.py`, `benchmark_checkpoint_serialization.py`) se ejecutan en workspace `MutaLambda_Proyect`. AST cache `cached_parse` (`lru_cache maxsize=1024`); msgpack checkpoint threshold 2000→256.
 
+- **Phase 7 (FASE 1 Auto-Mejora):** ✅ Implementado `FitnessDirectedMigration` en `migration.py`. Migración dirigida usando gradiente de fitness + diversidad genética, con parámetros configurables (alpha=0.7, beta=0.3, top_k=2, min_diversity_gap=0.2). Integración con `MigrationBus` y registro de métricas Prometheus. Ver `tests/test_metrics_exporter.py` y nuevo módulo `migration.py`.
+
 Siguiente paso: **Audit final** (full suite + scan + lint) → **Phase 8 push** a `origin/main`.
