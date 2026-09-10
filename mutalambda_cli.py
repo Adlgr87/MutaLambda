@@ -43,25 +43,33 @@ console = Console()
 def cli(ctx):
     """🧬 MutaLambda — Evolución genética de código Python."""
     ctx.ensure_object(dict)
-    ctx.obj['cli'] = MutaLambdaCLI()
+    ctx.obj["cli"] = MutaLambdaCLI()
 
 
 # ============================================================================
 # RUN
 # ============================================================================
 @cli.command()
-@click.option('--config', '-c', type=click.Path(exists=True), help='Archivo de configuración YAML')
-@click.option('--generations', '-g', type=int, default=50, help='Número de generaciones')
-@click.option('--animation', '-a', type=click.Choice(['retro', 'minimal', 'none']), default='retro', help='Estilo de animación')
-@click.option('--verbose', '-v', is_flag=True, help='Output detallado')
-@click.option('--source', type=click.Path(exists=True), help='Código semilla a evolucionar')
-@click.option('--tests', type=click.Path(exists=True), help='Casos de prueba JSON declarativos')
-@click.option('--task', type=str, default=None, help='Descripción de la tarea evolutiva')
-@click.option('--allow-untested', is_flag=True, help='Permitir corridas sin tests (solo desarrollo)')
+@click.option("--config", "-c", type=click.Path(exists=True), help="Archivo de configuración YAML")
+@click.option("--generations", "-g", type=int, default=50, help="Número de generaciones")
+@click.option(
+    "--animation",
+    "-a",
+    type=click.Choice(["retro", "minimal", "none"]),
+    default="retro",
+    help="Estilo de animación",
+)
+@click.option("--verbose", "-v", is_flag=True, help="Output detallado")
+@click.option("--source", type=click.Path(exists=True), help="Código semilla a evolucionar")
+@click.option("--tests", type=click.Path(exists=True), help="Casos de prueba JSON declarativos")
+@click.option("--task", type=str, default=None, help="Descripción de la tarea evolutiva")
+@click.option(
+    "--allow-untested", is_flag=True, help="Permitir corridas sin tests (solo desarrollo)"
+)
 @click.pass_context
 def run(ctx, config, generations, animation, verbose, source, tests, task, allow_untested):
     """🚀 Ejecutar corrida evolutiva completa."""
-    cli_instance = ctx.obj['cli']
+    cli_instance = ctx.obj["cli"]
     success = cli_instance.run_evolution(
         config_path=config,
         generations=generations,
@@ -79,13 +87,21 @@ def run(ctx, config, generations, animation, verbose, source, tests, task, allow
 # RESUME
 # ============================================================================
 @cli.command()
-@click.option('--checkpoint', '-p', type=click.Path(exists=True), required=True, help='Archivo de checkpoint')
-@click.option('--additional-gens', '-g', type=int, default=50, help='Generaciones adicionales')
-@click.option('--animation', '-a', type=click.Choice(['retro', 'minimal', 'none']), default='retro', help='Estilo de animación')
+@click.option(
+    "--checkpoint", "-p", type=click.Path(exists=True), required=True, help="Archivo de checkpoint"
+)
+@click.option("--additional-gens", "-g", type=int, default=50, help="Generaciones adicionales")
+@click.option(
+    "--animation",
+    "-a",
+    type=click.Choice(["retro", "minimal", "none"]),
+    default="retro",
+    help="Estilo de animación",
+)
 @click.pass_context
 def resume(ctx, checkpoint, additional_gens, animation):
     """🔄 Reanudar desde checkpoint."""
-    cli_instance = ctx.obj['cli']
+    cli_instance = ctx.obj["cli"]
     success = cli_instance.resume_evolution(
         checkpoint_path=checkpoint,
         additional_gens=additional_gens,
@@ -103,33 +119,39 @@ def config():
     pass
 
 
-@config.command('create')
-@click.option('--output', '-o', type=click.Path(), required=True, help='Archivo de salida')
-@click.option('--template', '-t', type=click.Choice(['basic', 'advanced', 'research']), default='basic', help='Plantilla base')
+@config.command("create")
+@click.option("--output", "-o", type=click.Path(), required=True, help="Archivo de salida")
+@click.option(
+    "--template",
+    "-t",
+    type=click.Choice(["basic", "advanced", "research"]),
+    default="basic",
+    help="Plantilla base",
+)
 @click.pass_context
 def config_create(ctx, output, template):
     """Crear configuración desde plantilla."""
-    cli_instance = ctx.obj['cli']
+    cli_instance = ctx.obj["cli"]
     success = cli_instance.create_config(output_path=output, template=template)
     sys.exit(0 if success else 1)
 
 
-@config.command('validate')
-@click.option('--path', '-p', type=click.Path(exists=True), required=True, help='Archivo a validar')
+@config.command("validate")
+@click.option("--path", "-p", type=click.Path(exists=True), required=True, help="Archivo a validar")
 @click.pass_context
 def config_validate(ctx, path):
     """Validar archivo de configuración."""
-    cli_instance = ctx.obj['cli']
+    cli_instance = ctx.obj["cli"]
     success = cli_instance.validate_config(config_path=path)
     sys.exit(0 if success else 1)
 
 
-@config.command('show')
-@click.option('--path', '-p', type=click.Path(exists=True), required=True, help='Archivo a mostrar')
+@config.command("show")
+@click.option("--path", "-p", type=click.Path(exists=True), required=True, help="Archivo a mostrar")
 @click.pass_context
 def config_show(ctx, path):
     """Mostrar resumen de configuración."""
-    cli_instance = ctx.obj['cli']
+    cli_instance = ctx.obj["cli"]
     cli_instance.config_manager.display_summary_from_file(path)
 
 
@@ -140,7 +162,7 @@ def config_show(ctx, path):
 @click.pass_context
 def stats(ctx):
     """📊 Mostrar estadísticas de ejecuciones anteriores."""
-    cli_instance = ctx.obj['cli']
+    cli_instance = ctx.obj["cli"]
     cli_instance.show_stats()
 
 
@@ -148,11 +170,11 @@ def stats(ctx):
 # EVALUATE
 # ============================================================================
 @cli.command()
-@click.option('--results', '-r', type=click.Path(exists=True), help='Archivo de resultados')
+@click.option("--results", "-r", type=click.Path(exists=True), help="Archivo de resultados")
 @click.pass_context
 def evaluate(ctx, results):
     """🔬 Evaluar y resumir resultados."""
-    cli_instance = ctx.obj['cli']
+    cli_instance = ctx.obj["cli"]
     cli_instance.evaluate_results(results_path=results)
 
 
@@ -165,34 +187,52 @@ def mutate():
     pass
 
 
-@mutate.command('prompt')
-@click.option('--target', '-t', type=str, required=True, help='Prompt o función a mutar')
-@click.option('--strategy', '-s', type=click.Choice(['adaptive', 'creative', 'conservative']), default='adaptive', help='Estrategia')
+@mutate.command("prompt")
+@click.option("--target", "-t", type=str, required=True, help="Prompt o función a mutar")
+@click.option(
+    "--strategy",
+    "-s",
+    type=click.Choice(["adaptive", "creative", "conservative"]),
+    default="adaptive",
+    help="Estrategia",
+)
 @click.pass_context
 def mutate_prompt(ctx, target, strategy):
     """Mutar prompts de evolución."""
-    cli_instance = ctx.obj['cli']
-    cli_instance.run_mutation(target=target, mutation_type='prompt', strategy=strategy)
+    cli_instance = ctx.obj["cli"]
+    cli_instance.run_mutation(target=target, mutation_type="prompt", strategy=strategy)
 
 
-@mutate.command('operators')
-@click.option('--target', '-t', type=str, required=True, help='Operador a mutar')
-@click.option('--strategy', '-s', type=click.Choice(['weighted', 'uniform', 'adaptive']), default='adaptive', help='Distribución')
+@mutate.command("operators")
+@click.option("--target", "-t", type=str, required=True, help="Operador a mutar")
+@click.option(
+    "--strategy",
+    "-s",
+    type=click.Choice(["weighted", "uniform", "adaptive"]),
+    default="adaptive",
+    help="Distribución",
+)
 @click.pass_context
 def mutate_operators(ctx, target, strategy):
     """Mutar operadores genéticos."""
-    cli_instance = ctx.obj['cli']
-    cli_instance.run_mutation(target=target, mutation_type='operators', strategy=strategy)
+    cli_instance = ctx.obj["cli"]
+    cli_instance.run_mutation(target=target, mutation_type="operators", strategy=strategy)
 
 
-@mutate.command('hyperparams')
-@click.option('--target', '-t', type=str, required=True, help='Hiperparámetro a mutar')
-@click.option('--strategy', '-s', type=click.Choice(['grid', 'random', 'bayesian']), default='bayesian', help='Búsqueda')
+@mutate.command("hyperparams")
+@click.option("--target", "-t", type=str, required=True, help="Hiperparámetro a mutar")
+@click.option(
+    "--strategy",
+    "-s",
+    type=click.Choice(["grid", "random", "bayesian"]),
+    default="bayesian",
+    help="Búsqueda",
+)
 @click.pass_context
 def mutate_hyperparams(ctx, target, strategy):
     """Optimizar hiperparámetros."""
-    cli_instance = ctx.obj['cli']
-    cli_instance.run_mutation(target=target, mutation_type='hyperparams', strategy=strategy)
+    cli_instance = ctx.obj["cli"]
+    cli_instance.run_mutation(target=target, mutation_type="hyperparams", strategy=strategy)
 
 
 # ============================================================================
@@ -202,7 +242,7 @@ def mutate_hyperparams(ctx, target, strategy):
 @click.pass_context
 def interactive(ctx):
     """🎮 Modo interactivo tipo REPL."""
-    cli_instance = ctx.obj['cli']
+    cli_instance = ctx.obj["cli"]
     repl = InteractiveREPL(cli_instance)
     repl.start()
 
@@ -212,13 +252,13 @@ def interactive(ctx):
 # ============================================================================
 @cli.command("generate-mutator")
 @click.argument("instruction", type=str)
-@click.option('--lang', type=str, default='python', help='Target language for mutator intent')
-@click.option('--name', type=str, default=None, help='Output mutator file name (without .py)')
-@click.option('--dry-run', is_flag=True, help='Print generated code instead of writing file')
+@click.option("--lang", type=str, default="python", help="Target language for mutator intent")
+@click.option("--name", type=str, default=None, help="Output mutator file name (without .py)")
+@click.option("--dry-run", is_flag=True, help="Print generated code instead of writing file")
 @click.pass_context
 def generate_mutator_cmd(ctx, instruction, lang, name, dry_run):
     """🤖 Generate CoreUAST mutator code from natural language."""
-    cli_instance = ctx.obj['cli']
+    cli_instance = ctx.obj["cli"]
     success = cli_instance.generate_mutator(
         instruction=instruction,
         lang=lang,
@@ -232,13 +272,13 @@ def generate_mutator_cmd(ctx, instruction, lang, name, dry_run):
 # CHECKPOINTS
 # ============================================================================
 @cli.command()
-@click.option('--list', '-l', 'list_mode', is_flag=True, help='Listar checkpoints')
-@click.option('--clean', '-c', is_flag=True, help='Limpiar checkpoints antiguos')
-@click.option('--max-age', type=int, default=30, help='Edad máxima en días')
+@click.option("--list", "-l", "list_mode", is_flag=True, help="Listar checkpoints")
+@click.option("--clean", "-c", is_flag=True, help="Limpiar checkpoints antiguos")
+@click.option("--max-age", type=int, default=30, help="Edad máxima en días")
 @click.pass_context
 def checkpoints(ctx, list_mode, clean, max_age):
     """💾 Gestionar checkpoints."""
-    cli_instance = ctx.obj['cli']
+    cli_instance = ctx.obj["cli"]
 
     if list_mode:
         chk_list = cli_instance.checkpoint_manager.list_checkpoints()
@@ -265,8 +305,15 @@ def checkpoints(ctx, list_mode, clean, max_age):
 # ============================================================================
 @cli.command("migrate-checkpoints")
 @click.argument("paths", nargs=-1, type=click.Path(exists=True), required=True)
-@click.option('--format', '-f', 'format_mode', type=click.Choice(['auto', 'json', 'msgpack'], case_sensitive=False), default='msgpack', help='Formato de destino')
-@click.option('--overwrite', is_flag=True, help='Sobrescribir si ya existe el destino')
+@click.option(
+    "--format",
+    "-f",
+    "format_mode",
+    type=click.Choice(["auto", "json", "msgpack"], case_sensitive=False),
+    default="msgpack",
+    help="Formato de destino",
+)
+@click.option("--overwrite", is_flag=True, help="Sobrescribir si ya existe el destino")
 @click.pass_context
 def migrate_checkpoints(ctx, paths, format_mode, overwrite):
     """🔄 Migrar checkpoints JSON a msgpack (o viceversa)."""
@@ -307,7 +354,9 @@ def migrate_checkpoints(ctx, paths, format_mode, overwrite):
                 dst.write_bytes(compressed)
                 console.print(f"[green]✓ {src} → msgpack ({len(compressed)} bytes)[/green]")
             else:
-                dst.write_text(json.dumps(serialised, indent=2, ensure_ascii=False), encoding="utf-8")
+                dst.write_text(
+                    json.dumps(serialised, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
                 console.print(f"[green]✓ {src} → json[/green]")
         except Exception as e:
             console.print(f"[red]✗ {path}: {e}[/red]")
@@ -317,7 +366,13 @@ def migrate_checkpoints(ctx, paths, format_mode, overwrite):
 # INIT (Wizard Interactivo)
 # ============================================================================
 @cli.command()
-@click.option('--output', '-o', type=click.Path(), default=None, help='Archivo de salida (default: config.yaml)')
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    default=None,
+    help="Archivo de salida (default: config.yaml)",
+)
 @click.pass_context
 def init(ctx, output):
     """✨ Asistente interactivo para crear configuración optimizada."""
@@ -326,11 +381,13 @@ def init(ctx, output):
     from rich.panel import Panel
 
     cm = ConfigManager()
-    console.print(Panel(
-        "[bold cyan]MutaLambda Configuration Wizard[/bold cyan]\n"
-        "Crearé una configuración optimizada para tu código.",
-        title="✨ Bienvenido"
-    ))
+    console.print(
+        Panel(
+            "[bold cyan]MutaLambda Configuration Wizard[/bold cyan]\n"
+            "Crearé una configuración optimizada para tu código.",
+            title="✨ Bienvenido",
+        )
+    )
 
     console.print("\n[bold]1. ¿Qué tipo de código vas a optimizar?[/bold]")
     code_type = Prompt.ask(
@@ -354,13 +411,23 @@ def init(ctx, output):
         default="2",
         show_choices=True,
     )
-    console.print(f"  → {['Conservador', 'Balanceado', 'Agresivo'][int(aggressiveness)-1]} seleccionado")
+    console.print(
+        f"  → {['Conservador', 'Balanceado', 'Agresivo'][int(aggressiveness)-1]} seleccionado"
+    )
 
     preset_map = {
-        ("1", "1"): "numpy", ("1", "2"): "numpy", ("1", "3"): "numpy",
-        ("2", "1"): "scientific", ("2", "2"): "scientific", ("2", "3"): "research",
-        ("3", "1"): "quick", ("3", "2"): "production", ("3", "3"): "advanced",
-        ("4", "1"): "quick", ("4", "2"): "production", ("4", "3"): "production",
+        ("1", "1"): "numpy",
+        ("1", "2"): "numpy",
+        ("1", "3"): "numpy",
+        ("2", "1"): "scientific",
+        ("2", "2"): "scientific",
+        ("2", "3"): "research",
+        ("3", "1"): "quick",
+        ("3", "2"): "production",
+        ("3", "3"): "advanced",
+        ("4", "1"): "quick",
+        ("4", "2"): "production",
+        ("4", "3"): "production",
     }
     preset = preset_map.get((code_type, aggressiveness), "basic")
     console.print(f"\n[bold green]✓ Configuración recomendada: preset '{preset}'[/bold green]")
@@ -378,8 +445,13 @@ def init(ctx, output):
 # DOCTOR --FIX  (enhanced)
 # ============================================================================
 @cli.command()
-@click.option('--config', '-c', type=click.Path(exists=True), help='Opcional: configurar YAML para diagnosticar')
-@click.option('--fix', is_flag=True, help='Aplicar correcciones automáticas')
+@click.option(
+    "--config",
+    "-c",
+    type=click.Path(exists=True),
+    help="Opcional: configurar YAML para diagnosticar",
+)
+@click.option("--fix", is_flag=True, help="Aplicar correcciones automáticas")
 @click.pass_context
 def doctor(ctx, config, fix):
     """🩺 Validar entorno, backend LLM, runner y dependencias, con opción --fix."""
@@ -398,14 +470,21 @@ def doctor(ctx, config, fix):
         import muta_lambda  # noqa
         from sandbox import SandboxEvaluator  # noqa
         from runners import create_runner  # noqa
+
         console.print("[green]✓ core imports[/green]")
     except Exception as e:
         console.print(f"[red]✗ core imports: {e}[/red]")
         ok = False
 
-    for name, mod in [("click","click"),("rich","rich"),("numpy","numpy"),
-                      ("pydantic","pydantic"),("yaml","yaml"),
-                      ("faiss","faiss"),("sentence-transformers","sentence_transformers")]:
+    for name, mod in [
+        ("click", "click"),
+        ("rich", "rich"),
+        ("numpy", "numpy"),
+        ("pydantic", "pydantic"),
+        ("yaml", "yaml"),
+        ("faiss", "faiss"),
+        ("sentence-transformers", "sentence_transformers"),
+    ]:
         try:
             importlib.import_module(mod)
             console.print(f"[green]✓ {name}[/green]")
@@ -424,6 +503,17 @@ def doctor(ctx, config, fix):
         console.print("[green]✓ runner de contenedor disponible[/green]")
     else:
         console.print("[yellow]! sin motor de contenedor — solo subprocess[/yellow]")
+
+    # ML-002: bwrap is mandatory for any untrusted input under runner=microvm.
+    bwrap_path = shutil.which("bwrap")
+    if bwrap_path:
+        console.print(f"[green]✓ bwrap en {bwrap_path} (microvm disponible)[/green]")
+    else:
+        console.print(
+            "[red]✗ bwrap (bubblewrap) no encontrado — runner=microvm fallará "
+            "cerrado. Instala: apt-get install -y bubblewrap[/red]"
+        )
+        ok = False
 
     # --- Config diagnostics ---
     if config:
@@ -444,8 +534,13 @@ def doctor(ctx, config, fix):
             table.add_column("Solución sugerida", style="cyan")
             for i, issue in enumerate(issues, 1):
                 sev = issue.get("severity", "warning")
-                color = {"error":"red","warning":"yellow","info":"blue"}.get(sev, "yellow")
-                table.add_row(str(i), f"[{color}]{sev}[/{color}]", issue["message"], issue.get("fix_suggestion",""))
+                color = {"error": "red", "warning": "yellow", "info": "blue"}.get(sev, "yellow")
+                table.add_row(
+                    str(i),
+                    f"[{color}]{sev}[/{color}]",
+                    issue["message"],
+                    issue.get("fix_suggestion", ""),
+                )
             console.print(table)
 
             if fix:
@@ -466,6 +561,7 @@ def doctor(ctx, config, fix):
 def _run_with_preset(ctx, preset_name, file_arg):
     from cli.config_manager import ConfigManager
     import yaml
+
     cm = ConfigManager()
     preset_path = Path("presets") / f"{preset_name}.yaml"
     if not preset_path.exists():
@@ -477,8 +573,10 @@ def _run_with_preset(ctx, preset_name, file_arg):
     console.print(f"[green]✓ Preset '{preset_name}' cargado → {out}[/green]")
     if file_arg:
         console.print(f"[cyan]Ejecutando evolve con {file_arg}...[/cyan]")
-        cli_inst = ctx.obj['cli']
-        success = cli_inst.run_evolution(config_path=str(out), verbose=False, animation='none', source=file_arg)
+        cli_inst = ctx.obj["cli"]
+        success = cli_inst.run_evolution(
+            config_path=str(out), verbose=False, animation="none", source=file_arg
+        )
         sys.exit(0 if success else 1)
     else:
         console.print(f"  Ejecuta: [cyan]mutalambda evolve --config {out.name} my_script.py[/cyan]")
@@ -528,6 +626,7 @@ def recommend(ctx, file, apply, output):
     """📋 Analizar código y recomendar preset + configuración óptima."""
     from cli.config_manager import ConfigManager
     import yaml
+
     cm = ConfigManager()
     src = Path(file).read_text(encoding="utf-8")
     code_type = _detect_code_type_cli(src)
@@ -570,13 +669,13 @@ def recommend(ctx, file, apply, output):
 
 def _detect_code_type_cli(source: str) -> str:
     ind = {
-        'numpy': 'np.' in source or 'numpy' in source,
-        'pandas': 'pd.' in source or 'pandas' in source,
-        'scipy': 'scipy' in source,
-        'ml': 'sklearn' in source or 'torch' in source or 'tensorflow' in source,
+        "numpy": "np." in source or "numpy" in source,
+        "pandas": "pd." in source or "pandas" in source,
+        "scipy": "scipy" in source,
+        "ml": "sklearn" in source or "torch" in source or "tensorflow" in source,
     }
     m = [n for n, p in ind.items() if p]
-    return ', '.join(m) if m else 'general'
+    return ", ".join(m) if m else "general"
 
 
 # ============================================================================
@@ -596,29 +695,37 @@ def dashboard(ctx, text, run_id):
             console.print("  [cyan]pip install streamlit[/cyan] o usa [cyan]--text[/cyan]")
             sys.exit(0)
         from pathlib import Path as P
+
         dash_file = P(__file__).parent / "dashboard_run.py"
         if dash_file.exists():
             import subprocess
+
             console.print("[cyan]🚀 Abriendo http://localhost:8501 ...[/cyan]")
             subprocess.run(["streamlit", "run", str(dash_file)])
             sys.exit(0)
         else:
-            console.print("[yellow]streamlit disponible pero dashboard_run.py no encontrado[/yellow]")
+            console.print(
+                "[yellow]streamlit disponible pero dashboard_run.py no encontrado[/yellow]"
+            )
             sys.exit(0)
 
     # --- text mode ---
     from json import loads
+
     checkpoints_dir = Path("checkpoints")
     if not checkpoints_dir.exists():
         console.print("[dim]No hay directorio de checkpoints[/dim]")
         sys.exit(0)
     runs = sorted(
         [d for d in checkpoints_dir.iterdir() if d.is_dir() and d.name.startswith("run_")],
-        key=lambda d: d.stat().st_mtime, reverse=True)[:10]
+        key=lambda d: d.stat().st_mtime,
+        reverse=True,
+    )[:10]
     if not runs:
         console.print("[dim]No hay runs[/dim]")
         sys.exit(0)
     from rich.table import Table
+
     t = Table(title="Resumen de Ejecuciones")
     t.add_column("#", style="dim")
     t.add_column("Run ID", style="cyan")
@@ -629,13 +736,17 @@ def dashboard(ctx, text, run_id):
         mp = d / "run_manifest.json"
         if mp.exists():
             m = loads(mp.read_text())
-            t.add_row(str(i), d.name[4:12],
-                      str(m.get("generation_completed", 0)),
-                      f"{m.get('best_score',0):.4f}",
-                      f"{m.get('total_time_sec',0):.1f}")
+            t.add_row(
+                str(i),
+                d.name[4:12],
+                str(m.get("generation_completed", 0)),
+                f"{m.get('best_score',0):.4f}",
+                f"{m.get('total_time_sec',0):.1f}",
+            )
         else:
-            t.add_row(str(i), d.name[:8], "?","?","?")
+            t.add_row(str(i), d.name[:8], "?", "?", "?")
     from rich.console import Console
+
     Console().print(t)
 
 
@@ -652,6 +763,7 @@ def compare(ctx, original, optimized, baseline):
     import difflib
     from rich.panel import Panel
     from rich.table import Table
+
     o = Path(original).read_text(encoding="utf-8")
     p = Path(optimized).read_text(encoding="utf-8")
     console.print(Panel("[bold cyan]⚖️ Solution Comparison[/bold cyan]"))
@@ -664,8 +776,15 @@ def compare(ctx, original, optimized, baseline):
         b = Path(baseline).read_text(encoding="utf-8")
         ft.add_row(str(baseline), str(b.count("\n")))
     console.print(ft)
-    diff = list(difflib.unified_diff(o.splitlines(keepends=True), p.splitlines(keepends=True),
-                                     fromfile=str(original), tofile=str(optimized), n=3))
+    diff = list(
+        difflib.unified_diff(
+            o.splitlines(keepends=True),
+            p.splitlines(keepends=True),
+            fromfile=str(original),
+            tofile=str(optimized),
+            n=3,
+        )
+    )
     additions = sum(1 for l in diff if l.startswith("+") and not l.startswith("+++"))
     removals = sum(1 for l in diff if l.startswith("-") and not l.startswith("---"))
     st = Table(title="Stats")
@@ -687,20 +806,24 @@ def compare(ctx, original, optimized, baseline):
 def explain_run(ctx, run_dir, full):
     """📖 Explicar decisiones de una corrida completada."""
     from json import loads
+
     rd = Path(run_dir)
-    manifest = loads((rd / "run_manifest.json").read_text()) if (rd/"run_manifest.json").exists() else {}
+    manifest = (
+        loads((rd / "run_manifest.json").read_text()) if (rd / "run_manifest.json").exists() else {}
+    )
     if not manifest:
         console.print(f"[red]✗ run_manifest.json no encontrado en {run_dir}[/red]")
         sys.exit(1)
     from rich.panel import Panel
     from rich.table import Table
+
     console.print(Panel("[bold cyan]📖 Explicando corrida[/bold cyan]"))
     it = Table(box=None, show_header=False)
     it.add_column("Key", style="dim")
     it.add_column("Value")
-    it.add_row("Run ID", manifest.get("run_id","—"))
-    it.add_row("Task", manifest.get("task","—"))
-    it.add_row("Generaciones", str(manifest.get("generation_completed",0)))
+    it.add_row("Run ID", manifest.get("run_id", "—"))
+    it.add_row("Task", manifest.get("task", "—"))
+    it.add_row("Generaciones", str(manifest.get("generation_completed", 0)))
     console.print(it)
     bs = manifest.get("best_score", 0)
     console.print(f"\n[cyan]🎯 Best Score:[/cyan] [bold]{bs:.4f}[/bold]")
@@ -712,12 +835,13 @@ def explain_run(ctx, run_dir, full):
             console.print(f"  Generaciones: {len(h)}")
             console.print(f"  Inicio: {h[0]:.4f}")
             console.print(f"  Final:  {h[-1]:.4f}")
-            pct = ((h[-1]-h[0])/abs(h[0])*100) if h[0] else 0
+            pct = ((h[-1] - h[0]) / abs(h[0]) * 100) if h[0] else 0
             console.print(f"  Mejora: {pct:.1f}%")
     if full:
-        bp = rd/"best_solution.py"
+        bp = rd / "best_solution.py"
         if bp.exists():
             from rich.console import Console
+
             console.print("\n[bold]Mejor solución:[/bold]")
             console.print(bp.read_text(encoding="utf-8"))
 
@@ -730,6 +854,7 @@ def explain_run(ctx, run_dir, full):
 def examples(ctx):
     """📁 Listar ejemplos listos para usar."""
     from rich.table import Table
+
     t = Table(title="Ejemplos MutaLambda")
     t.add_column("Archivo", style="cyan")
     t.add_column("Tipo")
@@ -740,14 +865,19 @@ def examples(ctx):
         sys.exit(0)
     for py in sorted(ex_dir.glob("*.py")):
         tests = py.with_name(py.stem + "_tests.json")
-        t.add_row(str(py), _guess_type(py.read_text(encoding="utf-8")[:200]),
-                  "✓" if tests.exists() else "—")
+        t.add_row(
+            str(py),
+            _guess_type(py.read_text(encoding="utf-8")[:200]),
+            "✓" if tests.exists() else "—",
+        )
     console.print(t)
 
 
 def _guess_type(src: str) -> str:
-    if "np." in src or "numpy" in src: return "NumPy"
-    if "scipy" in src: return "Científico"
+    if "np." in src or "numpy" in src:
+        return "NumPy"
+    if "scipy" in src:
+        return "Científico"
     return "General"
 
 
@@ -756,18 +886,28 @@ def _guess_type(src: str) -> str:
 def tutorial(ctx):
     """🐣 Tutorial interactivo paso a paso."""
     from rich.panel import Panel
-    console.print(Panel("""
+
+    console.print(
+        Panel(
+            """
 [bold cyan]🐣 Tutorial MutaLambda[/bold cyan]
 
 Pasos esenciales:
-""", title="Tutorial"))
+""",
+            title="Tutorial",
+        )
+    )
     steps = [
         ("1. Configuración", "Crea config.yaml con wizard:", "  mutalambda init"),
         ("2. Analizar", "Recomiendo preset para tu código:", "  mutalambda recommend my_script.py"),
         ("3. Optimizar", "Ejecuta con preset production:", "  mutalambda production my_script.py"),
         ("4. Monitorear", "Ver resumen en texto:", "  mutalambda dashboard --text"),
         ("5. Diagnosticar", "Verifica y corrige configuración:", "  mutalambda doctor --fix"),
-        ("6. Explicar", "Entiende resultados de una corrida:", "  mutalambda explain-run checkpoints/run_xxx"),
+        (
+            "6. Explicar",
+            "Entiende resultados de una corrida:",
+            "  mutalambda explain-run checkpoints/run_xxx",
+        ),
     ]
     for name, desc, cmd in steps:
         console.print(f"\n[bold]{name}[/bold]")
@@ -777,5 +917,5 @@ Pasos esenciales:
     console.print("  [cyan]mutalambda init && mutalambda production examples/target.py[/cyan]")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

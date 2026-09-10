@@ -8,6 +8,7 @@ from muta_ext.uast.mutators.scientific.base_mutator import BaseScientificMutator
 
 class StrengthReductionMutator(BaseScientificMutator):
     """Mutador que reduce operaciones costosas a equivalentes más rápidos."""
+
     _name = "strength_reduction"
     strength = 0.3
 
@@ -27,14 +28,15 @@ class StrengthReductionMutator(BaseScientificMutator):
 
         if not changed:
             return MutationResult(
-                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)),
-                applied=False
+                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)), applied=False
             )
 
         return MutationResult(
             CoreUAST(new_body, uast.language, dict(uast.metadata)),
-            applied=True, description="; ".join(descs),
-            score_impact=0.15, confidence=0.8
+            applied=True,
+            description="; ".join(descs),
+            score_impact=0.15,
+            confidence=0.8,
         )
 
     def _mutate_func(self, func: Function, rng: random.Random, descs: list) -> Function:
@@ -47,8 +49,12 @@ class StrengthReductionMutator(BaseScientificMutator):
                 descs.append(f"Reduced in {func.name.name}")
         if changed:
             return Function(
-                func.name, list(func.params), new_body,
-                list(func.decorators), func.return_type, func.tag
+                func.name,
+                list(func.params),
+                new_body,
+                list(func.decorators),
+                func.return_type,
+                func.tag,
             )
         return func
 

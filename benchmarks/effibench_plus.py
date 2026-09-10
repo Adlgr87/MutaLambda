@@ -11,6 +11,7 @@ Extends EffiBench with scientific correctness invariants:
 This demonstrates that MutaLambda can optimize while preserving physical
 invariants that Copilot/GPT-4 generated code violates.
 """
+
 import json
 import time
 import statistics
@@ -18,6 +19,8 @@ import tempfile
 import subprocess
 from pathlib import Path
 from dataclasses import dataclass, asdict
+
+from secure_exec import exec_guarded
 
 
 @dataclass
@@ -207,7 +210,7 @@ M1 = final_rho.sum()
 def attach_invariants():
     """Attach relevant invariants to each scientific task."""
     invs = get_scientific_invariants()
-    
+
     SCIENTIFIC_TASKS[0].invariants = [
         InvariantCheck(
             name="energy_conservation",
@@ -220,7 +223,7 @@ def check(thermal_energy_initial, thermal_energy_final):
             critical=True,
         ),
     ]
-    
+
     SCIENTIFIC_TASKS[1].invariants = [
         InvariantCheck(
             name="energy_decrement",
@@ -232,7 +235,7 @@ def check(E0, E_final):
             critical=True,
         ),
     ]
-    
+
     SCIENTIFIC_TASKS[2].invariants = [
         InvariantCheck(
             name="mass_balance",
@@ -250,49 +253,53 @@ def run_effibench_plus_baseline() -> dict:
     """Run baseline EffiBench+ with scientific invariants."""
     attach_invariants()
     invs = get_scientific_invariants()
-    
+
     results = {
         "suite": "EffiBench+ Scientific Mode",
         "invariants_available": [i.name for i in invs],
         "tasks": [],
         "summary": {},
     }
-    
+
     for task in SCIENTIFIC_TASKS:
         t0 = time.perf_counter()
         try:
             ns = {}
-            exec(task.code, ns)
+            # ML-001: task code is executed through the guarded, AST-scanned loader.
+            exec_guarded(task.code, ns)
             t1 = time.perf_counter()
-            
-            results["tasks"].append({
-                "name": task.name,
-                "description": task.description,
-                "status": "ok",
-                "p50_ms": (t1 - t0) * 1000,
-                "invariants": [
-                    {"name": inv.name, "critical": inv.critical}
-                    for inv in task.invariants
-                ],
-            })
+
+            results["tasks"].append(
+                {
+                    "name": task.name,
+                    "description": task.description,
+                    "status": "ok",
+                    "p50_ms": (t1 - t0) * 1000,
+                    "invariants": [
+                        {"name": inv.name, "critical": inv.critical} for inv in task.invariants
+                    ],
+                }
+            )
         except Exception as e:
-            results["tasks"].append({
-                "name": task.name,
-                "status": "error",
-                "error": str(e),
-            })
-    
+            results["tasks"].append(
+                {
+                    "name": task.name,
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
+
     # Summary
     ok_tasks = [t for t in results["tasks"] if t["status"] == "ok"]
     times = [t["p50_ms"] for t in ok_tasks]
-    
+
     results["summary"] = {
         "n_tasks": len(results["tasks"]),
         "n_passed": len(ok_tasks),
         "mean_p50_ms": round(statistics.mean(times), 2) if times else 0,
         "median_p50_ms": round(statistics.median(times), 2) if times else 0,
     }
-    
+
     return results
 
 
@@ -303,7 +310,7 @@ def run_mutalambda_scientific() -> dict:
     For now, simulate with vectorized NumPy.
     """
     attach_invariants()
-    
+
     OPTIMIZED_TASKS = [
         SciTask(
             name="heat_diffusion",
@@ -326,39 +333,44 @@ result = heat_diffusion_2d_vec(initial, steps=50)
             invariants=[],
         ),
     ]
-    
+
     results = {
         "suite": "EffiBench+ Scientific Mode (MutaLambda-optimized)",
         "tasks": [],
         "summary": {},
     }
-    
+
     for task in OPTIMIZED_TASKS:
         t0 = time.perf_counter()
         try:
             ns = {}
-            exec(task.code, ns)
+            # ML-001: task code is executed through the guarded, AST-scanned loader.
+            exec_guarded(task.code, ns)
             t1 = time.perf_counter()
-            
-            results["tasks"].append({
-                "name": task.name,
-                "status": "ok",
-                "p50_ms": (t1 - t0) * 1000,
-            })
+
+            results["tasks"].append(
+                {
+                    "name": task.name,
+                    "status": "ok",
+                    "p50_ms": (t1 - t0) * 1000,
+                }
+            )
         except Exception as e:
-            results["tasks"].append({
-                "name": task.name,
-                "status": "error",
-                "error": str(e),
-            })
-    
+            results["tasks"].append(
+                {
+                    "name": task.name,
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
+
     times = [t["p50_ms"] for t in results["tasks"] if t["status"] == "ok"]
     results["summary"] = {
         "n_tasks": len(results["tasks"]),
         "n_passed": len(ok := [t for t in results["tasks"] if t["status"] == "ok"]),
         "mean_p50_ms": round(statistics.mean(times), 2) if times else 0,
     }
-    
+
     return results
 
 
@@ -367,24 +379,24 @@ if __name__ == "__main__":
     print("=== EffiBench+ Scientific Mode Baseline ===")
     print(f"Tasks: {baseline['summary']['n_passed']}/{baseline['summary']['n_tasks']} passed")
     print(f"Mean P50: {baseline['summary']['mean_p50_ms']:.2f}ms")
-    
+
     for inv in get_scientific_invariants():
         print(f"\n  Invariant: {inv.name}")
         print(f"    {inv.description}")
-    
+
     optimized = run_mutalambda_scientific()
     print("\n=== MutaLambda-Optimized ===")
     for t in optimized["tasks"]:
         if t["status"] == "ok":
             print(f"  {t['name']}: {t['p50_ms']:.2f}ms")
-    
+
     # Calculate speedup
     if baseline["tasks"] and optimized["tasks"]:
         base_time = baseline["tasks"][0]["p50_ms"]
         opt_time = optimized["tasks"][0]["p50_ms"]
         speedup = base_time / max(opt_time, 1e-6)
         print(f"\n  Speedup: {speedup:.2f}x (invariants preserved)")
-    
+
     out = Path("benchmarks/results_effibench_plus.json")
     with open(out, "w") as f:
         json.dump({"baseline": baseline, "optimized": optimized}, f, indent=2)

@@ -35,20 +35,22 @@ mutalambda run --config config.yaml
 
 ### Build image
 ```bash
-# CPU-only image
+# CPU-only image (the repository ships a single multi-stage Dockerfile).
 docker build -t mutalambda:cpu .
-
-# GPU-enabled image
-docker build -f Dockerfile.gpu -t mutalambda:gpu .
 ```
+
+> Note: there is no separate `Dockerfile.gpu` in this repository. For GPU
+> workloads, build the same image and grant access to the host GPU at runtime
+> (see below). A dedicated GPU image is a follow-up, not a maintained path.
 
 ### Run container
 ```bash
-# CPU mode
-docker run -v $(pwd)/config.yaml:/app/config.yaml mutalambda:cpu
+# CPU mode (read-only, unprivileged, no network — the image already runs as a
+# non-root user uid/gid 10001).
+docker run -v $(pwd)/config.yaml:/workspace/config.yaml mutalambda:cpu
 
-# GPU mode
-docker run --gpus all -v $(pwd)/config.yaml:/app/config.yaml mutalambda:gpu
+# GPU mode (requires nvidia-container-toolkit on the host)
+docker run --gpus all -v $(pwd)/config.yaml:/workspace/config.yaml mutalambda:cpu
 ```
 
 ## Kubernetes Deployment
@@ -88,8 +90,9 @@ spec:
 
 ### AWS
 ```bash
-# Launch EC2 with GPU
-aws ec2 run-instances --instance-type p3.2xlarge --image-id ami-xxx
+# Launch EC2 with GPU. Replace <ami-id> with the AMI for your region/account;
+# there is no default AMI baked into this guide.
+aws ec2 run-instances --instance-type p3.2xlarge --image-id <ami-id>
 
 # Deploy container
 aws ecs create-cluster --cluster-name mutalambda
@@ -128,11 +131,34 @@ Configure alerts in `.github/workflows/` for:
 
 ## Rollback
 
+MutaLambda does **not** provide a `scripts/install.sh --rollback` flag. Rollback
+is a two-part operation: revert the code and restore a compatible checkpoint.
+
 ```bash
-# Rollback to previous version
-git checkout <previous-commit>
-bash scripts/install.sh --rollback
+# 1. Revert code to a known-good, tagged release (prefer immutable tags/artifacts
+#    over bare commits — see "Releases" below).
+git checkout <release-tag>
+#    or, for a containerized deployment, redeploy the exact immutable image tag
+#    (e.g. ghcr.io/adlgr87/mutalambda:<version>).
+
+# 2. Resume from a checkpoint produced by that same version.
+mutalambda resume --checkpoint checkpoints/<run-id>.msgpack
 ```
+
+> Checkpoint compatibility: ``checkpoint_manager.load_checkpoint`` /
+> ``resume_agent`` restore state serialized with msgpack and carry a schema
+> version. A checkpoint written by a newer version may not restore cleanly on an
+> older one — roll back code and checkpoint **together**. Artifacts for a run are
+> tracked separately by ``run_artifacts.py``; keep them alongside the checkpoint
+> to reproduce results.
+
+## Releases
+
+- Prefer immutable, tagged releases (git tags + pinned image digests) over
+  moving refs. The Docker workflow publishes ``ghcr.io/adlgr87/mutalambda:<version>``
+  and ``:latest`` on pushes to ``main``.
+- Record the version, Python version, image digest and dependency hashes with
+  every benchmark artifact so results stay comparable across rollbacks.
 
 ## Support
 

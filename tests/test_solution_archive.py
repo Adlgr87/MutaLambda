@@ -33,15 +33,19 @@ _mock_faiss.write_index = MagicMock()
 _mock_faiss.read_index = MagicMock(return_value=MagicMock())
 _mock_faiss.Kmeans = MagicMock()
 
-with patch.dict("sys.modules", {
-    "sentence_transformers": MagicMock(SentenceTransformer=_mock_st),
-    "faiss": _mock_faiss,
-}):
+with patch.dict(
+    "sys.modules",
+    {
+        "sentence_transformers": MagicMock(SentenceTransformer=_mock_st),
+        "faiss": _mock_faiss,
+    },
+):
     import muta_lambda
     from muta_lambda import SolutionArchive
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def archive():
@@ -93,10 +97,9 @@ def archive():
 def _add_solution(arch: SolutionArchive, code: str):
     """Helper: add a solution to the archive."""
     from muta_lambda import ArchivedSolution
+
     emb = arch._encode_normalized([code])[0]
-    arch.solutions.append(
-        ArchivedSolution(code=code, metrics={}, embedding=emb)
-    )
+    arch.solutions.append(ArchivedSolution(code=code, metrics={}, embedding=emb))
     arch.index.add.return_value = None  # mock
 
 

@@ -18,8 +18,8 @@ class TestLineage:
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
-def _make_ind(code: str, score: float = 10.0,
-              parent_ids: list = None) -> Individual:
+
+def _make_ind(code: str, score: float = 10.0, parent_ids: list = None) -> Individual:
     """Create a minimal individual with known parents."""
     ind = Individual(
         code=code,
@@ -47,9 +47,12 @@ def _populate_chain(graph: LineageGraph, count: int = 5) -> list:
         else:
             # Seed individual — register manually
             graph.nodes[ind.id] = LineageNode(
-                id=ind.id, generation=0, score=ind.score,
+                id=ind.id,
+                generation=0,
+                score=ind.score,
                 code_hash=hash(ind.code) & 0xFFFFFFFF,
-                island_id=0, alive=True,
+                island_id=0,
+                alive=True,
             )
         inds.append(ind)
         prev = ind
@@ -83,16 +86,23 @@ def test_record_with_crossover():
     pb = _make_ind("def b():\n    return 2", score=9.0)
     # Registrar padres manualmente como semillas
     graph.nodes[pa.id] = LineageNode(
-        id=pa.id, generation=0, score=pa.score,
-        code_hash=hash(pa.code) & 0xFFFFFFFF, island_id=0, alive=True,
+        id=pa.id,
+        generation=0,
+        score=pa.score,
+        code_hash=hash(pa.code) & 0xFFFFFFFF,
+        island_id=0,
+        alive=True,
     )
     graph.nodes[pb.id] = LineageNode(
-        id=pb.id, generation=0, score=pb.score,
-        code_hash=hash(pb.code) & 0xFFFFFFFF, island_id=0, alive=True,
+        id=pb.id,
+        generation=0,
+        score=pb.score,
+        code_hash=hash(pb.code) & 0xFFFFFFFF,
+        island_id=0,
+        alive=True,
     )
 
-    child = _make_ind("def c():\n    return 3", score=10.0,
-                      parent_ids=[pa.id, pb.id])
+    child = _make_ind("def c():\n    return 3", score=10.0, parent_ids=[pa.id, pb.id])
     graph.record(child, [pa, pb], generation=1, island_id=0)
 
     # Verificar ancestros
@@ -130,14 +140,16 @@ def test_genealogical_distance_siblings():
     pa = _make_ind("def a():\n    return 1", score=5.0)
     # Registrar padre
     graph.nodes[pa.id] = LineageNode(
-        id=pa.id, generation=0, score=pa.score,
-        code_hash=hash(pa.code) & 0xFFFFFFFF, island_id=0, alive=True,
+        id=pa.id,
+        generation=0,
+        score=pa.score,
+        code_hash=hash(pa.code) & 0xFFFFFFFF,
+        island_id=0,
+        alive=True,
     )
     # Dos hijos del mismo padre
-    c1 = _make_ind("def b():\n    return 2", score=6.0,
-                   parent_ids=[pa.id])
-    c2 = _make_ind("def c():\n    return 3", score=7.0,
-                   parent_ids=[pa.id])
+    c1 = _make_ind("def b():\n    return 2", score=6.0, parent_ids=[pa.id])
+    c2 = _make_ind("def c():\n    return 3", score=7.0, parent_ids=[pa.id])
     graph.record(c1, [pa], generation=1, island_id=0)
     graph.record(c2, [pa], generation=1, island_id=0)
 
@@ -153,8 +165,12 @@ def test_genealogical_distance_unrelated():
 
     isolated = _make_ind("def isolated():\n    pass", score=5.0)
     graph.nodes[isolated.id] = LineageNode(
-        id=isolated.id, generation=99, score=isolated.score,
-        code_hash=hash(isolated.code) & 0xFFFFFFFF, island_id=99, alive=True,
+        id=isolated.id,
+        generation=99,
+        score=isolated.score,
+        code_hash=hash(isolated.code) & 0xFFFFFFFF,
+        island_id=99,
+        alive=True,
     )
 
     dist = graph.get_genealogical_distance(inds[0].id, isolated.id)
@@ -180,13 +196,17 @@ def test_find_abandoned_branches_finds_candidates():
     # Crear un nodo lateral (rama abandonada) con buen score
     lateral = _make_ind("def lateral():\n    return 99", score=15.0)
     graph.nodes[lateral.id] = LineageNode(
-        id=lateral.id, generation=1, score=lateral.score,
-        code_hash=hash(lateral.code) & 0xFFFFFFFF, island_id=1,
+        id=lateral.id,
+        generation=1,
+        score=lateral.score,
+        code_hash=hash(lateral.code) & 0xFFFFFFFF,
+        island_id=1,
         alive=False,  # abandonado
     )
 
     candidates = graph.find_abandoned_branches(
-        chain[-1].id, threshold_score=0.0,
+        chain[-1].id,
+        threshold_score=0.0,
     )
     assert len(candidates) >= 1
     assert any(c.id == lateral.id for c in candidates)
@@ -200,13 +220,18 @@ def test_find_abandoned_branches_skips_resurrected():
 
     lateral = _make_ind("def lateral():\n    return 99", score=15.0)
     graph.nodes[lateral.id] = LineageNode(
-        id=lateral.id, generation=1, score=lateral.score,
-        code_hash=hash(lateral.code) & 0xFFFFFFFF, island_id=1,
-        alive=False, resurrected=True,
+        id=lateral.id,
+        generation=1,
+        score=lateral.score,
+        code_hash=hash(lateral.code) & 0xFFFFFFFF,
+        island_id=1,
+        alive=False,
+        resurrected=True,
     )
 
     candidates = graph.find_abandoned_branches(
-        chain[-1].id, threshold_score=0.0,
+        chain[-1].id,
+        threshold_score=0.0,
     )
     assert not any(c.id == lateral.id for c in candidates)
 
@@ -219,13 +244,17 @@ def test_find_abandoned_branches_score_threshold():
 
     lateral = _make_ind("def lateral():\n    return 99", score=3.0)
     graph.nodes[lateral.id] = LineageNode(
-        id=lateral.id, generation=1, score=lateral.score,
-        code_hash=hash(lateral.code) & 0xFFFFFFFF, island_id=1,
+        id=lateral.id,
+        generation=1,
+        score=lateral.score,
+        code_hash=hash(lateral.code) & 0xFFFFFFFF,
+        island_id=1,
         alive=False,
     )
 
     candidates = graph.find_abandoned_branches(
-        chain[-1].id, threshold_score=5.0,
+        chain[-1].id,
+        threshold_score=5.0,
     )
     assert not any(c.id == lateral.id for c in candidates)
 

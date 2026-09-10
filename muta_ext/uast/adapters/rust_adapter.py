@@ -1,21 +1,41 @@
 #!/usr/bin/env python3
 """Rust → CoreUAST adapter using tree-sitter."""
+
 from typing import Any, Optional
 
 from tree_sitter import Language, Parser
 
 from muta_ext.uast.adapters.base import BaseAdapter
 from muta_ext.uast.core_uast import (
-    CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
-    Assign, If, For, While, Return, Function, Comment, Opaque,
-    TryExcept, ExceptClause, StructDef, FieldDef, TypeAnnotation,
-    Match, MatchArm, Reference, Break
+    CoreUAST,
+    LiteralNode,
+    Identifier,
+    BinaryOp,
+    UnaryOp,
+    Call,
+    Assign,
+    If,
+    For,
+    While,
+    Return,
+    Function,
+    Comment,
+    Opaque,
+    TryExcept,
+    ExceptClause,
+    StructDef,
+    FieldDef,
+    TypeAnnotation,
+    Match,
+    MatchArm,
+    Reference,
+    Break,
 )
 
 
 def _get_text(node: Any, source: str) -> str:
     """Extract text from node, handling both str and bytes."""
-    text = source[node.start_byte:node.end_byte]
+    text = source[node.start_byte : node.end_byte]
     if isinstance(text, bytes):
         return text.decode("utf-8", errors="replace")
     return text
@@ -25,10 +45,11 @@ class RustAdapter(BaseAdapter):
     """Rust source to CoreUAST converter using tree-sitter."""
 
     language = "rust"
-    
+
     def __init__(self):
         # Load Rust language from installed package
         from tree_sitter_rust import language as rust_lang
+
         self._parser = Parser(Language(rust_lang()))
 
     def can_parse(self, source: str) -> bool:
@@ -52,28 +73,24 @@ class RustAdapter(BaseAdapter):
     def _transform(self, node: Any, source: str) -> CoreUAST:
         """Transform tree-sitter node to CoreUAST."""
         body = []
-        
+
         for child in node.children:
             uast_node = self._visit(child, source)
             if uast_node is not None:
                 body.append(uast_node)
-        
-        return CoreUAST(
-            body=body,
-            language="rust",
-            metadata={"source": source}
-        )
+
+        return CoreUAST(body=body, language="rust", metadata={"source": source})
 
     def _visit(self, node: Any, source: str) -> Optional[Any]:
         """Visit and transform a tree-sitter node."""
         node_type = node.type
-        
+
         method = f"_visit_{node_type}"
         visitor = getattr(self, method, None)
-        
+
         if visitor:
             return visitor(node, source)
-        
+
         # Default: Opaque for unsupported nodes
         return Opaque(original_text=_get_text(node, source), lang="rust")
 
@@ -82,7 +99,7 @@ class RustAdapter(BaseAdapter):
         name_id = None
         params = []
         body = []
-        
+
         for child in node.children:
             text = _get_text(child, source)
             if child.type == "identifier":
@@ -98,12 +115,8 @@ class RustAdapter(BaseAdapter):
                     stmt_node = self._visit(stmt, source)
                     if stmt_node:
                         body.append(stmt_node)
-        
-        return Function(
-            name=name_id or Identifier(name="unknown"),
-            params=params,
-            body=body
-        )
+
+        return Function(name=name_id or Identifier(name="unknown"), params=params, body=body)
 
     def _extract_parameter(self, node: Any, source: str) -> Optional[Identifier]:
         """Extract parameter from Rust parameter node."""
@@ -117,7 +130,7 @@ class RustAdapter(BaseAdapter):
         condition = None
         then_body = []
         else_body = []
-        
+
         for i, child in enumerate(node.children):
             if i == 0:
                 # First child is condition
@@ -134,11 +147,11 @@ class RustAdapter(BaseAdapter):
                         stmt_node = self._visit(stmt, source)
                         if stmt_node:
                             else_body.append(stmt_node)
-        
+
         return If(
             condition=condition or Opaque(original_text="?", lang="rust"),
             then_body=then_body or [Opaque(original_text="?", lang="rust")],
-            else_body=else_body if else_body else None
+            else_body=else_body if else_body else None,
         )
 
     def _visit_expression(self, node: Any, source: str) -> Optional[Any]:
@@ -154,7 +167,7 @@ class RustAdapter(BaseAdapter):
         """Transform binary_expression to BinaryOp."""
         parts = []
         op = "?"
-        
+
         for child in node.children:
             text = _get_text(child, source)
             if text in ("+", "-", "*", "/", "%", "&&", "||", "==", "!=", "<", ">", "<=", ">="):
@@ -164,7 +177,7 @@ class RustAdapter(BaseAdapter):
                 child_node = self._visit(child, source)
                 if child_node:
                     parts.append(child_node)
-        
+
         if len(parts) >= 2:
             return BinaryOp(left=parts[0], op=op, right=parts[1])
         return Opaque(original_text=_get_text(node, source), lang="rust")
@@ -173,14 +186,14 @@ class RustAdapter(BaseAdapter):
         """Transform unary_expression to UnaryOp."""
         op = "?"
         operand = None
-        
+
         for child in node.children:
             text = _get_text(child, source)
             if text in ("!", "-"):
                 op = "not" if text == "!" else text
             else:
                 operand = self._visit(child, source)
-        
+
         return UnaryOp(op=op, operand=operand or Opaque(original_text="?", lang="rust"))
 
     def _visit_identifier(self, node: Any, source: str) -> Identifier:
@@ -209,7 +222,7 @@ class RustAdapter(BaseAdapter):
         """Transform call_expression to Call."""
         func = None
         args = []
-        
+
         for child in node.children:
             if child.type in ("identifier", "field_expression"):
                 func = self._visit(child, source)
@@ -219,14 +232,14 @@ class RustAdapter(BaseAdapter):
                         arg_node = self._visit(arg, source)
                         if arg_node:
                             args.append(arg_node)
-        
+
         return Call(func=func or Identifier(name="unknown"), args=args)
 
     def _visit_struct_item(self, node: Any, source: str) -> StructDef:
         """Transform Rust struct_item to StructDef."""
         name = "unknown"
         fields = []
-        
+
         for child in node.children:
             if child.type == "identifier":
                 name = _get_text(child, source)
@@ -236,20 +249,20 @@ class RustAdapter(BaseAdapter):
                         field_node = self._visit_field_declaration(field, source)
                         if field_node:
                             fields.append(field_node)
-        
+
         return StructDef(name=name, fields=fields, methods=[])
 
     def _visit_field_declaration(self, node: Any, source: str) -> Optional[FieldDef]:
         """Extract field from field_declaration."""
         name = None
         type_ann = None
-        
+
         for child in node.children:
             if child.type == "identifier":
                 name = _get_text(child, source)
             elif child.type == "type_identifier":
                 type_ann = TypeAnnotation(type_name=_get_text(child, source))
-        
+
         if name:
             return FieldDef(name=name, type_annotation=type_ann)
         return None
@@ -262,7 +275,7 @@ class RustAdapter(BaseAdapter):
         """Transform Rust match_expression to Match."""
         subject = Opaque(original_text="?", lang="rust")
         arms = []
-        
+
         for child in node.children:
             if child.type in ("expression", "identifier", "literal"):
                 subject = self._visit(child, source) or subject
@@ -271,14 +284,14 @@ class RustAdapter(BaseAdapter):
                     arm_node = self._visit_match_arm(arm, source)
                     if arm_node:
                         arms.append(arm_node)
-        
+
         return Match(subject=subject, arms=arms)
 
     def _visit_match_arm(self, node: Any, source: str) -> Optional[MatchArm]:
         """Transform match arm to MatchArm."""
         pattern = Opaque(original_text="_", lang="rust")
         body = []
-        
+
         for child in node.children:
             if child.type in ("_", "literal", "identifier"):
                 pattern = self._visit(child, source) or pattern
@@ -287,7 +300,7 @@ class RustAdapter(BaseAdapter):
                     stmt_node = self._visit(stmt, source)
                     if stmt_node:
                         body.append(stmt_node)
-        
+
         return MatchArm(pattern=pattern, body=body)
 
 

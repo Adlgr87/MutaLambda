@@ -1,4 +1,3 @@
-
 TARGET_NAME = "look_and_say"
 TIER = 2
 function_name = "look_and_say"
@@ -20,5 +19,5 @@ test_cases = [
     {"function": "look_and_say", "args": ["21"], "expected": "1211", "comparison": "equal"},
     {"function": "look_and_say", "args": ["1211"], "expected": "111221", "comparison": "equal"},
 ]
-invariants = ['len(out) >= 1']
+invariants = ["len(out) >= 1"]
 input_strategy = "st.text(alphabet='1234',min_size=1,max_size=8)"

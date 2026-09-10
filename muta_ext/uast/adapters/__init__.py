@@ -1,4 +1,5 @@
 """UAST adapters for different languages."""
+
 from muta_ext.uast.adapters.base import BaseAdapter
 from muta_ext.uast.adapters.python_adapter import PythonAdapter, parse_to_uast
 from muta_ext.uast.adapters.rust_adapter import RustAdapter
@@ -21,4 +22,12 @@ def get_adapter(language: str) -> BaseAdapter:
     return _ADAPTERS[language]()
 
 
-__all__ = ["BaseAdapter", "PythonAdapter", "RustAdapter", "CppAdapter", "GoAdapter", "parse_to_uast", "get_adapter"]
+__all__ = [
+    "BaseAdapter",
+    "PythonAdapter",
+    "RustAdapter",
+    "CppAdapter",
+    "GoAdapter",
+    "parse_to_uast",
+    "get_adapter",
+]

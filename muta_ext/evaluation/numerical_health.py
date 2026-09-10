@@ -116,8 +116,10 @@ def evaluate_numerical_health(
             health.condition_number *= 10.0
 
     # ── Clasificar estabilidad ──────────────────────────────────────
-    if (health.stiffness_ratio > NumericalHealth.STIFFNESS_THRESHOLD
-            or health.condition_number > NumericalHealth.CONDITION_THRESHOLD):
+    if (
+        health.stiffness_ratio > NumericalHealth.STIFFNESS_THRESHOLD
+        or health.condition_number > NumericalHealth.CONDITION_THRESHOLD
+    ):
         health.is_stable = False
 
     # ── Meta-evaluador: Solver adaptativo (safe numpy) ────────────
@@ -189,8 +191,7 @@ class _RiskVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node):
         if isinstance(node.func, ast.Name):
-            if node.func.id in ("exp", "log", "pow", "math.exp",
-                               "math.log", "math.pow", "np.exp"):
+            if node.func.id in ("exp", "log", "pow", "math.exp", "math.log", "math.pow", "np.exp"):
                 self.has_exponential = True
         elif isinstance(node.func, ast.Attribute):
             if node.func.attr in ("exp", "log", "pow"):

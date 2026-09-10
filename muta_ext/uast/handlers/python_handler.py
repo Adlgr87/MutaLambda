@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Python language handler using existing UAST infrastructure."""
+
 import ast
-import shutil
-import subprocess
+import os
+import sys
 import tempfile
 import time
 from typing import Optional
@@ -10,7 +11,7 @@ from typing import Optional
 from muta_ext.uast.core_uast import CoreUAST
 from muta_ext.uast.adapters.python_adapter import PythonAdapter
 from muta_ext.uast.emitters.python_emitter import PythonEmitter
-from muta_ext.uast.handlers.base_handler import BaseLanguageHandler
+from muta_ext.uast.handlers.base_handler import BaseLanguageHandler, run_hardened
 
 
 class PythonHandler(BaseLanguageHandler):
@@ -43,17 +44,16 @@ class PythonHandler(BaseLanguageHandler):
             with tempfile.NamedTemporaryFile(suffix=".py", delete=False) as f:
                 f.write(source.encode())
                 tmpfile = f.name
-            
-            result = subprocess.run(
-                ["python", "-m", "py_compile", tmpfile],
-                capture_output=True,
-                text=True,
-                timeout=30
+
+            # ML-015: use the running interpreter (not PATH's "python") and the
+            # hardened subprocess helper (scrubbed env, bounded output).
+            result = run_hardened(
+                [sys.executable, "-m", "py_compile", tmpfile],
+                timeout=30,
             )
-            
-            import os
+
             os.unlink(tmpfile)
-            
+
             if result.returncode == 0:
                 return (True, "")
             return (False, result.stderr)
@@ -67,20 +67,20 @@ class PythonHandler(BaseLanguageHandler):
             with tempfile.TemporaryDirectory() as tmpdir:
                 main_py = f"{tmpdir}/main.py"
                 test_py = f"{tmpdir}/test_main.py"
-                
+
                 with open(main_py, "w") as f:
                     f.write(source)
-                
+
                 with open(test_py, "w") as f:
                     f.write(test_source)
-                
-                result = subprocess.run(
-                    ["python", "-m", "pytest", test_py, "-v"],
-                    capture_output=True,
-                    text=True,
-                    timeout=60
+
+                # ML-015: hardened subprocess (sys.executable, scrubbed env,
+                # bounded output) instead of bare subprocess.run.
+                result = run_hardened(
+                    [sys.executable, "-m", "pytest", test_py, "-v"],
+                    timeout=60,
                 )
-                
+
                 elapsed = time.perf_counter() - start
                 return (result.returncode == 0, result.stdout + result.stderr, elapsed)
         except Exception as e:
@@ -92,26 +92,27 @@ class PythonHandler(BaseLanguageHandler):
         try:
             for _ in range(iterations):
                 start = time.perf_counter()
-                result = subprocess.run(
-                    ["python", binary_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=self._config.get("run_timeout_sec", 10)
+                # ML-015: hardened subprocess (sys.executable, scrubbed env,
+                # bounded output).
+                result = run_hardened(
+                    [sys.executable, binary_path],
+                    timeout=self._config.get("run_timeout_sec", 10),
                 )
                 elapsed = time.perf_counter() - start
                 times.append(elapsed)
         except Exception:
             pass
-        
+
         if not times:
             return {"error": "No successful runs"}
-        
+
         import statistics
+
         return {
             "latency_p50": statistics.median(times),
             "latency_p99": sorted(times)[int(len(times) * 0.99)] if times else 0,
             "throughput": iterations / sum(times) if times else 0,
-            "runs": len(times)
+            "runs": len(times),
         }
 
     def roundtrip(self, source: str) -> str:

@@ -19,6 +19,7 @@ class HotPath:
         line_number: Línea donde se llama
         is_hotpath: Flag (siempre True, para extensibilidad)
     """
+
     function_name: str
     file_path: str
     cumulative_time: float
@@ -32,6 +33,7 @@ class HotPath:
 @dataclass
 class HotPathResult:
     """Resultado del profiling de un workload."""
+
     hot_paths: List[HotPath] = field(default_factory=list)
     total_time: float = 0.0
     profiler: str = "cprofile"
@@ -52,14 +54,17 @@ class HotPathResult:
         """Filtra hot-paths por porcentaje acumulativo mínimo."""
         filtered = [hp for hp in self.hot_paths if hp.cumulative_pct >= min_pct]
         return HotPathResult(
-            hot_paths=filtered, total_time=self.total_time,
-            profiler=self.profiler, entry_point=self.entry_point
+            hot_paths=filtered,
+            total_time=self.total_time,
+            profiler=self.profiler,
+            entry_point=self.entry_point,
         )
 
 
 @dataclass
 class ProfileConfig:
     """Configuración para el profiling de hot-paths."""
+
     enabled: bool = True
     profiler: str = "cprofile"
     min_cumulative_pct: float = 5.0

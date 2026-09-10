@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for LSP server in MutaLambda."""
+
 import pytest
 import sys
 from pathlib import Path
@@ -16,7 +17,7 @@ from lsp.server import (
     Range,
     CodeAction,
     InlayHint,
-    LSPMethod
+    LSPMethod,
 )
 
 
@@ -47,24 +48,24 @@ class TestLSPServer:
     def test_ext_to_language_mapping(self):
         """Test extension to language mapping."""
         server = MutaLambdaLSPServer()
-        assert server._ext_to_language('.go') == 'go'
-        assert server._ext_to_language('.py') == 'python'
-        assert server._ext_to_language('.rs') == 'rust'
-        assert server._ext_to_language('.cpp') == 'cpp'
-        assert server._ext_to_language('.c') == 'cpp'
-        assert server._ext_to_language('.unknown') is None
+        assert server._ext_to_language(".go") == "go"
+        assert server._ext_to_language(".py") == "python"
+        assert server._ext_to_language(".rs") == "rust"
+        assert server._ext_to_language(".cpp") == "cpp"
+        assert server._ext_to_language(".c") == "cpp"
+        assert server._ext_to_language(".unknown") is None
 
     def test_handle_initialize(self):
         """Test initialize request handling."""
         server = MutaLambdaLSPServer()
         msg = LSPMessage(id=1, method=LSPMethod.INITIALIZE, params={})
 
-        with patch.object(server, '_send') as mock_send:
+        with patch.object(server, "_send") as mock_send:
             server._handle_initialize(msg)
             mock_send.assert_called_once()
             response = mock_send.call_args[0][0]
             assert response.result is not None
-            assert 'capabilities' in response.result
+            assert "capabilities" in response.result
 
     def test_handle_did_open(self):
         """Test document open handling."""
@@ -73,14 +74,11 @@ class TestLSPServer:
             id=2,
             method=LSPMethod.TEXT_DOCUMENT_DID_OPEN,
             params={
-                "textDocument": {
-                    "uri": "file:///test.go",
-                    "text": "package main\nfunc main() {}"
-                }
-            }
+                "textDocument": {"uri": "file:///test.go", "text": "package main\nfunc main() {}"}
+            },
         )
 
-        with patch.object(server, '_analyze_document'):
+        with patch.object(server, "_analyze_document"):
             server._handle_did_open(msg)
             assert "file:///test.go" in server.document_store
 
@@ -92,7 +90,7 @@ class TestLSPServer:
         msg = LSPMessage(
             id=3,
             method=LSPMethod.TEXT_DOCUMENT_DID_CLOSE,
-            params={"textDocument": {"uri": "file:///test.go"}}
+            params={"textDocument": {"uri": "file:///test.go"}},
         )
         server._handle_did_close(msg)
         assert "file:///test.go" not in server.document_store
@@ -102,7 +100,7 @@ class TestLSPServer:
         server = MutaLambdaLSPServer()
         msg = LSPMessage(id=4, method=LSPMethod.SHUTDOWN)
 
-        with patch.object(server, '_send') as mock_send:
+        with patch.object(server, "_send") as mock_send:
             server._handle_shutdown(msg)
             mock_send.assert_called_once()
             response = mock_send.call_args[0][0]
@@ -113,8 +111,7 @@ class TestLSPServer:
         server = MutaLambdaLSPServer()
         msg = LSPMessage(id=5, method=LSPMethod.EXIT)
 
-        with patch.object(server, '_send'), \
-             patch('sys.exit') as mock_exit:
+        with patch.object(server, "_send"), patch("sys.exit") as mock_exit:
             server._handle_exit(msg)
             assert server._running is False
             mock_exit.assert_called_once_with(0)
@@ -122,7 +119,7 @@ class TestLSPServer:
     def test_analyze_document_empty(self):
         """Test analyzing empty document."""
         server = MutaLambdaLSPServer()
-        with patch.object(server, '_send'):
+        with patch.object(server, "_send"):
             server._analyze_document("file:///empty.go")
 
     def test_run_fast_analysis_python(self):
@@ -136,7 +133,7 @@ class TestLSPServer:
     def test_run_fast_analysis_go(self):
         """Test fast analysis on Go code."""
         server = MutaLambdaLSPServer()
-        source = "package main\nfunc hello() string { return \"hello\" }"
+        source = 'package main\nfunc hello() string { return "hello" }'
 
         diagnostics = server._run_fast_analysis(source, "go")
         assert isinstance(diagnostics, list)
@@ -156,14 +153,13 @@ class TestLSPServer:
         server = MutaLambdaLSPServer()
         msg = LSPMessage(id=1, method="test", result={"data": "value"})
 
-        with patch('sys.stdout.write') as mock_write, \
-             patch('sys.stdout.flush'):
+        with patch("sys.stdout.write") as mock_write, patch("sys.stdout.flush"):
             server._send(msg)
             mock_write.assert_called_once()
             # Verify JSON output
             call_args = mock_write.call_args[0][0]
-            assert 'jsonrpc' in call_args
-            assert '2.0' in call_args
+            assert "jsonrpc" in call_args
+            assert "2.0" in call_args
 
 
 class TestLSPDataClasses:
@@ -189,7 +185,7 @@ class TestLSPDataClasses:
             range=Range(Position(0, 0), Position(0, 5)),
             severity=2,
             code="WARN",
-            message="Warning message"
+            message="Warning message",
         )
         assert diag.severity == 2
         assert diag.code == "WARN"
@@ -205,11 +201,7 @@ class TestLSPDataClasses:
 
     def test_inlay_hint_creation(self):
         """Test InlayHint creation."""
-        hint = InlayHint(
-            position=Position(line=0, character=5),
-            label="int",
-            kind=2
-        )
+        hint = InlayHint(position=Position(line=0, character=5), label="int", kind=2)
         assert hint.position.line == 0
         assert hint.label == "int"
         assert hint.kind == 2

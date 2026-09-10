@@ -18,4 +18,3 @@ def discover_generated_mutators() -> Dict[str, Callable]:
         if callable(mutate_fn):
             discovered[module_info.name] = mutate_fn
     return discovered
-

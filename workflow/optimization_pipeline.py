@@ -11,6 +11,7 @@ FASES:
     5. comparison         — comparison.json with Mann-Whitney U
     6. explainability     — interpretability.py + SARIF + markdown
 """
+
 from __future__ import annotations
 
 import json
@@ -80,10 +81,17 @@ def phase_fingerprint(cfg: PipelineConfig) -> Dict[str, Any]:
 
 def phase_baseline(cfg: PipelineConfig) -> Dict[str, Any]:
     out = _run(
-        [sys.executable, "-m", "benchmarking",
-         "--target", str(cfg.target_file),
-         "--profile", cfg.profile,
-         "--output", str(cfg.workdir / "baseline.json")],
+        [
+            sys.executable,
+            "-m",
+            "benchmarking",
+            "--target",
+            str(cfg.target_file),
+            "--profile",
+            cfg.profile,
+            "--output",
+            str(cfg.workdir / "baseline.json"),
+        ],
         cwd=cfg.target_file.parent,
     )
     info = {"stdout": out, "report": str(cfg.workdir / "baseline.json")}
@@ -179,6 +187,7 @@ def run_pipeline(cfg: Optional[PipelineConfig] = None) -> PipelineReport:
 
 def build_arg_parser():
     import argparse
+
     ap = argparse.ArgumentParser(description="Run the 6-phase optimization pipeline")
     ap.add_argument("--target-file", default="examples/target.py")
     ap.add_argument("--profile", default="quick")
@@ -198,7 +207,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         seed=args.seed,
     )
     report = run_pipeline(cfg)
-    print(json.dumps({"ok": report.ok, "elapsed": report.elapsed, "phases": list(report.phases)}, indent=2))
+    print(
+        json.dumps(
+            {"ok": report.ok, "elapsed": report.elapsed, "phases": list(report.phases)}, indent=2
+        )
+    )
     return 0 if report.ok else 1
 
 

@@ -218,17 +218,18 @@ def compare_api(
 def fingerprint_from_callable(fn: Any) -> FunctionFingerprint:
     """Build fingerprint from a live Python callable (optional helper)."""
     sig = inspect.signature(fn)
-    params = [
-        p
-        for p in sig.parameters.values()
-        if p.name not in {"self", "cls"}
-    ]
+    params = [p for p in sig.parameters.values() if p.name not in {"self", "cls"}]
     return FunctionFingerprint(
         name=getattr(fn, "__name__", "anonymous"),
-        arg_names=tuple(p.name for p in params if p.kind in (
-            inspect.Parameter.POSITIONAL_ONLY,
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        )),
+        arg_names=tuple(
+            p.name
+            for p in params
+            if p.kind
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            )
+        ),
         defaults_count=sum(1 for p in params if p.default is not inspect.Parameter.empty),
         has_varargs=any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in params),
         has_varkw=any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params),

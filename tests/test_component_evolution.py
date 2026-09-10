@@ -14,7 +14,6 @@ from component_evolution import (
     ComponentMutator,
 )
 
-
 SAMPLE_CODE = """\
 def add(a: int, b: int) -> int:
     return a + b
@@ -35,6 +34,7 @@ def foo(x: int) -> int:
 
 # ── test_analyze_simple_module ────────────────────────────────────────────────
 
+
 def test_analyze_simple_module():
     """Parse a module with 2+ functions and build a component graph."""
     extractor = ModuleExtractor()
@@ -51,6 +51,7 @@ def test_analyze_simple_module():
 
 # ── test_extract_candidate_found ──────────────────────────────────────────────
 
+
 def test_extract_candidate_found():
     """Find extractable function candidates in a module with multiple functions."""
     extractor = ModuleExtractor()
@@ -64,6 +65,7 @@ def test_extract_candidate_found():
 
 
 # ── test_compute_coupling ─────────────────────────────────────────────────────
+
 
 def test_compute_coupling():
     """Calculate CBO correctly for a graph with known edges."""
@@ -102,6 +104,7 @@ def test_compute_coupling():
 
 # ── test_interface_crossover ──────────────────────────────────────────────────
 
+
 def test_interface_crossover():
     """Crossover produces a valid interface spec with mixed inputs."""
     spec_a = InterfaceSpec(
@@ -135,6 +138,7 @@ def test_interface_crossover():
 
 # ── test_interface_mutate ─────────────────────────────────────────────────────
 
+
 def test_interface_mutate():
     """Mutation produces a valid mutated interface."""
     spec = InterfaceSpec(
@@ -158,6 +162,7 @@ def test_interface_mutate():
 
 
 # ── test_component_quality_score ──────────────────────────────────────────────
+
 
 def test_component_quality_score():
     """Quality score calculation respects cohesion and coupling weights."""
@@ -187,6 +192,7 @@ def test_component_quality_score():
 
 
 # ── test_component_mutator_split ──────────────────────────────────────────────
+
 
 def test_component_mutator_split():
     """Split a high-complexity component into two."""
@@ -224,6 +230,7 @@ def test_component_mutator_split_low_complexity():
 
 
 # ── test_component_mutator_merge ──────────────────────────────────────────────
+
 
 def test_component_mutator_merge():
     """Merge two dependent components."""
@@ -271,12 +278,16 @@ def test_component_mutator_merge_no_relation():
 
 # ── test_coupling_level ───────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("score,expected", [
-    (0.0, CouplingLevel.LOW),
-    (0.2, CouplingLevel.LOW),
-    (0.5, CouplingLevel.MEDIUM),
-    (0.7, CouplingLevel.HIGH),
-    (0.9, CouplingLevel.CRITICAL),
-])
+
+@pytest.mark.parametrize(
+    "score,expected",
+    [
+        (0.0, CouplingLevel.LOW),
+        (0.2, CouplingLevel.LOW),
+        (0.5, CouplingLevel.MEDIUM),
+        (0.7, CouplingLevel.HIGH),
+        (0.9, CouplingLevel.CRITICAL),
+    ],
+)
 def test_coupling_level_from_score(score: float, expected: CouplingLevel):
     assert CouplingLevel.from_score(score) == expected

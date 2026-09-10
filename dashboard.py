@@ -35,6 +35,7 @@ except ImportError:
 
 # ── Dashboard State ──────────────────────────────────────────────────
 
+
 class DashboardState:
     """
     Shared state between the evolution engine and the Streamlit dashboard.
@@ -88,6 +89,7 @@ class DashboardState:
 
 # ── Dashboard Renderer ────────────────────────────────────────────────
 
+
 class DashboardRenderer:
     """
     Renders the Streamlit HITL dashboard.
@@ -120,22 +122,13 @@ class DashboardRenderer:
         with col1:
             st.metric("Generation", len(self.state.gen_numbers))
         with col2:
-            current_best = (
-                self.state.global_best[-1]
-                if self.state.global_best else 0.0
-            )
+            current_best = self.state.global_best[-1] if self.state.global_best else 0.0
             st.metric("Best Score", f"{current_best:.4f}")
         with col3:
-            current_div = (
-                self.state.diversity[-1]
-                if self.state.diversity else 0.0
-            )
+            current_div = self.state.diversity[-1] if self.state.diversity else 0.0
             st.metric("Diversity", f"{current_div:.3f}")
         with col4:
-            p_size = (
-                self.state.pareto_size[-1]
-                if self.state.pareto_size else 0
-            )
+            p_size = self.state.pareto_size[-1] if self.state.pareto_size else 0
             st.metric("Pareto Frontier", p_size)
 
         # ── Charts ────────────────────────────────────────────────
@@ -166,26 +159,33 @@ class DashboardRenderer:
         """Global best fitness over time."""
         if self.state.gen_numbers:
             import pandas as pd
-            data = pd.DataFrame({
-                "Generation": list(self.state.gen_numbers),
-                "Best Score": list(self.state.global_best),
-            })
+
+            data = pd.DataFrame(
+                {
+                    "Generation": list(self.state.gen_numbers),
+                    "Best Score": list(self.state.global_best),
+                }
+            )
             st.line_chart(data.set_index("Generation"), use_container_width=True)
 
     def _render_diversity_chart(self):
         """Diversity over time."""
         if self.state.diversity:
             import pandas as pd
-            data = pd.DataFrame({
-                "Generation": list(self.state.gen_numbers),
-                "Diversity": list(self.state.diversity),
-            })
+
+            data = pd.DataFrame(
+                {
+                    "Generation": list(self.state.gen_numbers),
+                    "Diversity": list(self.state.diversity),
+                }
+            )
             st.line_chart(data.set_index("Generation"), use_container_width=True)
 
     def _render_island_charts(self, agent):
         """Per-island best scores."""
         if self.state.island_bests:
             import pandas as pd
+
             data = {}
             for isl_id, scores in self.state.island_bests.items():
                 data[f"Island {isl_id}"] = list(scores)
@@ -197,10 +197,13 @@ class DashboardRenderer:
         """Pareto frontier size over time."""
         if self.state.pareto_size:
             import pandas as pd
-            data = pd.DataFrame({
-                "Generation": list(self.state.gen_numbers),
-                "Pareto Frontier": list(self.state.pareto_size),
-            })
+
+            data = pd.DataFrame(
+                {
+                    "Generation": list(self.state.gen_numbers),
+                    "Pareto Frontier": list(self.state.pareto_size),
+                }
+            )
             st.line_chart(data.set_index("Generation"), use_container_width=True)
 
     def _render_hitl_panel(self, agent):
@@ -219,14 +222,12 @@ class DashboardRenderer:
         st.divider()
 
         st.subheader("🔬 Variant Review")
-        if agent and hasattr(agent, 'islands'):
+        if agent and hasattr(agent, "islands"):
             for island in agent.islands[:2]:  # show first 2 islands
                 if island.population:
                     best = island.local_best
                     if best:
-                        with st.expander(
-                            f"Island {island.id} — Best (score={best.score:.4f})"
-                        ):
+                        with st.expander(f"Island {island.id} — Best (score={best.score:.4f})"):
                             st.code(best.code, language="python")
 
                             col_a, col_r = st.columns(2)
@@ -271,6 +272,7 @@ class DashboardRenderer:
 
 # ── Lightweight Dashboard (no Streamlit dependency) ──────────────────
 
+
 def print_console_dashboard(
     gen: int,
     best_score: float,
@@ -284,10 +286,7 @@ def print_console_dashboard(
 
     Prints a compact status line with generation metrics.
     """
-    islands_str = " | ".join(
-        f"I{isl}:{score:.2f}"
-        for isl, score in sorted(island_scores.items())
-    )
+    islands_str = " | ".join(f"I{isl}:{score:.2f}" for isl, score in sorted(island_scores.items()))
     hint_str = f" 💡{hints_available}" if hints_available > 0 else ""
     print(
         f"\r🧬 Gen {gen:4d} | Best={best_score:+.4f} | "
@@ -299,6 +298,7 @@ def print_console_dashboard(
 
 
 # ── HITL Integration for MutaLambdaAgent ────────────────────────────
+
 
 def integrate_hitl(
     agent: Any,
@@ -328,9 +328,9 @@ def integrate_hitl(
                     best_score=float(payload.get("best_score", float("-inf"))),
                     diversity=float(payload.get("diversity", 0.0)),
                     pareto_frontier_size=int(payload.get("pareto_size", 0)),
-                    island_data={int(k): float(v) for k, v in island_data.items()}
-                    if island_data
-                    else None,
+                    island_data=(
+                        {int(k): float(v) for k, v in island_data.items()} if island_data else None
+                    ),
                 )
             elif event.name == RUN_COMPLETED and console:
                 print_console_dashboard(

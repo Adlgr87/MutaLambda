@@ -1,22 +1,23 @@
 # Core runtime dependencies for MutaLambda.
 # Single source of truth for extras: see pyproject.toml [project.optional-dependencies].
-msgpack
-numpy
-pydantic>=2
-pyyaml
-requests
+# ML-007: bounded ranges mirror pyproject.toml; exact pins live in uv.lock.
+msgpack>=1.1,<2
+numpy>=2.0,<3
+pydantic>=2.13,<3
+pyyaml>=6.0,<7
+requests>=2.31,<3
 
 # Core extras (install one or more):
 #   pip install -e .[core]          # numpy, pydantic, etc. (this file)
-#   pip install -e .[uast]          # faiss-cpu, sentence-transformers
-#   pip install -e .[archive]       # pdfplumber, pandas, openpyxl, Pillow
+#   pip install -e .[uast]          # tree-sitter grammars
+#   pip install -e .[archive]       # faiss-cpu, sentence-transformers
 #   pip install -e .[cli]           # click, rich
-#   pip install -e .[dashboard]
-#   pip install -e .[scientific]    # scipy
-#   pip install -e .[test]          # pytest, pytest-asyncio, etc.
+#   pip install -e .[dashboard]     # streamlit
+#   pip install -e .[scientific]    # z3, pdfplumber, pandas, openpyxl, Pillow
+#   pip install -e .[dev]           # pytest, hypothesis, ruff, mypy
 
 # Test suite.
-pytest>=7.0
+pytest>=7.0,<10
 
 # Formal verification support for property_testing.py.
-z3-solver
+z3-solver>=4.12,<6

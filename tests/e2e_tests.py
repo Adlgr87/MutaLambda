@@ -23,7 +23,6 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-
 # Prefer package install; fall back to repo root for uninstalled checkouts.
 import sys
 
@@ -213,7 +212,6 @@ def run_e2e(
         timeout_sec=3.0,
     )
 
-
     start = time.perf_counter()
     best = agent.run(task="")
     elapsed = time.perf_counter() - start
@@ -240,19 +238,17 @@ def main() -> None:
     ap.add_argument("--serial", action="store_true", help="Forzar parallelism=1 en el sandbox")
     args = ap.parse_args()
 
-
     # 1) E2E bueno: debería converger a compute_sum correcto.
     out_good = run_e2e(llm_mode="good", fast=args.fast, use_archive=False, serial=args.serial)
-
 
     # 2) E2E malo: puede fallar pero el flujo no debe romperse.
     out_bad = run_e2e(llm_mode="bad", fast=args.fast, use_archive=False, serial=args.serial)
 
-
     # 3) E2E syntax_error: fuerza fallback AST (aunque con seed+AST mutator no garantizamos acierto,
     #    lo importante es que no se rompe el pipeline end-to-end).
-    out_syntax = run_e2e(llm_mode="syntax_error", fast=args.fast, use_archive=False, serial=args.serial)
-
+    out_syntax = run_e2e(
+        llm_mode="syntax_error", fast=args.fast, use_archive=False, serial=args.serial
+    )
 
     print("\n[E2E RESULTS] SUMMARY")
     for k, out in [("good", out_good), ("bad", out_bad), ("syntax_error", out_syntax)]:
@@ -273,15 +269,10 @@ def main() -> None:
     # Fase 6: con NSGA-II y FitnessVector, la latencia variable puede
     # causar pequeñas diferencias. Verificamos que ambas pipelines
     # producen scores razonables (no -inf).
-    assert final_good > -1e4, (
-        f"E2E good pipeline score anómalo: {final_good}"
-    )
-    assert final_bad > -1e5, (
-        f"E2E bad pipeline score anómalo: {final_bad}"
-    )
+    assert final_good > -1e4, f"E2E good pipeline score anómalo: {final_good}"
+    assert final_bad > -1e5, f"E2E bad pipeline score anómalo: {final_bad}"
     print(f"  [E2E] good={final_good:.4f}  bad={final_bad:.4f}")
 
 
 if __name__ == "__main__":
     main()
-

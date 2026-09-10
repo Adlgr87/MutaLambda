@@ -126,16 +126,14 @@ class EvolutionReport:
         sin lanzar KeyError.
         """
         # Safe metadata (optional extensions)
-        cache_stats = self.metadata.get("cache_stats", {}) if isinstance(self.metadata, dict) else {}
+        cache_stats = (
+            self.metadata.get("cache_stats", {}) if isinstance(self.metadata, dict) else {}
+        )
         compression_stats = (
-            self.metadata.get("lineage_compression", {})
-            if isinstance(self.metadata, dict)
-            else {}
+            self.metadata.get("lineage_compression", {}) if isinstance(self.metadata, dict) else {}
         )
         tipping_alerts = (
-            self.metadata.get("tipping_alerts", [])
-            if isinstance(self.metadata, dict)
-            else []
+            self.metadata.get("tipping_alerts", []) if isinstance(self.metadata, dict) else []
         )
 
         # Keep stable top-level fields for the dashboard

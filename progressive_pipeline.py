@@ -41,6 +41,7 @@ logger = logging.getLogger("MutaLambda")
 
 # ── Regression-test synthesis ──────────────────────────────────────────────
 
+
 def _json_safe(value: Any) -> Any:
     """Convert a value into something JSON-serializable for test cases."""
     try:
@@ -152,8 +153,7 @@ def synthesize_regression_tests(code: str, max_cases_per_func: int = 3) -> List[
         return []
 
     funcs = [
-        n for n in ast.walk(tree)
-        if isinstance(n, ast.FunctionDef) and not n.name.startswith("_")
+        n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and not n.name.startswith("_")
     ]
     if not funcs:
         return []
@@ -176,20 +176,24 @@ def synthesize_regression_tests(code: str, max_cases_per_func: int = 3) -> List[
             except Exception:
                 # Skip inputs the baseline itself rejects.
                 continue
-            cases.append({
-                "function": fn.name,
-                "args": [_json_safe(a) for a in args],
-                "expected": _json_safe(expected),
-                "comparison": _comparison_for(expected),
-            })
+            cases.append(
+                {
+                    "function": fn.name,
+                    "args": [_json_safe(a) for a in args],
+                    "expected": _json_safe(expected),
+                    "comparison": _comparison_for(expected),
+                }
+            )
     return cases
 
 
 # ── Pipeline result ────────────────────────────────────────────────────────
 
+
 @dataclass
 class PipelineResult:
     """Result of the progressive pipeline."""
+
     success: bool
     phase_reached: str
     original_code: str
@@ -238,16 +242,19 @@ class PipelineResult:
 
 # ── Pipeline ───────────────────────────────────────────────────────────────
 
+
 class ProgressivePipeline:
     """Main pipeline for MutaLambda 2.0 optimization workflow."""
 
-    def __init__(self,
-                 llm_fn: Optional[Callable[[str], str]] = None,
-                 test_cases: Optional[List[Dict]] = None,
-                 timeout_sec: float = 5.0,
-                 min_improvement: float = 0.15,
-                 fast_variants: int = 5,
-                 evolve_config: Any = None):
+    def __init__(
+        self,
+        llm_fn: Optional[Callable[[str], str]] = None,
+        test_cases: Optional[List[Dict]] = None,
+        timeout_sec: float = 5.0,
+        min_improvement: float = 0.15,
+        fast_variants: int = 5,
+        evolve_config: Any = None,
+    ):
         self.llm_fn = llm_fn
         self.test_cases = list(test_cases or [])
         self.timeout_sec = timeout_sec
@@ -352,6 +359,7 @@ class ProgressivePipeline:
         """FASE 0: Discover hotspots in code."""
         try:
             from hotspot_profiler import HotspotProfiler
+
             profiler = HotspotProfiler(min_time_threshold=0.05)
             hotspots = profiler.extract_hotspots(code)
 
@@ -371,6 +379,7 @@ class ProgressivePipeline:
         """FASE 1: Synthesize Hypothesis property specs for hotspots."""
         try:
             from test_synthesizer import TestSynthesizer
+
             synthesizer = TestSynthesizer()
             specs = synthesizer.synthesize_tests(code)
 
@@ -400,6 +409,7 @@ class ProgressivePipeline:
         """Lazily create a real :class:`SandboxEvaluator`."""
         if self._evaluator is None:
             from sandbox import SandboxEvaluator
+
             self._evaluator = SandboxEvaluator(
                 test_cases=self._resolved_test_cases,
                 timeout_sec=self.timeout_sec,
@@ -451,8 +461,11 @@ class ProgressivePipeline:
             logger.info(f"Generated {len(variants)} unique variants")
 
             if not variants:
-                return {"success": False, "reason": "no_variants",
-                        "variants_evaluated": variants_evaluated}
+                return {
+                    "success": False,
+                    "reason": "no_variants",
+                    "variants_evaluated": variants_evaluated,
+                }
 
             evaluator = self._ensure_evaluator()
             results = evaluator.evaluate_batch(variants)
@@ -481,16 +494,23 @@ class ProgressivePipeline:
                 logger.info(
                     "Fast mode found a correct variant but improvement %.1f%% "
                     "was below threshold %.1f%%",
-                    improvement * 100, self.min_improvement * 100,
+                    improvement * 100,
+                    self.min_improvement * 100,
                 )
 
-            return {"success": False, "reason": "no_improvement",
-                    "variants_evaluated": variants_evaluated}
+            return {
+                "success": False,
+                "reason": "no_improvement",
+                "variants_evaluated": variants_evaluated,
+            }
 
         except Exception as e:
             logger.error(f"Fast mode error: {e}")
-            return {"success": False, "reason": f"error:{e}",
-                    "variants_evaluated": variants_evaluated}
+            return {
+                "success": False,
+                "reason": f"error:{e}",
+                "variants_evaluated": variants_evaluated,
+            }
 
     # ── FASE 3: Deep Evolution ────────────────────────────────────────────
 
@@ -530,7 +550,9 @@ class ProgressivePipeline:
 
         logger.info(
             "Deep evolution: %d islands × %d generations × pop %d",
-            config.num_islands, config.generations, config.population_size,
+            config.num_islands,
+            config.generations,
+            config.population_size,
         )
 
         agent = MutaLambdaAgent(
@@ -581,10 +603,10 @@ class ProgressivePipeline:
             logger.info(
                 "Deep evolution produced a correct candidate but improvement "
                 "%.1f%% was below threshold %.1f%%",
-                improvement * 100, self.min_improvement * 100,
+                improvement * 100,
+                self.min_improvement * 100,
             )
-            return {"success": False, "reason": "no_improvement",
-                    "improvement": improvement}
+            return {"success": False, "reason": "no_improvement", "improvement": improvement}
 
         return {
             "success": True,
@@ -636,14 +658,16 @@ Return ONLY the optimized Python code, no explanations."""
 
         memory_gain = 0.0
         if baseline.memory_peak_mb > 0:
-            memory_gain = (baseline.memory_peak_mb - optimized.memory_peak_mb) / baseline.memory_peak_mb
+            memory_gain = (
+                baseline.memory_peak_mb - optimized.memory_peak_mb
+            ) / baseline.memory_peak_mb
 
         return 0.7 * latency_gain + 0.3 * memory_gain
 
 
-def run_progressive_optimization(code: str,
-                                 llm_fn: Callable[[str], str] = None,
-                                 mode: str = "auto") -> PipelineResult:
+def run_progressive_optimization(
+    code: str, llm_fn: Callable[[str], str] = None, mode: str = "auto"
+) -> PipelineResult:
     """Convenience function to run the progressive pipeline."""
     pipeline = ProgressivePipeline(llm_fn=llm_fn)
     return pipeline.run(code, mode=mode)

@@ -1,4 +1,5 @@
 """Tests multi-file (MF-*)."""
+
 from muta_ext.uast.call_graph import extract_call_graph_multi_file, extract_call_graph_from_source
 import pytest
 
@@ -10,7 +11,9 @@ class TestMultiFile:
         (tmp_path / "a.py").write_text("from b import h\ndef f(n): return h(n)")
         (tmp_path / "b.py").write_text("def h(n): return n + 1")
         g = extract_call_graph_multi_file([str(tmp_path / "a.py"), str(tmp_path / "b.py")])
-        assert "f" in {n.name for n in g.nodes.values()} and "h" in {n.name for n in g.nodes.values()}
+        assert "f" in {n.name for n in g.nodes.values()} and "h" in {
+            n.name for n in g.nodes.values()
+        }
 
     def test_mf02_explicit(self, tmp_path):
         (tmp_path / "x.py").write_text("def f(): return 1")

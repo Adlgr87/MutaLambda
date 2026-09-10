@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from comparison import compare_values
+from secure_exec import load_function
 
 
 @dataclass
@@ -58,12 +59,10 @@ def _call(fn: Callable, args: list, kwargs: dict) -> Tuple[Any, Optional[BaseExc
 
 
 def _load_function(code: str, function_name: str) -> Callable:
-    namespace: Dict[str, Any] = {"__name__": "__mutalambda_diff__"}
-    exec(compile(code, "<diff_candidate>", "exec"), namespace, namespace)  # noqa: S102
-    fn = namespace.get(function_name)
-    if not callable(fn):
-        raise NameError(f"function not found: {function_name}")
-    return fn
+    # ML-001: dynamic code loading is centralized in secure_exec and now fails
+    # closed via the AST security scan + restricted builtins instead of a bare
+    # in-process ``exec``.
+    return load_function(code, function_name)
 
 
 def differential_test(
@@ -81,9 +80,7 @@ def differential_test(
     result = DifferentialResult(equivalent=True)
     if not test_cases:
         result.equivalent = False
-        result.cases.append(
-            CaseDiff(index=-1, ok=False, message="no_test_cases")
-        )
+        result.cases.append(CaseDiff(index=-1, ok=False, message="no_test_cases"))
         return result
 
     # Infer function name if uniform across cases.
@@ -101,17 +98,13 @@ def differential_test(
             candidate_fns[name] = _load_function(candidate_code, name)
     except Exception as exc:
         result.equivalent = False
-        result.cases.append(
-            CaseDiff(index=-1, ok=False, message=f"load_error:{exc}")
-        )
+        result.cases.append(CaseDiff(index=-1, ok=False, message=f"load_error:{exc}"))
         return result
 
     for idx, tc in enumerate(test_cases):
         if not isinstance(tc, dict) or "function" not in tc:
             # Skip non-declarative cases rather than silently treating as equal.
-            result.cases.append(
-                CaseDiff(index=idx, ok=False, message="unsupported_case_shape")
-            )
+            result.cases.append(CaseDiff(index=idx, ok=False, message="unsupported_case_shape"))
             result.mismatches += 1
             result.equivalent = False
             continue
@@ -143,8 +136,7 @@ def differential_test(
             if type(b_err) is not type(c_err):
                 case.ok = False
                 case.message = (
-                    f"exception_type_mismatch "
-                    f"{type(b_err).__name__} vs {type(c_err).__name__}"
+                    f"exception_type_mismatch " f"{type(b_err).__name__} vs {type(c_err).__name__}"
                 )
             else:
                 case.message = "both_raised_same_type"

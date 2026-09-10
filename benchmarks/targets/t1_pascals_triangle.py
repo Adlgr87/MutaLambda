@@ -14,8 +14,13 @@ source = """def pascals_triangle(rows):
     return triangle
 """
 test_cases = [
-    {"function": "pascals_triangle", "args": [4], "expected": [[1], [1, 1], [1, 2, 1], [1, 3, 3, 1]], "comparison": "equal"},
+    {
+        "function": "pascals_triangle",
+        "args": [4],
+        "expected": [[1], [1, 1], [1, 2, 1], [1, 3, 3, 1]],
+        "comparison": "equal",
+    },
     {"function": "pascals_triangle", "args": [1], "expected": [[1]], "comparison": "equal"},
 ]
-invariants = ['out[0] == [1] if out else True']
+invariants = ["out[0] == [1] if out else True"]
 input_strategy = "st.integers(min_value=0, max_value=12)"

@@ -11,49 +11,52 @@ requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Adlgr87" }]
 dependencies = [
-  "numpy",
-  "msgpack",
-  "pydantic>=2",
-  "pyyaml",
-  "requests",
+  # ML-007: bounded ranges (upper pins) so upstream minor/major bumps cannot
+  # silently change results or introduce CVEs. Exact versions stay locked in
+  # uv.lock and are validated by `uv sync --locked` in CI.
+  "numpy>=2.0,<3",
+  "msgpack>=1.1,<2",
+  "pydantic>=2.13,<3",
+  "pyyaml>=6.0,<7",
+  "requests>=2.31,<3",
 ]
 
 [project.optional-dependencies]
 core = [
-  "numpy",
-  "pydantic>=2",
-  "pyyaml",
-  "requests",
+  "numpy>=2.0,<3",
+  "pydantic>=2.13,<3",
+  "pyyaml>=6.0,<7",
+  "requests>=2.31,<3",
 ]
 uast = [
-  "tree-sitter>=0.21",
-  "tree-sitter-go>=0.23.4",
-  "tree-sitter-rust>=0.21",
-  "tree-sitter-cpp>=0.22",
+  "tree-sitter>=0.21,<0.27",
+  "tree-sitter-go>=0.23.4,<0.26",
+  "tree-sitter-rust>=0.21,<0.25",
+  "tree-sitter-cpp>=0.22,<0.25",
 ]
 archive = [
-  "faiss-cpu",
-  "sentence-transformers",
+  "faiss-cpu>=1.13,<2",
+  "sentence-transformers>=5,<6",
 ]
 cli = [
-  "click",
-  "rich",
+  "click>=8,<9",
+  "rich>=13,<16",
 ]
 dashboard = [
-  "streamlit",
+  "streamlit>=1.50,<2",
 ]
 scientific = [
-  "z3-solver",
-  "pdfplumber",
-  "pandas",
-  "openpyxl",
-  "Pillow",
+  "z3-solver>=4.12,<6",
+  "pdfplumber>=0.11,<0.12",
+  "pandas>=2,<3",
+  "openpyxl>=3.1,<4",
+  "Pillow>=10,<13",
 ]
 dev = [
-  "pytest>=7",
-  "hypothesis",
-  "ruff",
-  "mypy",
+  "pytest>=7,<10",
+  "hypothesis>=6,<7",
+  "ruff>=0.6,<1",
+  "mypy>=1,<2",
 ]
 all = [
   "mutalambda[core,archive,cli,dashboard,scientific,dev]",
@@ -94,7 +97,6 @@ py-modules = [
   "interpretability",
   "dashboard",
 
-  "models",
   "gpu_optimizer",
   "evaluation_service",
   "runners",

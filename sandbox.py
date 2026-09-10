@@ -37,6 +37,7 @@ from runners import (
     ContainerRunner,
     MicroVMRunner,
     SubprocessRunner,
+    check_runner_availability,
     compare_values,
     create_runner,
     scan_code_security,
@@ -138,6 +139,23 @@ class SandboxEvaluator:
         self.runner_mode = runner_mode
         self.allow_expression_eval = allow_expression_eval
         self.enforce_ast_scan = enforce_ast_scan
+
+        # ML-002: fail-closed isolation.
+        #  1) Hardened modes must have their tooling available before any
+        #     evaluation can run (container engine / bwrap).
+        #  2) Ops can force the failure of the local-dev 'subprocess' mode by
+        #     setting MUTALAMBDA_REQUIRE_ISOLATION=1 (e.g. in production).
+        if os.getenv("MUTALAMBDA_REQUIRE_ISOLATION", "0") == "1" and runner_mode in (
+            "subprocess",
+            "local",
+            "dev",
+        ):
+            raise RuntimeError(
+                "MUTALAMBDA_REQUIRE_ISOLATION=1 forbids runner_mode='subprocess' "
+                "(no isolation). Use runner_mode='container' or 'microvm'."
+            )
+        if runner_mode in ("container", "microvm"):
+            check_runner_availability(runner_mode)
 
         if os.getenv("MUTALAMBDA_E2E_SERIAL", "0") == "1":
             self.parallelism = 1

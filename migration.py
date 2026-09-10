@@ -6,12 +6,12 @@ import copy
 import logging
 import random
 import threading
-import types
 from typing import Dict, List, Optional, TYPE_CHECKING
 
 from island import Island
 
 if TYPE_CHECKING:
+    from metrics_exporter import MetricsRegistry  # noqa: F401
     from muta_lambda import SolutionArchive
 from models import Individual
 
@@ -75,7 +75,7 @@ class MigrationBus:
             result = [i for i in ids if i != island_id]
         elif self.topology == "mesh":
             n = len(ids)
-            cols = max(1, int(n ** 0.5))
+            cols = max(1, int(n**0.5))
             result = self._mesh_neighbors(island_id, ids, cols)
         elif self.topology == "spatial_grid":
             try:
@@ -88,8 +88,20 @@ class MigrationBus:
                 result = spatial.neighbors(island_id, ids)
             except Exception:
                 n = len(ids)
-                cols = max(1, int(n ** 0.5))
+                cols = max(1, int(n**0.5))
                 result = self._mesh_neighbors(island_id, ids, cols)
+        elif self.topology == "fitness_gradient":
+            # Fitness-directed neighbor selection. Falls back to an empty
+            # neighbor set when the selector has not been configured.
+            selector = self._fitness_directed_migration
+            if selector is None:
+                result = []
+            else:
+                targets = selector.select_targets(
+                    self.islands.get(island_id, None),
+                    {iid: self.islands[iid] for iid in ids},
+                )
+                result = [t.id for t in targets]
         else:
             # Random topology is intentionally dynamic and never cached.
             candidates = [i for i in ids if i != island_id]
@@ -101,9 +113,7 @@ class MigrationBus:
         self._cache_topology_version = self._topology_version
         return result
 
-    def _mesh_neighbors(
-        self, island_id: int, ids: List[int], cols: int
-    ) -> List[int]:
+    def _mesh_neighbors(self, island_id: int, ids: List[int], cols: int) -> List[int]:
         """Calcula vecinos en grid 2D para topología mesh."""
         idx = ids.index(island_id)
         row, col = divmod(idx, cols)
@@ -180,7 +190,10 @@ class MigrationBus:
 
             logger.debug(
                 "Island %d staged %d migrants to %s (deferred=%s).",
-                island_id, len(migrants), neighbors, deferred,
+                island_id,
+                len(migrants),
+                neighbors,
+                deferred,
             )
             return sent
 
@@ -198,10 +211,7 @@ class MigrationBus:
         if archive is None or count == len(island.population):
             return island.rng.sample(island.population, count)
         # Rank the source island's population by archive novelty (descending).
-        scored = [
-            (i, archive.novelty_score(i.code, k=5))
-            for i in island.population
-        ]
+        scored = [(i, archive.novelty_score(i.code, k=5)) for i in island.population]
         scored.sort(key=lambda t: t[1], reverse=True)
         top = [ind for ind, _ in scored[: len(scored)]]
         return island.rng.sample(top, count)
@@ -228,9 +238,7 @@ class MigrationBus:
             # Degrade gracefully to the source order if distance scoring fails.
             return list(migrants)
 
-    def stage_all_migrations(
-        self, generation: int, *, deferred: bool = True, archive=None
-    ) -> int:
+    def stage_all_migrations(self, generation: int, *, deferred: bool = True, archive=None) -> int:
         """Stage migrations for every registered island (post-barrier).
 
         ``archive`` is forwarded to :meth:`stage_migration` for diversity-aware
@@ -240,9 +248,7 @@ class MigrationBus:
         with self._lock:
             ids = list(self.islands.keys())
         for island_id in ids:
-            total += self.stage_migration(
-                island_id, generation, deferred=deferred, archive=archive
-            )
+            total += self.stage_migration(island_id, generation, deferred=deferred, archive=archive)
         return total
 
     def get_global_best(self) -> Optional[Individual]:
@@ -259,6 +265,7 @@ class MigrationBus:
 # ---------------------------------------------------------------------------
 # FASE 1: Fitness-Directed Migration (Migration Plan v2)
 # ---------------------------------------------------------------------------
+
 
 class FitnessDirectedMigration:
     """Migración basada en gradiente de fitness + diversidad genética.
@@ -438,15 +445,15 @@ def _get_migration_strategy(
     # Lazy import to avoid circular dependencies
     try:
         from .migration import FitnessDirectedMigration  # type: ignore[no-redef]
+
         return FitnessDirectedMigration()
     except ImportError:
         return None
 
 
-MigrationBus._fitness_directed_migration: Optional[FitnessDirectedMigration] = (  # type: ignore[assignment]
-
-
-)
+MigrationBus._fitness_directed_migration: Optional[
+    FitnessDirectedMigration
+] = ()  # type: ignore[assignment]
 
 
 def set_fitness_directed_migration(config: Optional[Dict] = None) -> None:
@@ -477,50 +484,17 @@ def _validate_topology_fitness_directed(self) -> bool:
     return self._topology == "fitness_gradient"
 
 
-# Modify the _get_neighbors method to support fitness_gradient topology
-# We'll wrap the original method and add support
-
-_original_get_neighbors = MigrationBus._get_neighbors
-
-
-def _get_neighbors_fitness_gradient(self, island_id: int) -> List[int]:
-    """_get_neighbors implementation for fitness_gradient topology.
-
-    Instead of geometric neighbors, returns islands with highest migration score.
-    """
-    ids = sorted(self.islands.keys())
-    if len(ids) < 2:
-        return []
-
-    # Use FitnessDirectedMigration to select targets
-    if self._fitness_directed_migration is None:
-        return []
-
-    # Select top targets (we'll pick 2 targets by default)
-    all_ids = list(self.islands.keys())
-    targets = self._fitness_directed_migration.select_targets(
-        self.islands.get(island_id, None),  # type: ignore[arg-type]
-        {iid: self.islands[iid] for iid in all_ids},  # type: ignore[arg-type]
-    )
-
-    # Return target island IDs
-    target_ids = [t.id for t in targets]
-    # Cache and return
-    self._neighbor_cache[island_id] = target_ids
-    self._cache_version = self._islands_version
-    self._cache_topology_version = self._topology_version
-    return target_ids
-
-
-# Replace _get_neighbors with the fitness-gradient version when topology is set
-MigrationBus._get_neighbors = types.MethodType(_get_neighbors_fitness_gradient, MigrationBus)  # type: ignore[assignment]
-
-import types  # noqa: E402 # added after class definition
-
+# NOTE: ``fitness_gradient`` topology support is handled directly in
+# ``MigrationBus._get_neighbors`` (see the ``elif self.topology ==
+# "fitness_gradient"`` branch). The previous module-level monkeypatch bound the
+# override to the *class* via ``types.MethodType(fn, MigrationBus)``, so every
+# call received the class (not the instance) as ``self`` and raised
+# ``AttributeError: type object 'MigrationBus' has no attribute 'islands'``.
 
 # ---------------------------------------------------------------------------
 # Convenience function to register standard metrics for fitness-directed migration
 # ---------------------------------------------------------------------------
+
 
 def record_fitness_directed_migration(
     source_id: int,

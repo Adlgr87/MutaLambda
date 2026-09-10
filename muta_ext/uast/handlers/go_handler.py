@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Go language handler for UAST integration."""
+
+import os
 import shutil
 import subprocess
 from typing import Tuple
@@ -7,7 +9,7 @@ from typing import Tuple
 from muta_ext.uast.core_uast import CoreUAST
 from muta_ext.uast.adapters.go_adapter import GoAdapter, parse_to_uast
 from muta_ext.uast.emitters.go_emitter import GoEmitter, emit_from_uast
-from muta_ext.uast.handlers.base_handler import BaseLanguageHandler
+from muta_ext.uast.handlers.base_handler import BaseLanguageHandler, run_hardened
 
 
 class GoHandler(BaseLanguageHandler):
@@ -33,13 +35,7 @@ class GoHandler(BaseLanguageHandler):
             return True, "gofmt not available, skipping syntax validation"
 
         try:
-            result = subprocess.run(
-                ["gofmt", "-e"],
-                input=source,
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
+            result = run_hardened(["gofmt", "-e"], input=source, timeout=5)
             if result.returncode == 0:
                 return True, "valid"
             else:
@@ -56,17 +52,13 @@ class GoHandler(BaseLanguageHandler):
 
         # Write source to temp file
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.go', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".go", delete=False) as f:
             f.write(source)
             temp_path = f.name
 
         try:
-            result = subprocess.run(
-                ["go", "build", "-o", output_path, temp_path],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
+            result = run_hardened(["go", "build", "-o", output_path, temp_path], timeout=30)
             if result.returncode == 0:
                 return True, "compiled successfully"
             else:
@@ -77,6 +69,7 @@ class GoHandler(BaseLanguageHandler):
             return False, str(e)
         finally:
             import os
+
             os.unlink(temp_path)
 
     def run_tests(self, source: str, test_source: str) -> Tuple[bool, str, float]:
@@ -91,23 +84,20 @@ class GoHandler(BaseLanguageHandler):
             # Write source files
             main_file = os.path.join(tmpdir, "main.go")
             test_file = os.path.join(tmpdir, "main_test.go")
-            with open(main_file, 'w') as f:
+            with open(main_file, "w") as f:
                 f.write(source)
-            with open(test_file, 'w') as f:
+            with open(test_file, "w") as f:
                 f.write(test_source)
 
             try:
-                result = subprocess.run(
-                    ["go", "test", "-v", "-bench=.", "-benchtime=1x", tmpdir],
-                    capture_output=True,
-                    text=True,
-                    timeout=60
+                result = run_hardened(
+                    ["go", "test", "-v", "-bench=.", "-benchtime=1x", tmpdir], timeout=60
                 )
                 elapsed = 0.0
-                for line in result.stdout.split('\n'):
-                    if 'Benchmark' in line and 'ns/op' in line:
+                for line in result.stdout.split("\n"):
+                    if "Benchmark" in line and "ns/op" in line:
                         try:
-                            elapsed = float(line.split('/')[-2].split(' ')[0])
+                            elapsed = float(line.split("/")[-2].split(" ")[0])
                         except (ValueError, IndexError):
                             pass
                         break
@@ -119,25 +109,22 @@ class GoHandler(BaseLanguageHandler):
 
     def benchmark(self, binary_path: str, iterations: int = 1000) -> dict:
         """Run benchmark on compiled Go binary."""
-        if not shutil.which(binary_path):
+        if not os.path.isfile(binary_path):
             return {"error": "binary not found"}
 
         try:
-            result = subprocess.run(
-                [binary_path, "-test.bench=.", "-test.benchtime", f"{iterations}x"],
-                capture_output=True,
-                text=True,
-                timeout=120
+            result = run_hardened(
+                [binary_path, "-test.bench=.", "-test.benchtime", f"{iterations}x"], timeout=120
             )
             benchmarks = {}
-            for line in result.stdout.split('\n'):
-                if 'Benchmark' in line and 'ns/op' in line:
+            for line in result.stdout.split("\n"):
+                if "Benchmark" in line and "ns/op" in line:
                     parts = line.split()
                     if len(parts) >= 3:
                         name = parts[0]
                         ops = parts[-2]
                         try:
-                            benchmarks[name] = float(ops.replace('ns/op', ''))
+                            benchmarks[name] = float(ops.replace("ns/op", ""))
                         except ValueError:
                             pass
             return benchmarks

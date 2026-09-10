@@ -57,7 +57,9 @@ class HorizontalTransferEngine:
         self.fragments: Dict[str, FragmentRecord] = {}
         self.metrics = THCMetrics()
 
-    def apply(self, population: List[Individual], evaluator: Any, generation: int) -> List[Individual]:
+    def apply(
+        self, population: List[Individual], evaluator: Any, generation: int
+    ) -> List[Individual]:
         """Create validated hybrid individuals and replace weak candidates."""
         if not self.config.enabled or len(population) < 2:
             return population
@@ -73,7 +75,8 @@ class HorizontalTransferEngine:
             if attempted >= self.config.max_transfers_per_generation:
                 break
             compatible = [
-                fragment for fragment in self.fragments.values()
+                fragment
+                for fragment in self.fragments.values()
                 if fragment.donor_id != receiver.id
                 and fragment.donor_language == getattr(receiver, "language", "python")
             ]
@@ -115,7 +118,9 @@ class HorizontalTransferEngine:
             fragment_survival_gens=(
                 sum(f.survival_gens for f in self.fragments.values()) / max(1, len(self.fragments))
             ),
-            hybrid_lineage_depth=max((len(getattr(ind, "parent_ids", []) or []) for ind in accepted), default=0),
+            hybrid_lineage_depth=max(
+                (len(getattr(ind, "parent_ids", []) or []) for ind in accepted), default=0
+            ),
             transfers_attempted=attempted,
             transfers_accepted=len(accepted),
         )
@@ -155,9 +160,8 @@ class HorizontalTransferEngine:
         replaced = False
         new_body = []
         for node in receiver.body:
-            if (
-                isinstance(node, type(frag_node))
-                and getattr(node, "name", None) == getattr(frag_node, "name", None)
+            if isinstance(node, type(frag_node)) and getattr(node, "name", None) == getattr(
+                frag_node, "name", None
             ):
                 new_body.append(copy.deepcopy(frag_node))
                 replaced = True

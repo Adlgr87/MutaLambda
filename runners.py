@@ -66,65 +66,94 @@ def tests_hash(test_cases: List[Dict]) -> str:
 
 from dataclasses import dataclass
 
-
 # Modules whose import would grant filesystem / network / process-control
 # capability. ``sys`` and ``json`` are intentionally allowed — candidates
 # (and the generated harness) legitimately use them.
-_FORBIDDEN_IMPORTS = frozenset({
-    "os",
-    "subprocess",
-    "socket",
-    "pathlib",
-    "shutil",
-    "ctypes",
-    "multiprocessing",
-    "importlib",
-    "http",
-    "urllib",
-    "requests",
-    "ftplib",
-    "pickle",
-    "marshal",
-    "shelve",
-    "pty",
-    "commands",
-})
+_FORBIDDEN_IMPORTS = frozenset(
+    {
+        "os",
+        "subprocess",
+        "socket",
+        "pathlib",
+        "shutil",
+        "ctypes",
+        "multiprocessing",
+        "importlib",
+        "http",
+        "urllib",
+        "requests",
+        "ftplib",
+        "pickle",
+        "marshal",
+        "shelve",
+        "pty",
+        "commands",
+    }
+)
 
 # Calls that are inherently dynamic / unsafe regardless of argument.
-_FORBIDDEN_DYNAMIC_CALLS = frozenset({
-    "eval",
-    "exec",
-    "compile",
-    "__import__",
-    "globals",
-    "locals",
-    "vars",
-    "dir",
-    "breakpoint",
-})
+_FORBIDDEN_DYNAMIC_CALLS = frozenset(
+    {
+        "eval",
+        "exec",
+        "compile",
+        "__import__",
+        "globals",
+        "locals",
+        "vars",
+        "dir",
+        "breakpoint",
+    }
+)
 
 # Attribute calls on specific module objects that are known escape hatches.
 _FORBIDDEN_ATTR_CALLS = {
-    ("os", "system"), ("os", "popen"), ("os", "exec"), ("os", "execv"),
-    ("os", "execve"), ("os", "execvpe"), ("os", "execvp"),
-    ("os", "spawn"), ("os", "spawnl"), ("os", "spawnle"),
-    ("os", "fork"), ("os", "kill"),
-    ("subprocess", "Popen"), ("subprocess", "call"), ("subprocess", "check_call"),
-    ("subprocess", "check_output"), ("subprocess", "run"), ("subprocess", "getoutput"),
-    ("shutil", "rmtree"), ("shutil", "remove"), ("shutil", "move"), ("shutil", "copy"),
-    ("shutil", "copyfile"), ("shutil", "copytree"),
+    ("os", "system"),
+    ("os", "popen"),
+    ("os", "exec"),
+    ("os", "execv"),
+    ("os", "execve"),
+    ("os", "execvpe"),
+    ("os", "execvp"),
+    ("os", "spawn"),
+    ("os", "spawnl"),
+    ("os", "spawnle"),
+    ("os", "fork"),
+    ("os", "kill"),
+    ("subprocess", "Popen"),
+    ("subprocess", "call"),
+    ("subprocess", "check_call"),
+    ("subprocess", "check_output"),
+    ("subprocess", "run"),
+    ("subprocess", "getoutput"),
+    ("shutil", "rmtree"),
+    ("shutil", "remove"),
+    ("shutil", "move"),
+    ("shutil", "copy"),
+    ("shutil", "copyfile"),
+    ("shutil", "copytree"),
     ("importlib", "import_module"),
-    ("pickle", "loads"), ("pickle", "load"), ("pickle", "dumps"),
-    ("marshal", "loads"), ("marshal", "load"),
-    ("ctypes", "cdll"), ("ctypes", "pythonapi"),
+    ("pickle", "loads"),
+    ("pickle", "load"),
+    ("pickle", "dumps"),
+    ("marshal", "loads"),
+    ("marshal", "load"),
+    ("ctypes", "cdll"),
+    ("ctypes", "pythonapi"),
     ("pathlib", "Path"),
 }
 
 # Names that should never be reachable from candidate code.
-_SENSITIVE_NAMES = frozenset({
-    "__builtins__", "__import__", "__globals__", "__locals__",
-    "globals", "locals",
-})
+_SENSITIVE_NAMES = frozenset(
+    {
+        "__builtins__",
+        "__import__",
+        "__globals__",
+        "__locals__",
+        "globals",
+        "locals",
+    }
+)
 
 
 @dataclass
@@ -505,7 +534,9 @@ def _metrics_from_report(
     }
     return EvalResult(
         fitness=fitness,
-        passed=(passed >= total and returncode == 0 and total > 0 and report.get("error") != "no_tests"),
+        passed=(
+            passed >= total and returncode == 0 and total > 0 and report.get("error") != "no_tests"
+        ),
         metrics=metrics,
         stdout="",
         stderr="",
@@ -611,11 +642,17 @@ class SubprocessRunner:
         tmp_path: Optional[str] = None
         wrapper_path: Optional[str] = None
         try:
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".py", delete=False, encoding="utf-8"
+            ) as f:
                 f.write(code)
                 tmp_path = f.name
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
-                f.write(build_wrapper_source(tmp_path, allow_expression_eval=self.allow_expression_eval))
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".py", delete=False, encoding="utf-8"
+            ) as f:
+                f.write(
+                    build_wrapper_source(tmp_path, allow_expression_eval=self.allow_expression_eval)
+                )
                 wrapper_path = f.name
 
             preexec_fn = (lambda: _set_memory_limit(self.memory_mb)) if self.memory_mb > 0 else None
@@ -748,7 +785,9 @@ class ContainerRunner:
                     "details": [],
                     "load_error": (proc.stderr or proc.stdout)[:200],
                 }
-            result = _metrics_from_report(code, elapsed, float(self.memory_mb), report, proc.returncode)
+            result = _metrics_from_report(
+                code, elapsed, float(self.memory_mb), report, proc.returncode
+            )
             result.stdout = proc.stdout[:2000]
             result.stderr = proc.stderr[:2000]
             return result
@@ -776,17 +815,18 @@ class MicroVMRunner:
     memory_mb: int = 256
     allow_expression_eval: bool = False
     enforce_ast_scan: bool = True
-    require_bwrap: bool = False
 
     def __post_init__(self) -> None:
         if not shutil.which("bwrap"):
             msg = (
-                "MicroVMRunner requires 'bwrap' (bubblewrap). "
-                "Install with: apt-get install -y bubblewrap"
+                "MicroVMRunner requires 'bwrap' (bubblewrap) but it is not "
+                "installed. Install with: apt-get install -y bubblewrap"
             )
-            if self.require_bwrap:
+            if self.enforce_ast_scan:
+                # ML-002 / ADR-0038: fail closed. A missing isolation tool must
+                # not silently degrade to an un-isolated execution path.
                 raise RuntimeError(msg)
-            logger.warning(msg)
+            logger.warning("%s (enforce_ast_scan=False is a dev-only opt-out)", msg)
 
     def _build_sandbox(self, python_bin: str, workdir: str) -> List[str]:
         """Build the bwrap command with namespace isolation.
@@ -818,13 +858,22 @@ class MicroVMRunner:
             "--unshare-ipc",
             "--unshare-pid",
             "--unshare-uts",
-            "--cap-drop", "ALL",
-            "--hostname", "mutalambda-sandbox",
-            "--proc", "/proc",
-            "--tmpfs", "/tmp",
-            "--dev", "/dev",
-            "--ro-bind", python_bin, python_bin,
-            "--ro-bind", python_dir, python_dir,
+            "--cap-drop",
+            "ALL",
+            "--hostname",
+            "mutalambda-sandbox",
+            "--proc",
+            "/proc",
+            "--tmpfs",
+            "/tmp",
+            "--dev",
+            "/dev",
+            "--ro-bind",
+            python_bin,
+            python_bin,
+            "--ro-bind",
+            python_dir,
+            python_dir,
         ]
 
         # Mount core system directories read-only
@@ -886,9 +935,7 @@ class MicroVMRunner:
                     "load_error": (proc.stderr or proc.stdout)[:200],
                 }
 
-            result = _metrics_from_report(
-                code, elapsed, peak_mb, report, proc.returncode
-            )
+            result = _metrics_from_report(code, elapsed, peak_mb, report, proc.returncode)
             result.stdout = proc.stdout[:2000]
             result.stderr = proc.stderr[:2000]
             return result
@@ -901,6 +948,34 @@ class MicroVMRunner:
             return _error_result(self.timeout_sec, str(exc)[:2000])
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
+
+
+def check_runner_availability(mode: str) -> None:
+    """Fail fast if the isolation tooling required by ``mode`` is unavailable.
+
+    ML-002: this is the operational signal that a hardened runner cannot
+    provide isolation. Raises :class:`RuntimeError` for container modes without
+    a container engine and for ``microvm`` without ``bwrap``. ``subprocess`` is
+    always "available" because it is the explicit local-development mode.
+    """
+    mode = (mode or "subprocess").lower()
+    if mode in {"container", "docker", "podman"}:
+        if mode in {"docker", "podman"}:
+            if not shutil.which(mode):
+                raise RuntimeError(f"Container engine not found: {mode}")
+        elif not (shutil.which("docker") or shutil.which("podman")):
+            raise RuntimeError(
+                "No container engine found (docker/podman); sandbox isolation "
+                "unavailable. Install Docker/Podman or use "
+                "runner_mode='subprocess' for local development only."
+            )
+    elif mode in {"microvm", "vm"}:
+        if not shutil.which("bwrap"):
+            raise RuntimeError(
+                "bwrap (bubblewrap) not found; microvm isolation unavailable. "
+                "Install bubblewrap or use runner_mode='subprocess' for local "
+                "development only."
+            )
 
 
 def create_runner(
@@ -916,6 +991,9 @@ def create_runner(
     Modes: subprocess | container | microvm
     """
     mode = (mode or "subprocess").lower()
+    if mode in {"container", "docker", "podman", "microvm", "vm"}:
+        # ML-002: fail fast when the requested isolation tooling is absent.
+        check_runner_availability(mode)
     if mode in {"subprocess", "local", "dev"}:
         return SubprocessRunner(
             timeout_sec=timeout_sec,

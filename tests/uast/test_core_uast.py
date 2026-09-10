@@ -1,9 +1,22 @@
 #!/usr/bin/env python3
 """Tests for CoreUAST data structures and serialization."""
+
 import pytest
 from muta_ext.uast.core_uast import (
-    CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
-    Assign, If, For, While, Return, Function, Opaque, Break
+    CoreUAST,
+    LiteralNode,
+    Identifier,
+    BinaryOp,
+    UnaryOp,
+    Call,
+    Assign,
+    If,
+    For,
+    While,
+    Return,
+    Function,
+    Opaque,
+    Break,
 )
 
 
@@ -46,13 +59,16 @@ class TestBinaryOp:
 
     def test_binary_op_nested_roundtrip(self):
         """Nested BinaryOp nodes should roundtrip correctly."""
-        uast = CoreUAST(body=[
-            BinaryOp(
-                op="+",
-                left=BinaryOp(op="*", left=LiteralNode(value=1), right=LiteralNode(value=2)),
-                right=LiteralNode(value=3),
-            ),
-        ], language="python")
+        uast = CoreUAST(
+            body=[
+                BinaryOp(
+                    op="+",
+                    left=BinaryOp(op="*", left=LiteralNode(value=1), right=LiteralNode(value=2)),
+                    right=LiteralNode(value=3),
+                ),
+            ],
+            language="python",
+        )
         restored = CoreUAST.from_dict(uast.to_dict())
         assert restored.body[0].op == "+"
 
@@ -65,9 +81,14 @@ class TestCall:
 
     def test_call_roundtrip_via_uast(self):
         """Call should survive serialize→deserialize cycle via CoreUAST."""
-        uast = CoreUAST(body=[
-            Call(func=Identifier(name="sum"), args=[Identifier(name="a"), Identifier(name="b")]),
-        ], language="python")
+        uast = CoreUAST(
+            body=[
+                Call(
+                    func=Identifier(name="sum"), args=[Identifier(name="a"), Identifier(name="b")]
+                ),
+            ],
+            language="python",
+        )
         restored = CoreUAST.from_dict(uast.to_dict())
         assert restored.body[0].func.name == "sum"
 
@@ -75,21 +96,30 @@ class TestCall:
 class TestIf:
     def test_if_creation_without_else(self):
         """If should create with condition and then_body."""
-        uast = CoreUAST(body=[
-            If(condition=Identifier(name="cond"), then_body=[Return(value=LiteralNode(value=1))]),
-        ], language="python")
+        uast = CoreUAST(
+            body=[
+                If(
+                    condition=Identifier(name="cond"),
+                    then_body=[Return(value=LiteralNode(value=1))],
+                ),
+            ],
+            language="python",
+        )
         restored = CoreUAST.from_dict(uast.to_dict())
         assert restored.body[0].else_body is None
 
     def test_if_roundtrip(self):
         """If should survive serialize→deserialize cycle via CoreUAST."""
-        uast = CoreUAST(body=[
-            If(
-                condition=Identifier(name="cond"),
-                then_body=[Return(value=LiteralNode(value=1))],
-                else_body=[Identifier(name="fallback")],
-            ),
-        ], language="python")
+        uast = CoreUAST(
+            body=[
+                If(
+                    condition=Identifier(name="cond"),
+                    then_body=[Return(value=LiteralNode(value=1))],
+                    else_body=[Identifier(name="fallback")],
+                ),
+            ],
+            language="python",
+        )
         restored = CoreUAST.from_dict(uast.to_dict())
         assert restored.body[0].condition.name == "cond"
 
@@ -97,21 +127,32 @@ class TestIf:
 class TestFor:
     def test_for_creation(self):
         """For should create with var, iterable, and body."""
-        uast = CoreUAST(body=[
-            For(var=Identifier(name="x"), iterable=Identifier(name="data"), body=[]),
-        ], language="python")
+        uast = CoreUAST(
+            body=[
+                For(var=Identifier(name="x"), iterable=Identifier(name="data"), body=[]),
+            ],
+            language="python",
+        )
         restored = CoreUAST.from_dict(uast.to_dict())
         assert restored.body[0].var.name == "x"
 
     def test_for_roundtrip(self):
         """For should survive serialize→deserialize cycle via CoreUAST."""
-        uast = CoreUAST(body=[
-            For(
-                var=Identifier(name="x"),
-                iterable=Identifier(name="range"),
-                body=[If(condition=Identifier(name="check"), then_body=[Call(func=Identifier(name="process"), args=[])])],
-            ),
-        ], language="python")
+        uast = CoreUAST(
+            body=[
+                For(
+                    var=Identifier(name="x"),
+                    iterable=Identifier(name="range"),
+                    body=[
+                        If(
+                            condition=Identifier(name="check"),
+                            then_body=[Call(func=Identifier(name="process"), args=[])],
+                        )
+                    ],
+                ),
+            ],
+            language="python",
+        )
         restored = CoreUAST.from_dict(uast.to_dict())
         assert restored.body[0].var.name == "x"
 
@@ -125,9 +166,15 @@ class TestWhile:
 
     def test_while_roundtrip(self):
         """While should survive serialize→deserialize cycle via CoreUAST."""
-        uast = CoreUAST(body=[
-            While(condition=LiteralNode(value=True), body=[Call(func=Identifier(name="tick"), args=[])]),
-        ], language="python")
+        uast = CoreUAST(
+            body=[
+                While(
+                    condition=LiteralNode(value=True),
+                    body=[Call(func=Identifier(name="tick"), args=[])],
+                ),
+            ],
+            language="python",
+        )
         restored = CoreUAST.from_dict(uast.to_dict())
         assert restored.body[0].condition.value is True
 
@@ -143,21 +190,36 @@ class TestReturn:
 class TestFunction:
     def test_function_creation(self):
         """Function should store name, params, and body."""
-        uast = CoreUAST(body=[
-            Function(name=Identifier(name="add"), params=[Identifier(name="a")], body=[Return(value=LiteralNode(value=1))]),
-        ], language="python")
+        uast = CoreUAST(
+            body=[
+                Function(
+                    name=Identifier(name="add"),
+                    params=[Identifier(name="a")],
+                    body=[Return(value=LiteralNode(value=1))],
+                ),
+            ],
+            language="python",
+        )
         restored = CoreUAST.from_dict(uast.to_dict())
         assert restored.body[0].name.name == "add"
 
     def test_function_roundtrip(self):
         """Function should survive serialize→deserialize cycle via CoreUAST."""
-        uast = CoreUAST(body=[
-            Function(
-                name=Identifier(name="compute"),
-                params=[Identifier(name="x")],
-                body=[If(condition=LiteralNode(value=True), then_body=[Return(value=Identifier(name="x"))])],
-            ),
-        ], language="python")
+        uast = CoreUAST(
+            body=[
+                Function(
+                    name=Identifier(name="compute"),
+                    params=[Identifier(name="x")],
+                    body=[
+                        If(
+                            condition=LiteralNode(value=True),
+                            then_body=[Return(value=Identifier(name="x"))],
+                        )
+                    ],
+                ),
+            ],
+            language="python",
+        )
         restored = CoreUAST.from_dict(uast.to_dict())
         assert restored.body[0].name.name == "compute"
 
@@ -165,7 +227,9 @@ class TestFunction:
 class TestOpaque:
     def test_opaque_creation(self):
         """Opaque should store original text."""
-        uast = CoreUAST(body=[Opaque(original_text="lambda x: x + 1", lang="python")], language="python")
+        uast = CoreUAST(
+            body=[Opaque(original_text="lambda x: x + 1", lang="python")], language="python"
+        )
         restored = CoreUAST.from_dict(uast.to_dict())
         assert restored.body[0].original_text == "lambda x: x + 1"
 
@@ -189,24 +253,31 @@ class TestCoreUAST:
 
     def test_deeply_nested_roundtrip(self):
         """CoreUAST with deeply nested structures should roundtrip correctly."""
-        uast = CoreUAST(body=[
-            Function(
-                name=Identifier(name="complex"),
-                params=[Identifier(name="x")],
-                body=[
-                    For(
-                        var=Identifier(name="i"),
-                        iterable=Identifier(name="range"),
-                        body=[
-                            If(
-                                condition=BinaryOp(op="==", left=Identifier(name="x"), right=LiteralNode(value=0)),
-                                then_body=[Return(value=LiteralNode(value=0))],
-                            ),
-                        ],
-                    ),
-                ],
-            ),
-        ], language="python")
+        uast = CoreUAST(
+            body=[
+                Function(
+                    name=Identifier(name="complex"),
+                    params=[Identifier(name="x")],
+                    body=[
+                        For(
+                            var=Identifier(name="i"),
+                            iterable=Identifier(name="range"),
+                            body=[
+                                If(
+                                    condition=BinaryOp(
+                                        op="==",
+                                        left=Identifier(name="x"),
+                                        right=LiteralNode(value=0),
+                                    ),
+                                    then_body=[Return(value=LiteralNode(value=0))],
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+            language="python",
+        )
         restored = CoreUAST.from_dict(uast.to_dict())
         assert len(restored.body) == 1
 

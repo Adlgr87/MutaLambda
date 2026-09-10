@@ -21,6 +21,7 @@ from pathlib import Path
 @dataclass
 class Hotspot:
     """A performance-critical function identified for optimization."""
+
     name: str
     file: str
     line_start: int
@@ -83,8 +84,7 @@ stats.print_stats(20)
 """
 
         result = subprocess.run(
-            [sys.executable, '-c', profiler_script],
-            capture_output=True, text=True, timeout=60
+            [sys.executable, "-c", profiler_script], capture_output=True, text=True, timeout=60
         )
 
         return self._parse_profile_output(result.stdout, result.stderr)
@@ -102,7 +102,7 @@ stats.print_stats(20)
 
         stream = io.StringIO()
         stats = pstats.Stats(profiler, stream=stream)
-        stats.sort_stats('cumulative')
+        stats.sort_stats("cumulative")
 
         return {
             "wall_time_sec": wall_time,
@@ -130,12 +130,13 @@ stats.print_stats(20)
         hotspots.sort(key=lambda h: h.cumulative_time, reverse=True)
         return hotspots
 
-    def _analyze_function(self, node: ast.FunctionDef, full_code: str, 
-                          profile_data: Dict = None) -> Optional[Hotspot]:
+    def _analyze_function(
+        self, node: ast.FunctionDef, full_code: str, profile_data: Dict = None
+    ) -> Optional[Hotspot]:
         """Analyze a single function for optimization potential."""
         lines = full_code.splitlines()
-        func_lines = lines[node.lineno - 1:node.end_lineno]
-        func_code = '\n'.join(func_lines)
+        func_lines = lines[node.lineno - 1 : node.end_lineno]
+        func_code = "\n".join(func_lines)
 
         # Generate optimization hint
         hint = self._generate_hint(node, func_code)
@@ -144,8 +145,8 @@ stats.print_stats(20)
         cumulative_time = 0.0
         call_count = 0
         if profile_data and node.name in profile_data:
-            cumulative_time = profile_data[node.name].get('cumulative', 0.0)
-            call_count = profile_data[node.name].get('calls', 0)
+            cumulative_time = profile_data[node.name].get("cumulative", 0.0)
+            call_count = profile_data[node.name].get("calls", 0)
         else:
             # Heuristic based on code complexity
             cumulative_time = self._estimate_complexity(node)
@@ -169,11 +170,15 @@ stats.print_stats(20)
         # Check for nested loops
         loop_depth = self._max_loop_depth(node)
         if loop_depth >= 2:
-            hints.append(f"Tiene bucles anidados (profundidad {loop_depth}) que pueden vectorizarse con NumPy")
+            hints.append(
+                f"Tiene bucles anidados (profundidad {loop_depth}) que pueden vectorizarse con NumPy"
+            )
 
         # Check for list operations
-        if 'append' in code:
-            hints.append("Usa list.append en bucle - pre-asignación o list comprehension puede ser más rápido")
+        if "append" in code:
+            hints.append(
+                "Usa list.append en bucle - pre-asignación o list comprehension puede ser más rápido"
+            )
 
         # Check for repeated calculations
         if self._has_repeated_calculations(node):
@@ -202,7 +207,7 @@ stats.print_stats(20)
         calls = {}
         for child in ast.walk(node):
             if isinstance(child, ast.Call):
-                call_str = ast.unparse(child) if hasattr(ast, 'unparse') else str(child)
+                call_str = ast.unparse(child) if hasattr(ast, "unparse") else str(child)
                 calls[call_str] = calls.get(call_str, 0) + 1
         return any(count > 1 for count in calls.values())
 
@@ -229,20 +234,20 @@ stats.print_stats(20)
         in_data = False
 
         for line in lines:
-            if 'ncalls' in line and 'tottime' in line:
+            if "ncalls" in line and "tottime" in line:
                 in_data = True
                 continue
-            if in_data and line.strip() and not line.startswith(' '):
+            if in_data and line.strip() and not line.startswith(" "):
                 break
             if in_data and line.strip():
                 parts = line.split()
                 if len(parts) >= 6:
                     try:
                         # Parse function location
-                        func_info = ' '.join(parts[5:])
-                        if ':' in func_info:
-                            file_path, rest = func_info.split(':', 1)
-                            func_name = rest.split('(')[0] if '(' in rest else rest
+                        func_info = " ".join(parts[5:])
+                        if ":" in func_info:
+                            file_path, rest = func_info.split(":", 1)
+                            func_name = rest.split("(")[0] if "(" in rest else rest
 
                             hotspot = Hotspot(
                                 name=func_name.strip(),
@@ -250,7 +255,7 @@ stats.print_stats(20)
                                 line_start=0,
                                 line_end=0,
                                 cumulative_time=float(parts[3]) if len(parts) > 3 else 0.0,
-                                call_count=int(parts[0].split('/')[0]) if parts[0] != '1' else 1,
+                                call_count=int(parts[0].split("/")[0]) if parts[0] != "1" else 1,
                                 code="",
                             )
                             hotspots.append(hotspot)
@@ -273,4 +278,4 @@ stats.print_stats(20)
             report.append(f"   Hint: {hotspot.optimization_hint}")
             report.append("")
 
-        return '\n'.join(report)
+        return "\n".join(report)

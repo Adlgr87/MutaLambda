@@ -5,6 +5,7 @@ protocol as benchmarks/harness.py.
 
 Outputs a JSON snapshot consumed by the report generator.
 """
+
 from __future__ import annotations
 
 import os
@@ -25,9 +26,16 @@ TARGETS_DIR = BENCHMARKS_DIR / "targets"
 
 # Reuse the harness's LLM + verification + timing helpers.
 from benchmarks.harness import (  # noqa: E402
-    _llm_backend, _extract_function, _is_valid_python,
-    _build_arg_factory, _build_arg_factory_from_strategy, _verify,
-    time_function_code, median_iqr, get_git_sha, _env_info,
+    _llm_backend,
+    _extract_function,
+    _is_valid_python,
+    _build_arg_factory,
+    _build_arg_factory_from_strategy,
+    _verify,
+    time_function_code,
+    median_iqr,
+    get_git_sha,
+    _env_info,
 )
 from llm_backend import parse_structured_response  # noqa: E402
 from benchmarks.verification import verify_candidate  # noqa: E402
@@ -106,9 +114,13 @@ def _llm_best_of_5(code, fn_name, backend, mod):
         # Vary temperature / prompt hint to encourage diversity.
         b = backend
         b.temperature = 0.2 + 0.1 * i
-        hint = ["use numpy vectorization", "use loop unrolling and micro-opts",
-                "minimize allocations and precompute", "use local variable bindings",
-                "rewrite with comprehensions"][i]
+        hint = [
+            "use numpy vectorization",
+            "use loop unrolling and micro-opts",
+            "minimize allocations and precompute",
+            "use local variable bindings",
+            "rewrite with comprehensions",
+        ][i]
         prompt = (
             f"Optimize this Python function for speed (hint: {hint}). "
             f"Return ONLY the code, no explanation.\n```python\n{code}\n```\nOptimized:\n"
@@ -140,7 +152,13 @@ def run_target(name):
         "tier": mod.TIER,
         "baseline_median_ms": round(original_baseline_ms, 6),
         "llm_1shot": {"speedup": None, "correct": None, "median_ms": None, "src": None, "note": ""},
-        "llm_best_of_5": {"speedup": None, "correct": None, "median_ms": None, "src": None, "note": ""},
+        "llm_best_of_5": {
+            "speedup": None,
+            "correct": None,
+            "median_ms": None,
+            "src": None,
+            "note": "",
+        },
     }
 
     backend = _llm_backend()
@@ -171,18 +189,30 @@ def run_target(name):
         except Exception as exc:
             src, note = None, f"llm_error: {type(exc).__name__}"
         if src is not None:
-            ver = verify_candidate(code, src, mod.test_cases, function_name=fn_name,
-                                   invariants=getattr(mod, "invariants", None),
-                                   input_strategy=getattr(mod, "input_strategy", None),
-                                   random_trials=200, seed=42)
+            ver = verify_candidate(
+                code,
+                src,
+                mod.test_cases,
+                function_name=fn_name,
+                invariants=getattr(mod, "invariants", None),
+                input_strategy=getattr(mod, "input_strategy", None),
+                random_trials=200,
+                seed=42,
+            )
             correct = ver.ok
             samples = _candidate_samples(src, fn_name, arg_factory)
             med = median_iqr(samples)[0] * 1000.0 if samples else float("inf")
-            speedup = round(original_baseline_ms / med, 4) if (samples and med > 0 and med != float("inf")) else None
+            speedup = (
+                round(original_baseline_ms / med, 4)
+                if (samples and med > 0 and med != float("inf"))
+                else None
+            )
             result["llm_1shot"] = {
-                "speedup": speedup, "correct": correct,
+                "speedup": speedup,
+                "correct": correct,
                 "median_ms": None if med == float("inf") else round(med, 6),
-                "src": src, "note": note if not correct else note,
+                "src": src,
+                "note": note if not correct else note,
             }
         else:
             result["llm_1shot"]["note"] = note
@@ -202,10 +232,16 @@ def run_target(name):
         for src, note in variants:
             if src is None:
                 continue
-            ver = verify_candidate(code, src, mod.test_cases, function_name=fn_name,
-                                   invariants=getattr(mod, "invariants", None),
-                                   input_strategy=getattr(mod, "input_strategy", None),
-                                   random_trials=200, seed=42)
+            ver = verify_candidate(
+                code,
+                src,
+                mod.test_cases,
+                function_name=fn_name,
+                invariants=getattr(mod, "invariants", None),
+                input_strategy=getattr(mod, "input_strategy", None),
+                random_trials=200,
+                seed=42,
+            )
             if not ver.ok:
                 continue
             samples = _candidate_samples(src, fn_name, arg_factory)
@@ -213,11 +249,17 @@ def run_target(name):
             if best_med is None or med < best_med:
                 best, best_med, best_note = src, med, note
         if best is not None:
-            speedup = round(original_baseline_ms / best_med, 4) if (best_med > 0 and best_med != float("inf")) else None
+            speedup = (
+                round(original_baseline_ms / best_med, 4)
+                if (best_med > 0 and best_med != float("inf"))
+                else None
+            )
             result["llm_best_of_5"] = {
-                "speedup": speedup, "correct": True,
+                "speedup": speedup,
+                "correct": True,
                 "median_ms": None if best_med == float("inf") else round(best_med, 6),
-                "src": best, "note": best_note,
+                "src": best,
+                "note": best_note,
             }
         else:
             result["llm_best_of_5"]["note"] = "no_correct_variant"
@@ -226,7 +268,11 @@ def run_target(name):
 
 
 def main():
-    targets = sys.argv[1:] if len(sys.argv) > 1 else ["t3_page_rank", "t1_primes_sieve", "t1_matrix_multiply"]
+    targets = (
+        sys.argv[1:]
+        if len(sys.argv) > 1
+        else ["t3_page_rank", "t1_primes_sieve", "t1_matrix_multiply"]
+    )
     # Resume from any previously-saved snapshot so partial runs survive.
     snap_path = RESULTS_BASE / "D.6_baseline_snapshot.json"
     out = []
@@ -245,17 +291,40 @@ def main():
             r = run_target(t)
         except Exception as exc:
             import traceback
+
             traceback.print_exc()
-            r = {"target": t, "function": "", "tier": None, "baseline_median_ms": None,
-                 "error": f"runner_crashed: {exc}",
-                 "llm_1shot": {"speedup": None, "correct": None, "median_ms": None, "src": None, "note": "runner_error"},
-                 "llm_best_of_5": {"speedup": None, "correct": None, "median_ms": None, "src": None, "note": "runner_error"}}
+            r = {
+                "target": t,
+                "function": "",
+                "tier": None,
+                "baseline_median_ms": None,
+                "error": f"runner_crashed: {exc}",
+                "llm_1shot": {
+                    "speedup": None,
+                    "correct": None,
+                    "median_ms": None,
+                    "src": None,
+                    "note": "runner_error",
+                },
+                "llm_best_of_5": {
+                    "speedup": None,
+                    "correct": None,
+                    "median_ms": None,
+                    "src": None,
+                    "note": "runner_error",
+                },
+            }
         out.append(r)
         # Persist incrementally so partial progress survives a crash/timeout.
-        (RESULTS_BASE / "D.6_baseline_snapshot.json").write_text(json.dumps(out, indent=2, default=str))
-        print(f"  baseline_ms={r['baseline_median_ms']} "
-              f"1shot_speedup={r['llm_1shot']['speedup']} correct={r['llm_1shot']['correct']} "
-              f"5shot_speedup={r['llm_best_of_5']['speedup']} correct={r['llm_best_of_5']['correct']}", flush=True)
+        (RESULTS_BASE / "D.6_baseline_snapshot.json").write_text(
+            json.dumps(out, indent=2, default=str)
+        )
+        print(
+            f"  baseline_ms={r['baseline_median_ms']} "
+            f"1shot_speedup={r['llm_1shot']['speedup']} correct={r['llm_1shot']['correct']} "
+            f"5shot_speedup={r['llm_best_of_5']['speedup']} correct={r['llm_best_of_5']['correct']}",
+            flush=True,
+        )
     out_path = RESULTS_BASE / "D.6_baseline_snapshot.json"
     out_path.write_text(json.dumps(out, indent=2, default=str))
     print(f"\nWrote {out_path}")

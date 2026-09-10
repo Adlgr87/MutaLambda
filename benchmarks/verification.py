@@ -6,6 +6,7 @@ verify_candidate(original, mutated, test_cases) -> VerificationResult
   Layer 2: differential testing with 1000 random inputs vs original
   Layer 3: property-based testing with Hypothesis on declared invariants
 """
+
 from __future__ import annotations
 
 import inspect
@@ -20,6 +21,7 @@ from comparison import compare_values
 try:
     from hypothesis import given, settings, strategies as st, Phase
     from hypothesis.errors import InvalidArgument
+
     HAS_HYPOTHESIS = True
 except ImportError:  # pragma: no cover
     HAS_HYPOTHESIS = False
@@ -81,16 +83,18 @@ def _infer_arg_generators(sample_args: List[Any]) -> List[Callable[[random.Rando
 
     def _make(v):
         if _is_number(v):
-            return (lambda rng: _gen_float(v, rng))
+            return lambda rng: _gen_float(v, rng)
         if isinstance(v, (list, tuple, np.ndarray)):
             seq = list(v)
-            return (lambda rng: _seq_like(seq, rng))
+            return lambda rng: _seq_like(seq, rng)
         if isinstance(v, str):
             chars = v if v else "abc "
-            return (lambda rng: "".join(rng.choice(chars) for _ in range(rng.randint(1, max(len(chars), 4)))))
+            return lambda rng: "".join(
+                rng.choice(chars) for _ in range(rng.randint(1, max(len(chars), 4)))
+            )
         if callable(v):  # e.g. a lambda in test args (newton_raphson) — pass through
-            return (lambda rng: v)
-        return (lambda rng: rng.uniform(-100.0, 100.0))
+            return lambda rng: v
+        return lambda rng: rng.uniform(-100.0, 100.0)
 
     generators = []
     for v in sample_args:
@@ -103,11 +107,14 @@ def _infer_arg_generators(sample_args: List[Any]) -> List[Callable[[random.Rando
 
 def _seq_like(sample: list, rng: random.Random) -> Any:
     import numpy as np
+
     if len(sample) == 0:
         return np.array([], dtype=float)
     if _is_number(sample[0]):
-        vals = [rng.uniform(min(float(min(sample)), -1.0), max(float(max(sample)), 1.0))
-                for _ in range(rng.randint(0, max(len(sample) * 2, 1)))]
+        vals = [
+            rng.uniform(min(float(min(sample)), -1.0), max(float(max(sample)), 1.0))
+            for _ in range(rng.randint(0, max(len(sample) * 2, 1)))
+        ]
         return np.array(vals, dtype=float)
     if isinstance(sample[0], (list, tuple)):
         rows = rng.randint(0, max(len(sample), 1))
@@ -118,12 +125,15 @@ def _seq_like(sample: list, rng: random.Random) -> Any:
 
 def _is_number(v) -> bool:
     try:
-        float(v); return True
+        float(v)
+        return True
     except (TypeError, ValueError):
         return False
 
 
-def _signature_args(fn: Callable, rng: random.Random, sample_args: Optional[List[Any]] = None) -> Tuple[tuple, dict]:
+def _signature_args(
+    fn: Callable, rng: random.Random, sample_args: Optional[List[Any]] = None
+) -> Tuple[tuple, dict]:
     """Generate random args. Prefer structure inferred from sample_args (test cases)."""
     if sample_args:
         gens = _infer_arg_generators(sample_args)
@@ -155,6 +165,7 @@ def _approx_equal(a: Any, b: Any, rel_tol: float = 1e-9, abs_tol: float = 1e-12)
     """Deep approximate equality for nested numbers/arrays/lists."""
     try:
         import numpy as np
+
         if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
             return bool(np.allclose(np.asarray(a), np.asarray(b), rtol=rel_tol, atol=abs_tol))
     except ImportError:
@@ -171,7 +182,9 @@ def _approx_equal(a: Any, b: Any, rel_tol: float = 1e-9, abs_tol: float = 1e-12)
         return a == b
 
 
-def _same_exception_type(orig_exc: Optional[BaseException], mut_exc: Optional[BaseException]) -> bool:
+def _same_exception_type(
+    orig_exc: Optional[BaseException], mut_exc: Optional[BaseException]
+) -> bool:
     if orig_exc is None and mut_exc is None:
         return True
     if orig_exc is not None and mut_exc is not None:
@@ -179,7 +192,7 @@ def _same_exception_type(orig_exc: Optional[BaseException], mut_exc: Optional[Ba
     return False
 
 
-def verify_candidate(
+def verify_candidate(  # noqa: C901
     original: str,
     mutated: str,
     test_cases: List[Dict[str, Any]],
@@ -218,8 +231,8 @@ def verify_candidate(
     result.layer1_ok = l1.equivalent
     result.layer1_msg = (
         f"differential OK ({l1.compared} cases, {l1.mismatches} mismatches)"
-        if l1.equivalent else
-        f"FAILED {l1.mismatches}/{l1.compared} cases: {l1.cases[0].message if l1.cases else ''}"
+        if l1.equivalent
+        else f"FAILED {l1.mismatches}/{l1.compared} cases: {l1.cases[0].message if l1.cases else ''}"
     )
     if not l1.equivalent:
         result.ok = False
@@ -273,8 +286,8 @@ def verify_candidate(
     result.layer2_ok = divergences == 0
     result.layer2_msg = (
         f"OK ({checked} random trials, 0 divergences)"
-        if divergences == 0 else
-        f"FAILED {divergences}/{checked} divergences, max_abs_error={max_err}"
+        if divergences == 0
+        else f"FAILED {divergences}/{checked} divergences, max_abs_error={max_err}"
     )
     if not result.layer2_ok:
         result.ok = False
@@ -298,16 +311,27 @@ def verify_candidate(
     for inv in invariants:
         strat_src = input_strategy or "st.floats(min_value=-100, max_value=100)"
         try:
-            strat = eval(strat_src, {"st": st, "np": __import__("numpy"), "math": math})  # noqa: S307
+            strat = eval(
+                strat_src, {"st": st, "np": __import__("numpy"), "math": math}
+            )  # noqa: S307
         except Exception as exc:
             failures.append(f"strategy_error: {exc}")
             continue
         # Invariant is a boolean Python expression over input `x` and `out` (the return value).
-        g: Dict[str, Any] = {"st": st, "math": math, "np": __import__("numpy"),
-                             function_name: mut_fn, "__builtins__": __builtins__}
+        g: Dict[str, Any] = {
+            "st": st,
+            "math": math,
+            "np": __import__("numpy"),
+            function_name: mut_fn,
+            "__builtins__": __builtins__,
+        }
         # Call with correct unpacking: single-param fn gets fn(x); multi-param gets fn(*x).
-        nparams = sum(1 for p in inspect.signature(mut_fn).parameters.values()
-                      if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD))
+        nparams = sum(
+            1
+            for p in inspect.signature(mut_fn).parameters.values()
+            if p.kind
+            in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        )
         call_expr = function_name + "(*x)" if nparams > 1 else function_name + "(x)"
         test_fn_src = (
             "def _check(x):\n"
@@ -329,12 +353,14 @@ def verify_candidate(
         _test_ns: Dict[str, Any] = {"_check": _check, "__builtins__": __builtins__}
         exec(
             "def _hypothesis_test(x):\n    assert _check(x)\n",
-            _test_ns, _test_ns,
+            _test_ns,
+            _test_ns,
         )
         _hypothesis_test = _test_ns["_hypothesis_test"]
         _hypothesis_test = given(strat)(  # type: ignore
-            settings(max_examples=200, deadline=None, phases=[Phase.generate],
-                     suppress_health_check=[])(_hypothesis_test)
+            settings(
+                max_examples=200, deadline=None, phases=[Phase.generate], suppress_health_check=[]
+            )(_hypothesis_test)
         )
         try:
             _hypothesis_test()

@@ -47,7 +47,7 @@ class TestGPUOptimizer:
         pop = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
 
         def fitness(ind):
-            return float(np.sum(ind ** 2))
+            return float(np.sum(ind**2))
 
         scores, stats = opt.evaluate_population_gpu(pop, fitness)
         assert len(scores) == 3
@@ -70,7 +70,7 @@ class TestGPUOptimizer:
         pop = np.random.randn(10, 5)
 
         def fitness(ind):
-            return float(np.sum(ind ** 2))
+            return float(np.sum(ind**2))
 
         result = opt.nsga2_gpu(pop, fitness, n_generations=3, population_size=5)
         assert result["generations_completed"] == 3

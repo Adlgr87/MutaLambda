@@ -69,6 +69,7 @@ _SEVERITY_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 @dataclass
 class FitnessReport:
     """Resultado de la validación post-evaluación de un individuo."""
+
     passed: bool = True
     blocked: bool = False
     issues: List[str] = field(default_factory=list)
@@ -79,6 +80,7 @@ class FitnessReport:
 
 class ProfileMode(str, enum.Enum):
     """Profile mode for evolution filters."""
+
     HOTFIX = "hotfix"
     BALANCED = "balanced"
     DEBT = "debt"
@@ -122,7 +124,9 @@ def check_syntax(code):
 def check_max_length(code, max_lines=500):
     line_count = len(code.strip().splitlines())
     if line_count > max_lines:
-        return _make_report(False, True, [f"code exceeds {max_lines} lines ({line_count} lines)"], "high")
+        return _make_report(
+            False, True, [f"code exceeds {max_lines} lines ({line_count} lines)"], "high"
+        )
     return _make_report(True, False, [], "none")
 
 
@@ -256,7 +260,14 @@ def run_all_filters(code, profile="balanced", enforce_syntax=True):
         if _severity_rank(report.severity) > _severity_rank(max_severity):
             max_severity = report.severity
 
-    return FR(passed=not blocked, blocked=blocked, issues=all_issues, severity=max_severity, is_valid=not blocked, fixed_code=code)
+    return FR(
+        passed=not blocked,
+        blocked=blocked,
+        issues=all_issues,
+        severity=max_severity,
+        is_valid=not blocked,
+        fixed_code=code,
+    )
 
 
 def _filter_mutant(code: str, profile_mode: ProfileMode) -> Optional[str]:
@@ -265,6 +276,7 @@ def _filter_mutant(code: str, profile_mode: ProfileMode) -> Optional[str]:
     if not report.is_valid:
         return None
     return report.fixed_code
+
 
 __all__ = [
     "run_all_filters",

@@ -5,6 +5,7 @@ MutaLambda Language Server Protocol (LSP) Server.
 Provides real-time optimization suggestions while coding.
 Supports VS Code and Neovim integration.
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -15,6 +16,7 @@ from enum import Enum
 import asyncio
 import threading
 from pathlib import Path
+
 
 # LSP Message types
 class LSPMethod(str, Enum):
@@ -37,10 +39,12 @@ class Position:
     line: int = 0
     character: int = 0
 
+
 @dataclass
 class Range:
     start: Position
     end: Position
+
 
 @dataclass
 class Diagnostic:
@@ -50,6 +54,7 @@ class Diagnostic:
     message: str
     source: str = "mutalambda"
 
+
 @dataclass
 class CodeAction:
     title: str
@@ -57,12 +62,14 @@ class CodeAction:
     diagnostic: Optional[Diagnostic] = None
     edit: Optional[Dict] = None
 
+
 @dataclass
 class InlayHint:
     position: Position
     label: str
     kind: int = 2  # Type hint
     tooltip: Optional[str] = None
+
 
 @dataclass
 class LSPMessage:
@@ -72,6 +79,7 @@ class LSPMessage:
     params: Optional[Dict] = None
     result: Optional[Any] = None
     error: Optional[Dict] = None
+
 
 class MutaLambdaLSPServer:
     """LSP Server for MutaLambda optimization suggestions."""
@@ -106,6 +114,7 @@ class MutaLambdaLSPServer:
         release the thread without depending on stdin being closed.
         """
         import select
+
         while self._running:
             try:
                 ready, _, _ = select.select([sys.stdin], [], [], 0.1)
@@ -149,24 +158,22 @@ class MutaLambdaLSPServer:
                         "openClose": True,
                         "change": 1,  # Incremental
                         "willSave": False,
-                        "willSaveWaitUntil": False
+                        "willSaveWaitUntil": False,
                     },
                     "diagnosticProvider": {
                         "identifier": "mutalambda",
                         "interFileDependencies": False,
-                        "workspaceDiagnostics": False
+                        "workspaceDiagnostics": False,
                     },
                     "codeActionProvider": {
                         "codeActionKinds": ["quickfix", "refactor"],
-                        "resolveProvider": False
+                        "resolveProvider": False,
                     },
                     "inlayHintProvider": True,
-                    "completionProvider": {
-                        "triggerCharacters": [".", "(", "="]
-                    },
-                    "hoverProvider": True
+                    "completionProvider": {"triggerCharacters": [".", "(", "="]},
+                    "hoverProvider": True,
                 }
-            }
+            },
         )
         self._send(response)
 
@@ -189,9 +196,11 @@ class MutaLambdaLSPServer:
                 if "range" in change:
                     # Full replace for simplicity
                     pass
-            self.document_store[uri] = "\n".join(
-                c.get("text", "") for c in changes
-            ) if changes else self.document_store.get(uri, "")
+            self.document_store[uri] = (
+                "\n".join(c.get("text", "") for c in changes)
+                if changes
+                else self.document_store.get(uri, "")
+            )
         self._analyze_document(uri)
 
     def _handle_did_close(self, msg: LSPMessage):
@@ -227,10 +236,7 @@ class MutaLambdaLSPServer:
         # Send diagnostics
         response = LSPMessage(
             method="textDocument/publishDiagnostics",
-            params={
-                "uri": uri,
-                "diagnostics": [asdict(d) for d in diagnostics]
-            }
+            params={"uri": uri, "diagnostics": [asdict(d) for d in diagnostics]},
         )
         self._send(response)
 
@@ -240,50 +246,57 @@ class MutaLambdaLSPServer:
 
         try:
             from muta_ext.uast.adapters import get_adapter
+
             adapter = get_adapter(language)
 
             if not adapter.can_parse(source):
-                diagnostics.append(Diagnostic(
-                    range=Range(Position(0, 0), Position(0, len(source))),
-                    severity=1,
-                    code="SYNTAX_ERROR",
-                    message="Source code has syntax errors"
-                ))
+                diagnostics.append(
+                    Diagnostic(
+                        range=Range(Position(0, 0), Position(0, len(source))),
+                        severity=1,
+                        code="SYNTAX_ERROR",
+                        message="Source code has syntax errors",
+                    )
+                )
                 return diagnostics
 
             uast = adapter.parse_to_uast(source)
 
             # Check for optimization opportunities
             for node in uast.body:
-                if hasattr(node, 'name'):
-                    func_name = node.name.name if hasattr(node.name, 'name') else str(node.name)
+                if hasattr(node, "name"):
+                    func_name = node.name.name if hasattr(node.name, "name") else str(node.name)
                     # Check for potential optimizations
-                    if hasattr(node, 'body') and len(node.body) > 10:
-                        diagnostics.append(Diagnostic(
-                            range=Range(Position(0, 0), Position(0, 0)),
-                            severity=4,
-                            code="OPT_SUGGESTION",
-                            message=f"Function '{func_name}' may benefit from optimization",
-                            source="mutalambda/fast"
-                        ))
+                    if hasattr(node, "body") and len(node.body) > 10:
+                        diagnostics.append(
+                            Diagnostic(
+                                range=Range(Position(0, 0), Position(0, 0)),
+                                severity=4,
+                                code="OPT_SUGGESTION",
+                                message=f"Function '{func_name}' may benefit from optimization",
+                                source="mutalambda/fast",
+                            )
+                        )
         except Exception as e:
-            diagnostics.append(Diagnostic(
-                range=Range(Position(0, 0), Position(0, 0)),
-                severity=3,
-                code="ANALYSIS_ERROR",
-                message=f"Analysis error: {str(e)}"
-            ))
+            diagnostics.append(
+                Diagnostic(
+                    range=Range(Position(0, 0), Position(0, 0)),
+                    severity=3,
+                    code="ANALYSIS_ERROR",
+                    message=f"Analysis error: {str(e)}",
+                )
+            )
 
         return diagnostics
 
     def _ext_to_language(self, ext: str) -> Optional[str]:
         """Map file extension to language."""
         mapping = {
-            '.go': 'go',
-            '.py': 'python',
-            '.rs': 'rust',
-            '.cpp': 'cpp',
-            '.c': 'cpp',
+            ".go": "go",
+            ".py": "python",
+            ".rs": "rust",
+            ".cpp": "cpp",
+            ".c": "cpp",
         }
         return mapping.get(ext)
 

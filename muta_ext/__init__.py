@@ -19,17 +19,38 @@ __all_extra_v4 = [
     # Core
     "MutaLambdaOptimizer",
     # UAST
-    "CoreUAST", "Function", "Node",
-    "get_adapter", "PythonAdapter", "RustAdapter", "CppAdapter", "GoAdapter",
-    "get_emitter", "PythonEmitter", "RustEmitter", "CppEmitter", "GoEmitter",
-    "get_handler", "PythonHandler", "RustHandler", "CppHandler", "GoHandler",
+    "CoreUAST",
+    "Function",
+    "Node",
+    "get_adapter",
+    "PythonAdapter",
+    "RustAdapter",
+    "CppAdapter",
+    "GoAdapter",
+    "get_emitter",
+    "PythonEmitter",
+    "RustEmitter",
+    "CppEmitter",
+    "GoEmitter",
+    "get_handler",
+    "PythonHandler",
+    "RustHandler",
+    "CppHandler",
+    "GoHandler",
     # Project optimizer
-    "ProjectAnalyzer", "analyze_project",
+    "ProjectAnalyzer",
+    "analyze_project",
     # Explainable optimizer
-    "ExplainableOptimizer", "ExplanationGenerator", "OptimizationType", "RiskLevel",
+    "ExplainableOptimizer",
+    "ExplanationGenerator",
+    "OptimizationType",
+    "RiskLevel",
     # CI/CD
-    "PerformanceBaseline", "RegressionDetector", "PRAnalyzer",
-    "create_ci_pipeline", "register_baseline_from_ci",
+    "PerformanceBaseline",
+    "RegressionDetector",
+    "PRAnalyzer",
+    "create_ci_pipeline",
+    "register_baseline_from_ci",
     # Config
     "MutaLambdaConfig",
 ]
@@ -40,6 +61,7 @@ def __getattr__(name: str):
     # v4.0 lazy imports
     if name in __all_extra_v4:
         import importlib
+
         if name == "MutaLambdaOptimizer":
             mod = importlib.import_module("muta_ext.optimizer")
         elif name in ("CoreUAST", "Function", "Node"):
@@ -58,10 +80,20 @@ def __getattr__(name: str):
             mod = importlib.import_module("muta_ext.uast.handlers")
         elif name in ("ProjectAnalyzer", "analyze_project"):
             mod = importlib.import_module("muta_ext.project_optimizer")
-        elif name in ("ExplainableOptimizer", "ExplanationGenerator", "OptimizationType", "RiskLevel"):
+        elif name in (
+            "ExplainableOptimizer",
+            "ExplanationGenerator",
+            "OptimizationType",
+            "RiskLevel",
+        ):
             mod = importlib.import_module("muta_ext.explainable_optimizer")
-        elif name in ("PerformanceBaseline", "RegressionDetector", "PRAnalyzer",
-                      "create_ci_pipeline", "register_baseline_from_ci"):
+        elif name in (
+            "PerformanceBaseline",
+            "RegressionDetector",
+            "PRAnalyzer",
+            "create_ci_pipeline",
+            "register_baseline_from_ci",
+        ):
             mod = importlib.import_module("muta_ext.ci_integration")
         elif name == "MutaLambdaConfig":
             mod = importlib.import_module("muta_ext.config")
@@ -71,5 +103,6 @@ def __getattr__(name: str):
 
     if name in __all__:
         import importlib
+
         return importlib.import_module(f"muta_ext.{name}")
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

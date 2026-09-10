@@ -4,6 +4,7 @@
 Provides the main MutaLambdaOptimizer class that orchestrates
 UAST parsing, mutation generation, and code emission.
 """
+
 from __future__ import annotations
 import json
 import tempfile
@@ -49,15 +50,17 @@ class MutaLambdaOptimizer:
         # Generate optimized variants (stub - in production this runs NSGA-II)
         variants: List[Dict[str, Any]] = []
         for i in range(min(3, self.config.get("max_generations", 10))):
-            variants.append({
-                "variant_id": i + 1,
-                "code": source,  # Placeholder - real implementation would mutate
-                "fitness": {
-                    "latency_p50": 100.0 - (i * 5),
-                    "memory_peak_mb": 50.0 - (i * 2),
-                },
-                "explanation": f"Variant {i + 1}: baseline optimization",
-            })
+            variants.append(
+                {
+                    "variant_id": i + 1,
+                    "code": source,  # Placeholder - real implementation would mutate
+                    "fitness": {
+                        "latency_p50": 100.0 - (i * 5),
+                        "memory_peak_mb": 50.0 - (i * 2),
+                    },
+                    "explanation": f"Variant {i + 1}: baseline optimization",
+                }
+            )
 
         return {
             "original": source,

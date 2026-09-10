@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Tuple
 try:
     from hypothesis import given, settings, strategies as st
     from hypothesis.errors import InvalidArgument
+
     HAS_HYPOTHESIS = True
 except ImportError:
     HAS_HYPOTHESIS = False
@@ -25,12 +26,14 @@ except ImportError:
 # Z3 is optional
 try:
     import z3
+
     HAS_Z3 = True
 except ImportError:
     HAS_Z3 = False
 
 
 # ── Property Strategies from Code ────────────────────────────────────
+
 
 def infer_property_strategies(code: str) -> List[Dict]:
     """
@@ -67,9 +70,7 @@ def infer_property_strategies(code: str) -> List[Dict]:
             low = arg_name.lower()
             if any(w in low for w in ("n", "count", "size", "length", "num", "int")):
                 func_info["input_types"].append("int")
-                func_info["suggested_strategies"].append(
-                    "integers(min_value=0, max_value=1000)"
-                )
+                func_info["suggested_strategies"].append("integers(min_value=0, max_value=1000)")
             elif any(w in low for w in ("xs", "arr", "list", "items", "data", "seq")):
                 func_info["input_types"].append("list[int]")
                 func_info["suggested_strategies"].append(
@@ -87,17 +88,14 @@ def infer_property_strategies(code: str) -> List[Dict]:
                 )
             else:
                 func_info["input_types"].append("int")
-                func_info["suggested_strategies"].append(
-                    "integers(min_value=-100, max_value=100)"
-                )
+                func_info["suggested_strategies"].append("integers(min_value=-100, max_value=100)")
 
         strategies.append(func_info)
 
     return strategies
 
 
-def generate_test_template(function_name: str, strategies: List[str],
-                           arg_names: List[str]) -> str:
+def generate_test_template(function_name: str, strategies: List[str], arg_names: List[str]) -> str:
     """
     Generate a Hypothesis test template for a function.
 
@@ -106,10 +104,7 @@ def generate_test_template(function_name: str, strategies: List[str],
     if not strategies or not HAS_HYPOTHESIS:
         return f"# Hypothesis not available for {function_name}"
 
-    strat_parts = ", ".join(
-        f"{name}={strat}"
-        for name, strat in zip(arg_names, strategies)
-    )
+    strat_parts = ", ".join(f"{name}={strat}" for name, strat in zip(arg_names, strategies))
 
     return f'''
 @given({strat_parts})
@@ -131,6 +126,7 @@ def test_{function_name}_properties({", ".join(arg_names)}):
 
 
 # ── Z3 Formal Verification ───────────────────────────────────────────
+
 
 def verify_invariant_z3(code: str, invariant: str) -> Tuple[bool, Optional[str]]:
     """
@@ -156,8 +152,7 @@ def verify_invariant_z3(code: str, invariant: str) -> Tuple[bool, Optional[str]]
         # Try to extract a simple numeric function for Z3
         tree = ast.parse(code)
         funcs = [
-            n for n in ast.walk(tree)
-            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
         ]
         if not funcs:
             return (False, "No function found in code")
@@ -229,37 +224,38 @@ def _expr_to_z3(node, z3_vars):
 
 
 def _parse_invariant_violation(invariant: str, z3_expr):
-   """Return a Z3 expression that violates a simple result comparison."""
-   comparisons = {
-       ">=": lambda expr, value: expr < value,
-       "<=": lambda expr, value: expr > value,
-       "==": lambda expr, value: expr != value,
-       "!=": lambda expr, value: expr == value,
-       ">": lambda expr, value: expr <= value,
-       "<": lambda expr, value: expr >= value,
-   }
+    """Return a Z3 expression that violates a simple result comparison."""
+    comparisons = {
+        ">=": lambda expr, value: expr < value,
+        "<=": lambda expr, value: expr > value,
+        "==": lambda expr, value: expr != value,
+        "!=": lambda expr, value: expr == value,
+        ">": lambda expr, value: expr <= value,
+        "<": lambda expr, value: expr >= value,
+    }
 
-   text = invariant.strip()
-   if not text.startswith("result"):
-       return None
+    text = invariant.strip()
+    if not text.startswith("result"):
+        return None
 
-   rest = text[len("result") :].strip()
-   for op in (">=", "<=", "==", "!=", ">", "<"):
-       if rest.startswith(op):
-           rhs = rest[len(op) :].strip()
-           try:
-               value = int(rhs)
-           except ValueError:
-               try:
-                   value = float(rhs)
-               except ValueError:
-                   return None
-           return comparisons[op](z3_expr, value)
+    rest = text[len("result") :].strip()
+    for op in (">=", "<=", "==", "!=", ">", "<"):
+        if rest.startswith(op):
+            rhs = rest[len(op) :].strip()
+            try:
+                value = int(rhs)
+            except ValueError:
+                try:
+                    value = float(rhs)
+                except ValueError:
+                    return None
+            return comparisons[op](z3_expr, value)
 
-   return None
+    return None
 
 
 # ── Combined Property Test Runner ─────────────────────────────────────
+
 
 def run_property_tests(code: str) -> Dict:
     """
@@ -288,9 +284,7 @@ def run_property_tests(code: str) -> Dict:
         # Try Z3 verification if available
         if HAS_Z3:
             try:
-                holds, ce = verify_invariant_z3(
-                    code, f"{info['func_name']}_result >= 0"
-                )
+                holds, ce = verify_invariant_z3(code, f"{info['func_name']}_result >= 0")
                 func_result["z3_holds"] = holds
                 if ce:
                     func_result["z3_counterexample"] = ce

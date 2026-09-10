@@ -128,9 +128,7 @@ def write_run_artifacts(
         "config": cfg_dict,
         "artifacts": {k: Path(v).name for k, v in paths.items()},
         "extension_metrics": (
-            agent.extensions.all_metrics()
-            if getattr(agent, "extensions", None) is not None
-            else {}
+            agent.extensions.all_metrics() if getattr(agent, "extensions", None) is not None else {}
         ),
         "bandit": (
             agent._operator_bandit.snapshot()
@@ -138,9 +136,7 @@ def write_run_artifacts(
             else {}
         ),
         "event_counts": (
-            agent.event_bus.counts()
-            if getattr(agent, "event_bus", None) is not None
-            else {}
+            agent.event_bus.counts() if getattr(agent, "event_bus", None) is not None else {}
         ),
     }
     man_path = out / "run_manifest.json"

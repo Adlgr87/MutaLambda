@@ -17,5 +17,5 @@ test_cases = [
     {"function": "fibonacci", "args": [10], "expected": 55, "comparison": "equal"},
     {"function": "fibonacci", "args": [20], "expected": 6765, "comparison": "equal"},
 ]
-invariants = ['out >= 0']
+invariants = ["out >= 0"]
 input_strategy = "st.integers(min_value=0, max_value=40)"

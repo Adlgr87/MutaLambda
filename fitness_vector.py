@@ -14,7 +14,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
-
 # The 3 objectives used in dominance comparison.
 # Auxiliary metrics (latency_p99, throughput, parsimony) are tracked but excluded from dominance.
 _DOMINANCE_OBJECTIVES = ("correctness", "latency_p50", "memory_peak_mb")
@@ -23,9 +22,9 @@ _AUXILIARY_METRICS = ("latency_p99", "throughput", "parsimony")
 # Default weights for weighted-sum scalarisation.
 # With 3 objectives, selective pressure remains strong.
 DEFAULT_WEIGHTS: Dict[str, float] = {
-    "correctness":    1.00,
-    "latency_p50":   -0.15,
-    "memory_peak_mb":-0.10,
+    "correctness": 1.00,
+    "latency_p50": -0.15,
+    "memory_peak_mb": -0.10,
 }
 
 # Reference costs for normalizing absolute units (milliseconds / MiB) into
@@ -65,18 +64,17 @@ class FitnessVector:
     throughput: float = 0.0
     parsimony: float = 0.0
 
-
     def is_worst(self) -> bool:
         """Check if this is worst possible fitness."""
-        return (self.correctness == 0.0 and 
-                self.latency_p50 == float('inf') and
-                self.memory_peak_mb == float('inf'))
+        return (
+            self.correctness == 0.0
+            and self.latency_p50 == float("inf")
+            and self.memory_peak_mb == float("inf")
+        )
 
     def is_best(self) -> bool:
         """Check if this is best possible fitness."""
-        return (self.correctness == 1.0 and 
-                self.latency_p50 == 0.0 and
-                self.memory_peak_mb == 0.0)
+        return self.correctness == 1.0 and self.latency_p50 == 0.0 and self.memory_peak_mb == 0.0
 
     def is_perfect(self) -> bool:
         """Check if correctness is perfect."""
@@ -138,14 +136,18 @@ class FitnessVector:
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, FitnessVector):
             return NotImplemented
-        return (self.correctness == other.correctness and 
-                self.latency_p50 == other.latency_p50 and
-                self.memory_peak_mb == other.memory_peak_mb)
+        return (
+            self.correctness == other.correctness
+            and self.latency_p50 == other.latency_p50
+            and self.memory_peak_mb == other.memory_peak_mb
+        )
 
     def __repr__(self) -> str:
-        return (f"FitnessVector(correct={self.correctness:.2f}, "
-                f"latency={self.latency_p50:.2f}ms, "
-                f"memory={self.memory_peak_mb:.2f}MB)")
+        return (
+            f"FitnessVector(correct={self.correctness:.2f}, "
+            f"latency={self.latency_p50:.2f}ms, "
+            f"memory={self.memory_peak_mb:.2f}MB)"
+        )
 
     # ── Serialization ───────────────────────────────────────────────────
 
@@ -164,13 +166,10 @@ class FitnessVector:
             memory_peak_mb=data.get("memory_peak_mb", 0.0),
         )
 
-
-
-
     @classmethod
     def worst(cls) -> "FitnessVector":
         """Return worst possible fitness (for initialization)."""
-        return cls(correctness=0.0, latency_p50=float('inf'), memory_peak_mb=float('inf'))
+        return cls(correctness=0.0, latency_p50=float("inf"), memory_peak_mb=float("inf"))
 
     @classmethod
     def best(cls) -> "FitnessVector":
@@ -178,13 +177,17 @@ class FitnessVector:
         return cls(correctness=1.0, latency_p50=0.0, memory_peak_mb=0.0)
 
     @classmethod
-    def from_metrics(cls, correctness: float, latency_ms: float, 
-                     memory_mb: float, **kwargs) -> "FitnessVector":
+    def from_metrics(
+        cls, correctness: float, latency_ms: float, memory_mb: float, **kwargs
+    ) -> "FitnessVector":
         """Create from raw metrics."""
-        return cls(correctness=correctness, latency_p50=latency_ms,
-                  memory_peak_mb=memory_mb, **kwargs)
+        return cls(
+            correctness=correctness, latency_p50=latency_ms, memory_peak_mb=memory_mb, **kwargs
+        )
+
 
 # ── NSGA-II Helpers ─────────────────────────────────────────────────────────
+
 
 def non_dominated_sort(population: list) -> list:
     """Fast non-dominated sort (NSGA-II). Returns list of fronts."""
@@ -193,7 +196,7 @@ def non_dominated_sort(population: list) -> list:
 
     fronts = [[]]
     dom_count = {}  # number of solutions dominating this one
-    dom_set = {}   # solutions this one dominates
+    dom_set = {}  # solutions this one dominates
 
     for i, p in enumerate(population):
         dom_count[i] = 0
@@ -232,19 +235,19 @@ def non_dominated_sort(population: list) -> list:
 def crowding_distance(population: list, front: list) -> dict:
     """Compute crowding distance for a front."""
     if len(front) <= 2:
-        return {i: float('inf') for i in front}
+        return {i: float("inf") for i in front}
 
     distance = {i: 0.0 for i in front}
 
-    objectives = ['correctness', 'latency_p50', 'memory_peak_mb']
+    objectives = ["correctness", "latency_p50", "memory_peak_mb"]
 
     for obj in objectives:
         # Sort by objective
         sorted_front = sorted(front, key=lambda i: getattr(population[i].fitness, obj))
 
         # Boundary points get infinite distance
-        distance[sorted_front[0]] = float('inf')
-        distance[sorted_front[-1]] = float('inf')
+        distance[sorted_front[0]] = float("inf")
+        distance[sorted_front[-1]] = float("inf")
 
         # Compute for intermediate points
         obj_min = getattr(population[sorted_front[0]].fitness, obj)
@@ -255,8 +258,8 @@ def crowding_distance(population: list, front: list) -> dict:
             continue
 
         for i in range(1, len(sorted_front) - 1):
-            prev_val = getattr(population[sorted_front[i-1]].fitness, obj)
-            next_val = getattr(population[sorted_front[i+1]].fitness, obj)
+            prev_val = getattr(population[sorted_front[i - 1]].fitness, obj)
+            next_val = getattr(population[sorted_front[i + 1]].fitness, obj)
             distance[sorted_front[i]] += (next_val - prev_val) / obj_range
 
     return distance

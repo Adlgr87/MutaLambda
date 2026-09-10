@@ -7,6 +7,7 @@ This module provides:
 - Performance regression detection
 - Automated optimization suggestions for new code
 """
+
 from __future__ import annotations
 import os
 import json
@@ -26,6 +27,7 @@ from muta_ext.project_optimizer import ProjectAnalyzer
 @dataclass
 class FunctionBaseline:
     """Baseline performance metrics for a function."""
+
     function_name: str
     file_path: str
     language: str
@@ -39,6 +41,7 @@ class FunctionBaseline:
 @dataclass
 class RegressionResult:
     """Result of regression analysis."""
+
     function_name: str
     file_path: str
     regression_detected: bool
@@ -52,6 +55,7 @@ class RegressionResult:
 @dataclass
 class PRAnalysisResult:
     """Complete analysis result for a pull request."""
+
     pr_number: int
     branch: str
     base_branch: str
@@ -86,7 +90,7 @@ class PerformanceBaseline:
         fitness: Dict[str, float],
         code: str,
         commit_hash: str,
-        branch: str = "main"
+        branch: str = "main",
     ):
         """Register baseline metrics for a function."""
         baseline = FunctionBaseline(
@@ -97,12 +101,12 @@ class PerformanceBaseline:
             baseline_code=code,
             recorded_at=datetime.now().isoformat(),
             commit_hash=commit_hash,
-            branch=branch
+            branch=branch,
         )
 
         # Save to file
         baseline_file = self._get_baseline_file(file_path, function_name)
-        with open(baseline_file, 'w') as f:
+        with open(baseline_file, "w") as f:
             json.dump(asdict(baseline), f, indent=2)
 
         # Update cache
@@ -139,18 +143,12 @@ class PerformanceBaseline:
 class RegressionDetector:
     """Detect performance regressions using baselines."""
 
-    def __init__(
-        self,
-        threshold: float = 0.1,
-        critical_threshold: float = 0.5
-    ):
+    def __init__(self, threshold: float = 0.1, critical_threshold: float = 0.5):
         self.threshold = threshold  # 10% degradation = warning
         self.critical_threshold = critical_threshold  # 50% degradation = critical
 
     def detect_regression(
-        self,
-        baseline: FunctionBaseline,
-        current_fitness: Dict[str, float]
+        self, baseline: FunctionBaseline, current_fitness: Dict[str, float]
     ) -> RegressionResult:
         """Detect if current fitness represents a regression."""
         max_degradation = 0.0
@@ -188,7 +186,7 @@ class RegressionDetector:
             severity=severity,
             suggestion=suggestion,
             baseline_fitness=baseline.baseline_fitness,
-            current_fitness=current_fitness
+            current_fitness=current_fitness,
         )
 
     def _generate_suggestion(self, severity: str, degraded_metrics: List[Tuple[str, float]]) -> str:
@@ -209,18 +207,14 @@ class PRAnalyzer:
         self,
         baseline_manager: PerformanceBaseline,
         regression_detector: RegressionDetector,
-        optimizer: Optional[MutaLambdaOptimizer] = None
+        optimizer: Optional[MutaLambdaOptimizer] = None,
     ):
         self.baselines = baseline_manager
         self.detector = regression_detector
         self.optimizer = optimizer or MutaLambdaOptimizer()
 
     def analyze_pr(
-        self,
-        pr_number: int,
-        branch: str,
-        base_branch: str = "main",
-        repo_path: str = "."
+        self, pr_number: int, branch: str, base_branch: str = "main", repo_path: str = "."
     ) -> PRAnalysisResult:
         """Analyze a pull request for performance regressions."""
         # Get changed files
@@ -233,8 +227,8 @@ class PRAnalyzer:
         suggestions = []
 
         for func_info in functions_to_analyze:
-            file_path = func_info['file']
-            func_name = func_info['name']
+            file_path = func_info["file"]
+            func_name = func_info["name"]
 
             # Get baseline
             baseline = self.baselines.get_baseline(file_path, func_name)
@@ -275,7 +269,7 @@ class PRAnalyzer:
             critical_regressions=[r for r in regressions if r.severity == "critical"],
             warnings=[r for r in regressions if r.severity == "major"],
             optimization_suggestions=suggestions,
-            overall_status=overall_status
+            overall_status=overall_status,
         )
 
     def _get_changed_files(self, repo_path: str, branch: str, base_branch: str) -> List[str]:
@@ -283,9 +277,11 @@ class PRAnalyzer:
         try:
             result = subprocess.run(
                 ["git", "-C", repo_path, "diff", "--name-only", f"origin/{base_branch}...{branch}"],
-                capture_output=True, text=True, check=True
+                capture_output=True,
+                text=True,
+                check=True,
             )
-            return result.stdout.strip().split('\n')
+            return result.stdout.strip().split("\n")
         except subprocess.CalledProcessError as e:
             print(f"Git error: {e}")
             return []
@@ -310,34 +306,25 @@ class PRAnalyzer:
                 if adapter.can_parse(source):
                     uast = adapter.parse_to_uast(source)
                     for node in uast.body:
-                        if hasattr(node, 'name'):
-                            func_name = node.name.name if hasattr(node.name, 'name') else str(node.name)
-                            functions.append({
-                                'file': file_path,
-                                'name': func_name,
-                                'language': language
-                            })
+                        if hasattr(node, "name"):
+                            func_name = (
+                                node.name.name if hasattr(node.name, "name") else str(node.name)
+                            )
+                            functions.append(
+                                {"file": file_path, "name": func_name, "language": language}
+                            )
             except Exception as e:
                 print(f"Error parsing {file_path}: {e}")
 
         return functions
 
-    def _measure_current_performance(
-        self, file_path: str, function_name: str
-    ) -> Dict[str, float]:
+    def _measure_current_performance(self, file_path: str, function_name: str) -> Dict[str, float]:
         """Measure current performance of a function."""
         # This would run actual benchmarks
         # For now, return dummy values
-        return {
-            "latency_p50": 1.0,
-            "latency_p99": 2.0,
-            "memory_peak_mb": 0.5,
-            "throughput": 1000.0
-        }
+        return {"latency_p50": 1.0, "latency_p99": 2.0, "memory_peak_mb": 0.5, "throughput": 1000.0}
 
-    def _generate_optimization_suggestions(
-        self, func_info: Dict
-    ) -> List[Dict]:
+    def _generate_optimization_suggestions(self, func_info: Dict) -> List[Dict]:
         """Generate optimization suggestions for a function."""
         suggestions = []
         # Use optimizer to generate suggestions
@@ -347,19 +334,16 @@ class PRAnalyzer:
     def _ext_to_language(self, ext: str) -> Optional[str]:
         """Map file extension to language."""
         mapping = {
-            '.go': 'go',
-            '.py': 'python',
-            '.rs': 'rust',
-            '.cpp': 'cpp',
-            '.c': 'cpp',
+            ".go": "go",
+            ".py": "python",
+            ".rs": "rust",
+            ".cpp": "cpp",
+            ".c": "cpp",
         }
         return mapping.get(ext)
 
 
-def create_ci_pipeline(
-    repo_path: str = ".",
-    pr_number: Optional[int] = None
-) -> PRAnalysisResult:
+def create_ci_pipeline(repo_path: str = ".", pr_number: Optional[int] = None) -> PRAnalysisResult:
     """Create a CI pipeline integration point."""
     baselines = PerformanceBaseline(f"{repo_path}/.mutalambda/baselines")
     detector = RegressionDetector()
@@ -370,10 +354,7 @@ def create_ci_pipeline(
     base_branch = os.environ.get("CI_MERGE_REQUEST_TARGET_BRANCH_NAME", "main")
 
     return analyzer.analyze_pr(
-        pr_number=pr_number or 0,
-        branch=branch,
-        base_branch=base_branch,
-        repo_path=repo_path
+        pr_number=pr_number or 0, branch=branch, base_branch=base_branch, repo_path=repo_path
     )
 
 
@@ -384,7 +365,7 @@ def register_baseline_from_ci(
     fitness: Dict[str, float],
     code: str,
     commit_hash: str,
-    branch: str = "main"
+    branch: str = "main",
 ):
     """Register baseline during CI build."""
     baselines = PerformanceBaseline()
@@ -395,13 +376,14 @@ def register_baseline_from_ci(
         fitness=fitness,
         code=code,
         commit_hash=commit_hash,
-        branch=branch
+        branch=branch,
     )
     print(f"Baseline registered for {function_name} in {file_path}")
 
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) > 1 and sys.argv[1] == "register":
         # Register baseline mode
         if len(sys.argv) > 4:
@@ -411,7 +393,7 @@ if __name__ == "__main__":
                 sys.argv[4],  # language
                 {"latency_p50": 1.0},  # fitness (from benchmark)
                 "# code would be passed via stdin",
-                os.environ.get("GIT_COMMIT", "unknown")
+                os.environ.get("GIT_COMMIT", "unknown"),
             )
     else:
         # Analyze mode

@@ -137,6 +137,7 @@ class TestMetricsIntegration:
             pytest.skip("HTTP server not available")
         try:
             import urllib.request  # noqa: PLC0415
+
             time.sleep(0.2)
             resp = urllib.request.urlopen("http://127.0.0.1:19102/metrics", timeout=2)
             assert resp.status == 200

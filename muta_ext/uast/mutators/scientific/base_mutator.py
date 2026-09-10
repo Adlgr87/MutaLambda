@@ -11,12 +11,15 @@ try:
 except ImportError:
     # Fallback for testing
     @dataclass
-    class Node: pass
+    class Node:
+        pass
+
     @dataclass
     class CoreUAST:
         body: List = []
         language: str = "python"
         metadata: Dict = {}
+
     @dataclass
     class Function(Node):
         name: Any = None
@@ -25,17 +28,20 @@ except ImportError:
         decorators: List = []
         return_type: Any = None
         tag: Any = None
+
     @dataclass
     class For(Node):
         var: Any = None
         iterable: Any = None
         body: List = []
         is_traditional: bool = True
+
     @dataclass
     class While(Node):
         condition: Any = None
         body: List = []
         is_traditional: bool = True
+
     @dataclass
     class If(Node):
         condition: Any = None
@@ -54,6 +60,7 @@ class MutationResult:
         score_impact: Impacto estimado en el score
         confidence: Confianza en el cambio (0.0 - 1.0)
     """
+
     mutated_uast: CoreUAST
     applied: bool = False
     description: str = ""
@@ -90,6 +97,7 @@ class BaseMutator(ABC):
 
 class BaseScientificMutator(BaseMutator):
     """Base para mutadores de dominio científico."""
+
     domain = "scientific"
     strength = 0.3
 

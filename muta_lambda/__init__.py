@@ -83,7 +83,6 @@ from event_bus import (
 )
 from workflow_protocol import ProtocolTrace
 
-
 # ── EvolveConfig + tipos relacionados (extracted to muta_lambda/config.py, Phase 2A) ──
 # Re-exportados para que ``from muta_lambda import EvolveConfig,
 # EarlyStopMonitor, GenerationResult`` siga funcionando.
@@ -93,9 +92,6 @@ from muta_lambda.config import (  # noqa: F401
     GenerationResult,
 )
 
-
-
-
 # ── Re-export MutaLambdaAgent from the dedicated ``agent`` module ────────
 # (Phase 2B extraction). The class plus its helper methods live in
 # ``muta_lambda/agent.py``; it is imported *after* all of the symbols above
@@ -103,13 +99,11 @@ from muta_lambda.config import (  # noqa: F401
 # ``from muta_lambda import ...`` without a circular-import error.
 from muta_lambda.agent import MutaLambdaAgent  # noqa: E402,F401
 
-
 # ── Re-export MutaLambdaSession from the dedicated ``session`` module ─────
 # (Phase 2C extraction). Imported *after* ``MutaLambdaAgent`` is bound so that
 # ``session.py`` can resolve its ``"MutaLambdaAgent"`` type-hint via
 # ``from muta_lambda import ...`` without a circular-import error.
 from muta_lambda.session import MutaLambdaSession  # noqa: E402,F401
-
 
 # ── CLI entry points (Phase 2D extraction) ──
 # ``main()``, ``run_full_test_suite()``, ``_demo_llm_fn`` now live in
@@ -118,28 +112,56 @@ from cli.entrypoints import main, run_full_test_suite, _demo_llm_fn  # noqa: E40
 
 __all__ = [  # noqa: C800
     # Configuration
-    "EvolveConfig", "EarlyStopMonitor", "GenerationResult",
+    "EvolveConfig",
+    "EarlyStopMonitor",
+    "GenerationResult",
     # Core types
-    "Individual", "LineageGraph", "LineageNode", "PromptGenome",
-    "EvalResult", "IslandConfig", "ArchivedSolution",
+    "Individual",
+    "LineageGraph",
+    "LineageNode",
+    "PromptGenome",
+    "EvalResult",
+    "IslandConfig",
+    "ArchivedSolution",
     # Modules
-    "Island", "MigrationBus", "SandboxEvaluator", "SolutionArchive",
-    "ASTMutator", "CodeRegion", "CoreEvolutionEngine",
-    "LLMBackend", "_resolve_llm_backend",
-    "PromptEvolver", "ProfileMode",
-    "run_all_filters", "_filter_mutant",
+    "Island",
+    "MigrationBus",
+    "SandboxEvaluator",
+    "SolutionArchive",
+    "ASTMutator",
+    "CodeRegion",
+    "CoreEvolutionEngine",
+    "LLMBackend",
+    "_resolve_llm_backend",
+    "PromptEvolver",
+    "ProfileMode",
+    "run_all_filters",
+    "_filter_mutant",
     # Event bus
-    "EventBus", "CommandQueue",
-    "RUN_STARTED", "RUN_COMPLETED", "GENERATION_STARTED",
-    "GENERATION_COMPLETED", "CHECKPOINT_SAVED", "MIGRATION_APPLIED",
+    "EventBus",
+    "CommandQueue",
+    "RUN_STARTED",
+    "RUN_COMPLETED",
+    "GENERATION_STARTED",
+    "GENERATION_COMPLETED",
+    "CHECKPOINT_SAVED",
+    "MIGRATION_APPLIED",
     # Extensions
-    "ExtensionRegistry", "ExtensionContext", "RNGSession", "ProtocolTrace",
-    "IslandPool", "IslandDiversity", "IslandSnapshot",
-    "HFCLeagueEngine", "HFCTierConfig",
+    "ExtensionRegistry",
+    "ExtensionContext",
+    "RNGSession",
+    "ProtocolTrace",
+    "IslandPool",
+    "IslandDiversity",
+    "IslandSnapshot",
+    "HFCLeagueEngine",
+    "HFCTierConfig",
     # Top-level classes
-    "MutaLambdaAgent", "MutaLambdaSession",
+    "MutaLambdaAgent",
+    "MutaLambdaSession",
     # CLI
-    "main", "run_full_test_suite",
+    "main",
+    "run_full_test_suite",
 ]
 
 if __name__ == "__main__":

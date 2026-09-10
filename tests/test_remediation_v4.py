@@ -13,7 +13,6 @@ from muta_lambda import EvolveConfig, GenerationResult, MutaLambdaAgent
 from runners import SubprocessRunner, compare_values, scan_code_security
 from sandbox import SandboxEvaluator
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 

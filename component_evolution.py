@@ -14,8 +14,8 @@ import enum
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
-
 # ── Enums ────────────────────────────────────────────────────────────────────
+
 
 class CouplingLevel(str, enum.Enum):
     """Nivel de acoplamiento entre componentes."""
@@ -38,6 +38,7 @@ class CouplingLevel(str, enum.Enum):
 
 
 # ── Data Classes ──────────────────────────────────────────────────────────────
+
 
 @dataclass
 class InterfaceSpec:
@@ -198,14 +199,16 @@ class ComponentGraph:
             if source is None:
                 continue
             params = self._extract_params(node)
-            results.append({
-                "name": node.name,
-                "source": source,
-                "line_start": start,
-                "line_end": end,
-                "parameters": params,
-                "complexity": self._node_complexity(node),
-            })
+            results.append(
+                {
+                    "name": node.name,
+                    "source": source,
+                    "line_start": start,
+                    "line_end": end,
+                    "parameters": params,
+                    "complexity": self._node_complexity(node),
+                }
+            )
 
         # Sort by complexity descending, filter by min_functions
         results.sort(key=lambda r: r["complexity"], reverse=True)
@@ -249,6 +252,7 @@ class ComponentGraph:
 
 
 # ── Module Extractor ──────────────────────────────────────────────────────────
+
 
 class ModuleExtractor:
     """Extrae funciones/clases de código monolítico en componentes."""
@@ -305,7 +309,10 @@ class ModuleExtractor:
         new_body = []
         extracted_node = None
         for node in tree.body:
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == candidate["name"]:
+            if (
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == candidate["name"]
+            ):
                 extracted_node = node
                 continue
             new_body.append(node)
@@ -359,9 +366,7 @@ class ModuleExtractor:
             "edge_count": float(edge_count),
         }
 
-    def _make_component(
-        self, code: str, node: ast.FunctionDef
-    ) -> Component:
+    def _make_component(self, code: str, node: ast.FunctionDef) -> Component:
         """Create a Component from a FunctionDef AST node."""
         start = getattr(node, "lineno", 0)
         end = getattr(node, "end_lineno", start)
@@ -395,9 +400,7 @@ class ModuleExtractor:
             interface=interface,
         )
 
-    def _make_class_component(
-        self, code: str, node: ast.ClassDef
-    ) -> Component:
+    def _make_class_component(self, code: str, node: ast.ClassDef) -> Component:
         """Create a Component from a ClassDef AST node."""
         start = getattr(node, "lineno", 0)
         end = getattr(node, "end_lineno", start)
@@ -451,10 +454,16 @@ class ModuleExtractor:
     def _compute_coupling_for(self, name: str) -> float:
         """Compute coupling score for a single component (normalized)."""
         deps = self.graph.edges.get(name, set())
-        callers = self.graph.components.get(name, Component(
-            name=name, source_code="", line_start=0, line_end=0,
-            interface=InterfaceSpec(name=name),
-        )).callers
+        callers = self.graph.components.get(
+            name,
+            Component(
+                name=name,
+                source_code="",
+                line_start=0,
+                line_end=0,
+                interface=InterfaceSpec(name=name),
+            ),
+        ).callers
         total = len(deps) + len(callers)
         # Normalize: 0.0 = no coupling, 1.0 = high coupling
         return min(1.0, total / 10.0)
@@ -474,6 +483,7 @@ class ModuleExtractor:
 
 
 # ── Component Mutator ────────────────────────────────────────────────────────
+
 
 class ComponentMutator:
     """Mutates component structures during evolution."""
@@ -513,9 +523,7 @@ class ComponentMutator:
             dependents=set(comp.dependents),
         )
 
-    def merge_components(
-        self, comp_a: Component, comp_b: Component
-    ) -> Optional[Component]:
+    def merge_components(self, comp_a: Component, comp_b: Component) -> Optional[Component]:
         """Merge two related components into one."""
         # Check for any dependency relationship (either direction)
         related = (
@@ -530,9 +538,7 @@ class ComponentMutator:
         merged_name = f"{comp_a.name}+{comp_b.name}"
         merged_inputs = {**comp_a.interface.input_types, **comp_b.interface.input_types}
         merged_reqs = list(set(comp_a.interface.requirements + comp_b.interface.requirements))
-        merged_complexity = (
-            comp_a.interface.complexity_score + comp_b.interface.complexity_score
-        )
+        merged_complexity = comp_a.interface.complexity_score + comp_b.interface.complexity_score
         merged_coupling = max(comp_a.coupling_score, comp_b.coupling_score)
 
         return Component(
@@ -570,6 +576,7 @@ class ComponentMutator:
 
 
 # ── Utility Functions ─────────────────────────────────────────────────────────
+
 
 def run_component_evolution(
     code: str,
@@ -611,10 +618,12 @@ def run_component_evolution(
             evolved = mutator.evolve_interface(comp)
             current_graph.components[name] = evolved
 
-        results["evolved_graphs"].append({
-            "generation": gen + 1,
-            "metrics": extractor.compute_metrics(current_graph),
-        })
+        results["evolved_graphs"].append(
+            {
+                "generation": gen + 1,
+                "metrics": extractor.compute_metrics(current_graph),
+            }
+        )
 
     results["final_graph"] = current_graph
     results["final_metrics"] = extractor.compute_metrics(current_graph)

@@ -37,4 +37,3 @@ def mutate(node, **kwargs):
     )
     assert "def mutate" in code
     validate_generated_mutator(code, "python")
-

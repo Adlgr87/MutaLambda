@@ -44,9 +44,11 @@ def _test_cases():
 
 # ── Module sanity ───────────────────────────────────────────────────────────
 
+
 class TestModule:
     def test_imports_cleanly(self):
         import progressive_pipeline  # noqa: F401
+
         # If this file has a syntax error, import fails before reaching here.
         assert hasattr(progressive_pipeline, "ProgressivePipeline")
 
@@ -65,20 +67,17 @@ class TestModule:
 
 # ── Regression-test synthesis ───────────────────────────────────────────────
 
+
 class TestSynthesizeRegressionTests:
     def test_produces_declarative_cases(self):
-        cases = synthesize_regression_tests(
-            "def double(x):\n    return x * 2\n"
-        )
+        cases = synthesize_regression_tests("def double(x):\n    return x * 2\n")
         assert cases
         for case in cases:
             assert case["function"] == "double"
             assert "args" in case and "expected" in case
 
     def test_float_uses_float_close(self):
-        cases = synthesize_regression_tests(
-            "def scale(x: float) -> float:\n    return x * 1.5\n"
-        )
+        cases = synthesize_regression_tests("def scale(x: float) -> float:\n    return x * 1.5\n")
         assert any(c["comparison"] == "float_close" for c in cases)
 
     def test_expected_matches_baseline_output(self):
@@ -92,6 +91,7 @@ class TestSynthesizeRegressionTests:
 
 
 # ── Improvement calculation ─────────────────────────────────────────────────
+
 
 class TestImprovement:
     def test_faster_latency_is_positive(self):
@@ -115,6 +115,7 @@ class TestImprovement:
 
 
 # ── Fast phase: real evaluation ─────────────────────────────────────────────
+
 
 class TestFastPhase:
     def test_no_llm_returns_no_llm(self):
@@ -161,6 +162,7 @@ class TestFastPhase:
 
 # ── Deep phase: real engine ─────────────────────────────────────────────────
 
+
 class TestDeepPhase:
     # Flaky bajo carga de la suite completa (ver docs/PRODUCTION_CHECKLIST.md §1);
     # falla rápido, así que reintentar es barato.
@@ -184,6 +186,7 @@ class TestDeepPhase:
 
 
 # ── End-to-end ──────────────────────────────────────────────────────────────
+
 
 class TestEndToEnd:
     def test_full_run_fast_mode(self):

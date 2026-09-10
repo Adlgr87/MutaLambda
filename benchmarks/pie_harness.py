@@ -36,7 +36,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from benchmarks.effibench_harness import summarize
 
-
 # ---- Representative competitive programming tasks ----
 # These are common patterns from CodeForces that benefit from optimization.
 # Each has: original (slow) C++ and optimized (fast) C++ by human authors.
@@ -168,9 +167,9 @@ std::string buildResult(std::vector<std::string>& parts) {
 }
 """,
         "tests": [
-            "assert(buildResult({\"hello\", \" \", \"world\"}) == \"hello world\")",
-            "assert(buildResult({\"a\", \"b\", \"c\"}) == \"abc\")",
-            "assert(buildResult({}) == \"\")",
+            'assert(buildResult({"hello", " ", "world"}) == "hello world")',
+            'assert(buildResult({"a", "b", "c"}) == "abc")',
+            'assert(buildResult({}) == "")',
         ],
     },
     {
@@ -430,7 +429,9 @@ void customSort(std::vector<int>& arr) {
     std::sort(arr.begin(), arr.end());
 }
 """,
-        "tests": ["std::vector<int> v = {5,3,1,4,2}; customSort(v); assert(v == (std::vector<int>{1,2,3,4,5}))"],
+        "tests": [
+            "std::vector<int> v = {5,3,1,4,2}; customSort(v); assert(v == (std::vector<int>{1,2,3,4,5}))"
+        ],
     },
 ]
 
@@ -438,6 +439,7 @@ void customSort(std::vector<int>& arr) {
 @dataclass
 class PIETask:
     """A PIE benchmark task."""
+
     problem_idx: int
     task_name: str
     description: str
@@ -477,7 +479,9 @@ def compile_cpp(code: str, output_path: str, flag_o3: bool = True) -> tuple[bool
         os.unlink(code_path)
 
 
-def run_cpp_binary(binary_path: str, iterations: int = 1, timeout: float = 10.0) -> tuple[float, bool, str]:
+def run_cpp_binary(
+    binary_path: str, iterations: int = 1, timeout: float = 10.0
+) -> tuple[float, bool, str]:
     """Run compiled C++ binary and measure execution time.
 
     Returns (avg_exec_time_sec, success, output).
@@ -519,7 +523,9 @@ def build_full_program(func_code: str, task_name: str, iterations: int = 10000) 
             + func_code
             + "\nint main() {\n"
             + "    volatile int r;\n"
-            + "    for (int i = 0; i < " + IT + "; i++) {\n"
+            + "    for (int i = 0; i < "
+            + IT
+            + "; i++) {\n"
             + "        std::vector<int> nums = {1,1,2,2,3,3,3,4,4,5,5,5,5,6,6,6,7,7,7,7,7,8,8,9,9,9,9,10,10,10};\n"
             + "        r = removeDuplicates(nums);\n"
             + "    }\n"
@@ -532,7 +538,9 @@ def build_full_program(func_code: str, task_name: str, iterations: int = 10000) 
             + func_code
             + "\nint main() {\n"
             + "    volatile int r;\n"
-            + "    for (int i = 0; i < " + IT + "; i++) {\n"
+            + "    for (int i = 0; i < "
+            + IT
+            + "; i++) {\n"
             + "        std::vector<int> nums = {1,2,3,4,5,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,6,7,8,9,10};\n"
             + "        std::vector<int> copy = nums;\n"
             + "        r = countPairs(copy, 11);\n"
@@ -545,8 +553,10 @@ def build_full_program(func_code: str, task_name: str, iterations: int = 10000) 
             "#include <string>\n#include <vector>\n#include <chrono>\n"
             + func_code
             + "\nint main() {\n"
-            + "    for (int i = 0; i < " + IT + "; i++) {\n"
-            + "        std::vector<std::string> parts = {\"hello\", \"world\", \"foo\", \"bar\", \"baz\", \"qux\", \"abc\", \"def\", \"ghi\", \"jkl\"};\n"
+            + "    for (int i = 0; i < "
+            + IT
+            + "; i++) {\n"
+            + '        std::vector<std::string> parts = {"hello", "world", "foo", "bar", "baz", "qux", "abc", "def", "ghi", "jkl"};\n'
             + "        std::vector<std::string> copy = parts;\n"
             + "        volatile std::string r = buildResult(copy);\n"
             + "    }\n"
@@ -558,7 +568,9 @@ def build_full_program(func_code: str, task_name: str, iterations: int = 10000) 
             "#include <vector>\n#include <algorithm>\n#include <chrono>\n"
             + func_code
             + "\nint main() {\n"
-            + "    for (int i = 0; i < " + IT + "; i++) {\n"
+            + "    for (int i = 0; i < "
+            + IT
+            + "; i++) {\n"
             + "        std::vector<int> arr = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30};\n"
             + "        std::vector<int> copy = arr;\n"
             + "        volatile auto r = removeEven(copy);\n"
@@ -572,7 +584,9 @@ def build_full_program(func_code: str, task_name: str, iterations: int = 10000) 
             + func_code
             + "\nint main() {\n"
             + "    volatile long long r;\n"
-            + "    for (int i = 0; i < " + IT + "; i++) {\n"
+            + "    for (int i = 0; i < "
+            + IT
+            + "; i++) {\n"
             + "        r = fib(40);\n"
             + "    }\n"
             + "    return 0;\n"

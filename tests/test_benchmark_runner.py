@@ -40,18 +40,20 @@ class TestBenchmarkResult:
 
 class TestBenchmarkRunner:
     def setup_method(self):
-        self.runner = BenchmarkRunner(BenchmarkConfig(
-            num_repeats=1,
-            num_generations=2,
-            population_size=4,
-            report_dir="/tmp/mutalambda_test_reports",
-        ))
+        self.runner = BenchmarkRunner(
+            BenchmarkConfig(
+                num_repeats=1,
+                num_generations=2,
+                population_size=4,
+                report_dir="/tmp/mutalambda_test_reports",
+            )
+        )
 
     def test_run_benchmark_cpu(self):
         pop = np.random.randn(4, 5)
 
         def fitness(ind):
-            return float(np.sum(ind ** 2))
+            return float(np.sum(ind**2))
 
         result = self.runner.run_benchmark("sphere", fitness, pop, method="cpu")
         assert result.success
@@ -84,7 +86,7 @@ class TestBenchmarkRunner:
         pop = np.random.randn(4, 5)
 
         def fitness(ind):
-            return float(np.sum(ind ** 2))
+            return float(np.sum(ind**2))
 
         self.runner.run_benchmark("sphere", fitness, pop, method="cpu")
         report_path = self.runner.generate_report()
@@ -97,7 +99,7 @@ class TestBenchmarkRunner:
         pop = np.random.randn(4, 5)
 
         def fitness(ind):
-            return float(np.sum(ind ** 2))
+            return float(np.sum(ind**2))
 
         self.runner.run_benchmark("sphere", fitness, pop, method="cpu")
         self.runner.print_report()

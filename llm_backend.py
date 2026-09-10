@@ -38,13 +38,13 @@ SUPPORTED_BACKENDS = {
 # Model pricing table (USD per 1M tokens) — updated 2026-08-24.
 # Source: provider pricing pages + transparent.community for OpenRouter.
 MODEL_PRICING: Dict[str, Dict[str, float]] = {
-    "gpt-4o":          {"prompt": 2.50, "completion": 10.00},
-    "gpt-4o-mini":      {"prompt": 0.15, "completion": 0.60},
-    "gpt-4-turbo":      {"prompt": 10.00, "completion": 30.00},
-    "gpt-3.5-turbo":    {"prompt": 0.50, "completion": 1.50},
+    "gpt-4o": {"prompt": 2.50, "completion": 10.00},
+    "gpt-4o-mini": {"prompt": 0.15, "completion": 0.60},
+    "gpt-4-turbo": {"prompt": 10.00, "completion": 30.00},
+    "gpt-3.5-turbo": {"prompt": 0.50, "completion": 1.50},
     "claude-3-5-sonnet": {"prompt": 3.00, "completion": 15.00},
-    "claude-3-opus":    {"prompt": 15.00, "completion": 75.00},
-    "gemini-1.5-pro":   {"prompt": 2.50, "completion": 10.00},
+    "claude-3-opus": {"prompt": 15.00, "completion": 75.00},
+    "gemini-1.5-pro": {"prompt": 2.50, "completion": 10.00},
     "gemini-1.5-flash": {"prompt": 0.076, "completion": 0.30},
 }
 
@@ -137,7 +137,7 @@ def parse_structured_response(text: str) -> StructuredLLMResponse:
     # Heuristic: first def/class to end.
     m = re.search(r"(?m)^(def |class |async def ).*", raw)
     if m:
-        code = raw[m.start():].strip()
+        code = raw[m.start() :].strip()
         return StructuredLLMResponse(code=code, raw=raw, confidence=0.3)
 
     return StructuredLLMResponse(code=raw.strip(), raw=raw, confidence=0.1)
@@ -145,6 +145,47 @@ def parse_structured_response(text: str) -> StructuredLLMResponse:
 
 def prompt_hash(prompt: str) -> str:
     return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+
+
+# ── Central prompt redaction (ML-014) ──────────────────────────────────────
+# Best-effort, single-layer scrubbing of common secret shapes before a prompt
+# leaves the host toward an external provider. This is not a substitute for
+# keeping secrets out of prompts entirely — it is defense-in-depth behind the
+# privacy.allow_external_llm=false policy.
+_SECRET_PATTERNS: List[tuple] = [
+    (
+        re.compile(
+            r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----",
+            re.DOTALL,
+        ),
+        "[REDACTED_PRIVATE_KEY]",
+    ),
+    (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "[REDACTED_AWS_KEY]"),
+    (re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b"), "[REDACTED_GOOGLE_KEY]"),
+    (re.compile(r"\bgh[pousr]_[0-9A-Za-z]{20,}\b"), "[REDACTED_GITHUB_TOKEN]"),
+    (re.compile(r"\bxox[baprs]-[0-9A-Za-z\-]{10,}\b"), "[REDACTED_SLACK_TOKEN]"),
+    (re.compile(r"\bsk_live_[0-9A-Za-z]{16,}\b"), "[REDACTED_STRIPE_KEY]"),
+    (
+        re.compile(r"\b(Bearer\s+)[A-Za-z0-9_\-\.]{16,}\b", re.IGNORECASE),
+        r"\1[REDACTED_TOKEN]",
+    ),
+    (
+        re.compile(
+            r"\b(api[_-]?key|apikey|secret|password|passwd|token)\s*[:=]\s*['\"]?"
+            r"[A-Za-z0-9_\-\.]{8,}['\"]?",
+            re.IGNORECASE,
+        ),
+        r"\1=[REDACTED]",
+    ),
+]
+
+
+def redact_prompt(prompt: str) -> str:
+    """Strip common secret shapes from ``prompt`` (ML-014)."""
+    out = prompt
+    for pattern, replacement in _SECRET_PATTERNS:
+        out = pattern.sub(replacement, out)
+    return out
 
 
 class LLMBackend:
@@ -169,6 +210,7 @@ class LLMBackend:
         fallback_fn: Optional[Callable[[str], str]] = None,
         replay_log_path: Optional[str] = None,
         privacy_allow_external: bool = True,
+        privacy_redact_secrets: bool = True,
     ) -> None:
         self.backend = (backend or DEFAULT_BACKEND).lower()
         self.model = model or DEFAULT_MODEL
@@ -192,6 +234,7 @@ class LLMBackend:
         self.fallback_fn = fallback_fn
         self.replay_log_path = replay_log_path
         self.privacy_allow_external = privacy_allow_external
+        self.privacy_redact_secrets = privacy_redact_secrets
 
         self._total_calls = 0
         self._gen_calls = 0
@@ -209,6 +252,11 @@ class LLMBackend:
 
     def _init_backend(self) -> None:
         import requests
+
+        # ML-014: enforce the external-LLM policy *before* constructing any
+        # HTTP session so a disallowed provider is rejected without side effects.
+        if not self.privacy_allow_external and self.backend not in {"ollama"}:
+            raise ValueError(f"privacy.allow_external_llm=false forbids backend={self.backend}")
 
         if self.backend == "ollama":
             self._session = requests.Session()
@@ -265,11 +313,6 @@ class LLMBackend:
         else:
             raise ValueError(f"Unsupported LLM backend: {self.backend}")
 
-        if not self.privacy_allow_external and self.backend not in {"ollama"}:
-            raise ValueError(
-                f"privacy.allow_external_llm=false forbids backend={self.backend}"
-            )
-
     def reset_generation_budget(self) -> None:
         self._gen_calls = 0
 
@@ -315,9 +358,7 @@ class LLMBackend:
 
     def _check_budget(self) -> None:
         if self.max_total_calls and self._total_calls >= self.max_total_calls:
-            raise LLMBudgetExceeded(
-                f"max_total_calls={self.max_total_calls} exhausted"
-            )
+            raise LLMBudgetExceeded(f"max_total_calls={self.max_total_calls} exhausted")
         if self.max_calls_per_generation and self._gen_calls >= self.max_calls_per_generation:
             raise LLMBudgetExceeded(
                 f"max_calls_per_generation={self.max_calls_per_generation} exhausted"
@@ -455,14 +496,14 @@ class LLMBackend:
 
     def generate(self, prompt: str) -> str:
         """Genera texto con retries, budget y circuit breaker."""
+        if self.privacy_redact_secrets:
+            prompt = redact_prompt(prompt)
         self._check_budget()
         if self._circuit_is_open():
             if self.fallback_fn is not None:
                 logger.warning("LLM circuit open — using fallback")
                 return self.fallback_fn(prompt)
-            raise LLMCircuitOpen(
-                f"circuit open after {self._consecutive_failures} failures"
-            )
+            raise LLMCircuitOpen(f"circuit open after {self._consecutive_failures} failures")
 
         last_exc: Optional[Exception] = None
         attempts = 0
@@ -491,7 +532,7 @@ class LLMBackend:
                     exc,
                 )
                 if attempt < self.max_retries:
-                    delay = self.backoff_base_sec * (2 ** attempt)
+                    delay = self.backoff_base_sec * (2**attempt)
                     delay *= 0.5 + random.random()  # jitter
                     time.sleep(delay)
 
@@ -540,7 +581,9 @@ class LLMBackend:
             logger.warning("batch path failed, falling to sequential")
             return [self.generate(p) for p in prompts]
 
-    def _batch_openai(self, prompts: List[str], base_url: str = "https://api.openai.com/v1") -> List[str]:
+    def _batch_openai(
+        self, prompts: List[str], base_url: str = "https://api.openai.com/v1"
+    ) -> List[str]:
         """Native batch using OpenAI's bulk chat endpoint (if endpoint supports it).
 
         Many OpenAI-compatible APIs do not have true batch endpoints behind the
@@ -552,6 +595,8 @@ class LLMBackend:
         results: List[str] = []
         for prompt in prompts:
             try:
+                if self.privacy_redact_secrets:
+                    prompt = redact_prompt(prompt)
                 text = self._single_request(prompt)
                 self._total_calls += 1
                 self._gen_calls += 1
@@ -587,11 +632,11 @@ def _resolve_llm_backend(
     resolved_backend = backend or os.getenv("MUTALAMBDA_LLM_BACKEND", DEFAULT_BACKEND)
     resolved_model = model or os.getenv("MUTALAMBDA_LLM_MODEL", DEFAULT_MODEL)
     resolved_timeout = timeout_sec if timeout_sec is not None else DEFAULT_TIMEOUT_SEC
-    resolved_temperature = (
-        temperature if temperature is not None else DEFAULT_TEMPERATURE
-    )
-    resolved_cost = max_cost_usd if max_cost_usd is not None else float(
-        _env("MUTALAMBDA_LLM_MAX_COST_USD", "0")
+    resolved_temperature = temperature if temperature is not None else DEFAULT_TEMPERATURE
+    resolved_cost = (
+        max_cost_usd
+        if max_cost_usd is not None
+        else float(_env("MUTALAMBDA_LLM_MAX_COST_USD", "0"))
     )
     llm = LLMBackend(
         backend=resolved_backend,
@@ -618,6 +663,7 @@ __all__ = [
     "StructuredLLMResponse",
     "parse_structured_response",
     "prompt_hash",
+    "redact_prompt",
     "_resolve_llm_backend",
     "MODEL_PRICING",
     "_lookup_pricing",

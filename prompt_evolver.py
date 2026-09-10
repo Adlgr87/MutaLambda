@@ -59,9 +59,7 @@ class PromptEvolver:
 
     def step(self, task: str, base_code: str) -> List[str]:
         """Un paso de evolución de prompts."""
-        generated = [
-            self.llm_fn(pg.render(task, base_code)) for pg in self.population
-        ]
+        generated = [self.llm_fn(pg.render(task, base_code)) for pg in self.population]
 
         eval_results = self.evaluator.evaluate_batch(generated)
 

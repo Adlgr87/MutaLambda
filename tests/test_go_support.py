@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for Go language support in MutaLambda."""
+
 import pytest
 import sys
 from pathlib import Path
@@ -10,7 +11,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from muta_ext.uast.adapters.go_adapter import GoAdapter
 from muta_ext.uast.emitters.go_emitter import GoEmitter
 from muta_ext.uast.handlers.go_handler import GoHandler
-from muta_ext.uast.core_uast import CoreUAST, Function, Identifier, Return, LiteralNode, StructDef, FieldDef, TypeAnnotation
+from muta_ext.uast.core_uast import (
+    CoreUAST,
+    Function,
+    Identifier,
+    Return,
+    LiteralNode,
+    StructDef,
+    FieldDef,
+    TypeAnnotation,
+)
 
 
 class TestGoAdapter:
@@ -102,7 +112,7 @@ func add(a int, b int) int {
         uast = adapter.parse_to_uast(source)
 
         assert uast is not None
-        assert hasattr(uast, 'body')
+        assert hasattr(uast, "body")
         assert uast.language == "go"
 
 
@@ -117,7 +127,7 @@ class TestGoEmitter:
             name=Identifier(name="test_func"),
             params=[],
             body=[Return(value=LiteralNode(value=42))],
-            return_type="int"
+            return_type="int",
         )
         uast = CoreUAST(body=[func], language="go")
         result = emitter.emit(uast)
@@ -133,7 +143,7 @@ class TestGoEmitter:
             fields=[
                 FieldDef(name="X", type_annotation=TypeAnnotation(type_name="float64")),
                 FieldDef(name="Y", type_annotation=TypeAnnotation(type_name="float64")),
-            ]
+            ],
         )
         uast = CoreUAST(body=[struct], language="go")
         result = emitter.emit(uast)
@@ -205,6 +215,7 @@ func hello() string {
         """Test emit method."""
         handler = GoHandler()
         from muta_ext.uast.core_uast import CoreUAST
+
         uast = CoreUAST(body=[], language="go")
         result = handler.emit(uast)
         assert isinstance(result, str)

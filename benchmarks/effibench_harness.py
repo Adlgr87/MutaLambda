@@ -149,8 +149,11 @@ def summarize(records: list[dict], min_improvement: float) -> dict:
     kept = [r for r in valid if r["kept"]]
     speeds = [r["speedup"] for r in kept]
     baseline_fails = sum(1 for r in records if r.get("status") == "baseline_fail")
-    llm_correct = sum(1 for r in records if r.get("status") == "llm" and
-                      r.get("candidate", {}).get("correctness") == 1.0)
+    llm_correct = sum(
+        1
+        for r in records
+        if r.get("status") == "llm" and r.get("candidate", {}).get("correctness") == 1.0
+    )
     llm_total = sum(1 for r in records if r.get("status") == "llm")
     return {
         "n_tasks": len(records),
@@ -186,9 +189,11 @@ def main() -> int:
     args = p.parse_args()
 
     tasks = load_tasks(args.parquet)
-    selected = tasks[args.skip::][: args.tasks] if not args.smoke else tasks[: args.tasks]
-    print(f"Loaded {len(tasks)} convertible tasks; running {len(selected)} "
-          f"(mode={'smoke' if args.smoke else 'baseline' if args.baseline_only else 'llm'})")
+    selected = tasks[args.skip : :][: args.tasks] if not args.smoke else tasks[: args.tasks]
+    print(
+        f"Loaded {len(tasks)} convertible tasks; running {len(selected)} "
+        f"(mode={'smoke' if args.smoke else 'baseline' if args.baseline_only else 'llm'})"
+    )
 
     generate = None
     if args.llm and not args.smoke:
@@ -218,21 +223,29 @@ def main() -> int:
         extra = ""
         if rec.get("ratio_to_canonical") is not None:
             extra = f" ratio={rec['ratio_to_canonical']} kept={rec['kept']}"
-        print(f"[{i+1}/{len(selected)}] #{task.problem_idx} {task.task_name[:44]:44s} "
-              f"{tag}{extra}")
+        print(
+            f"[{i+1}/{len(selected)}] #{task.problem_idx} {task.task_name[:44]:44s} "
+            f"{tag}{extra}"
+        )
         # Incremental write for resilience
         summary = summarize(records, args.min_improvement)
-        report = {"benchmark": "EffiBench", "mode": "smoke" if args.smoke else
-                  "baseline" if args.baseline_only else "llm",
-                  "config": vars(args) | {"parquet": str(args.parquet)},
-                  "summary": summary, "results": records}
+        report = {
+            "benchmark": "EffiBench",
+            "mode": "smoke" if args.smoke else "baseline" if args.baseline_only else "llm",
+            "config": vars(args) | {"parquet": str(args.parquet)},
+            "summary": summary,
+            "results": records,
+        }
         out.write_text(json.dumps(report, indent=1))
 
     summary = summarize(records, args.min_improvement)
-    report = {"benchmark": "EffiBench", "mode": "smoke" if args.smoke else
-              "baseline" if args.baseline_only else "llm",
-              "config": vars(args) | {"parquet": str(args.parquet)},
-              "summary": summary, "results": records}
+    report = {
+        "benchmark": "EffiBench",
+        "mode": "smoke" if args.smoke else "baseline" if args.baseline_only else "llm",
+        "config": vars(args) | {"parquet": str(args.parquet)},
+        "summary": summary,
+        "results": records,
+    }
     out.write_text(json.dumps(report, indent=1))
     print("\n== SUMMARY ==")
     for k, v in summary.items():
@@ -245,8 +258,10 @@ def main() -> int:
             n_ok = sum(1 for r in records if r["baseline"]["correctness"] > 0)
             ok = n_ok == len(selected) and summary["n_baseline_fail"] == 0
         else:
-            ok = (summary["n_valid_comparisons"] > 0
-                  and summary["mean_ratio_to_canonical"] is not None)
+            ok = (
+                summary["n_valid_comparisons"] > 0
+                and summary["mean_ratio_to_canonical"] is not None
+            )
         print(f"SMOKE {'PASS' if ok else 'FAIL'}")
         return 0 if ok else 1
     return 0

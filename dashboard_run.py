@@ -4,6 +4,7 @@ MutaLambda Run Dashboard — Streamlit interface for inspecting completed runs.
 Usage:
   streamlit run dashboard_run.py
 """
+
 from __future__ import annotations
 
 import json

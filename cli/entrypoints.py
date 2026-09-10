@@ -107,7 +107,8 @@ def _demo_llm_fn(prompt: str) -> str:
     code_lines = [
         l
         for l in lines
-        if l.strip() and not l.startswith(("You are", "Task:", "Improve", "Return", "Instructions:"))
+        if l.strip()
+        and not l.startswith(("You are", "Task:", "Improve", "Return", "Instructions:"))
     ]
     code = "\n".join(code_lines).strip()
     if not code:

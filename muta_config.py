@@ -166,6 +166,7 @@ class UASTSection(BaseModel):
     UAST provides language-agnostic code analysis and mutation.
     Disabled by default for safe opt-in adoption.
     """
+
     model_config = ConfigDict(extra="ignore")
 
     use_uast: bool = False

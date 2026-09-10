@@ -21,6 +21,7 @@ class TestConvergentBoost:
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
+
 def _make_individual(code: str, score: float = 10.0) -> Individual:
     """Create a minimal individual for boost tests."""
     return Individual(
@@ -30,8 +31,7 @@ def _make_individual(code: str, score: float = 10.0) -> Individual:
     )
 
 
-def _make_island(island_id: int, pop_size: int = 4,
-                 best_code: str = "x + 1") -> Island:
+def _make_island(island_id: int, pop_size: int = 4, best_code: str = "x + 1") -> Island:
     """Create an island with mocked dependencies and a known population."""
     config = IslandConfig(population_size=pop_size, top_k=2)
     llm_fn = MagicMock(return_value=best_code)
@@ -45,8 +45,9 @@ def _make_island(island_id: int, pop_size: int = 4,
         evaluator=evaluator,
         migration_bus=mig_bus,
     )
-    isl.population = [_make_individual(f"{best_code} # var{i}", 10.0 + i * 0.1)
-                      for i in range(pop_size)]
+    isl.population = [
+        _make_individual(f"{best_code} # var{i}", 10.0 + i * 0.1) for i in range(pop_size)
+    ]
     isl.local_best = max(isl.population, key=lambda x: x.score)
     return isl
 
@@ -81,8 +82,8 @@ def test_boost_applied_when_similar():
 
     stats = agent._apply_convergent_boost()
 
-    assert stats["boosted"] == 6   # 3 per island
-    assert stats["pairs"] == 1     # one pair of islands
+    assert stats["boosted"] == 6  # 3 per island
+    assert stats["pairs"] == 1  # one pair of islands
 
     for orig, ind in zip(orig_scores_a, isl_a.population):
         assert ind.score > orig
@@ -208,14 +209,10 @@ def test_large_population_boost():
 
     agent.islands = []
     for i in range(4):
-        isl = _make_island(island_id=i, pop_size=8,
-                           best_code=f"def f(x): return x + {i}")
+        isl = _make_island(island_id=i, pop_size=8, best_code=f"def f(x): return x + {i}")
         agent.islands.append(isl)
 
-    orig_scores = [
-        [ind.score for ind in isl.population]
-        for isl in agent.islands
-    ]
+    orig_scores = [[ind.score for ind in isl.population] for isl in agent.islands]
 
     stats = agent._apply_convergent_boost()
 

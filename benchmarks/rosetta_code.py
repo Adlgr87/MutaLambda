@@ -5,6 +5,7 @@ Optimizes a task in Python via UAST, then emits equivalent Rust and C++
 to demonstrate portability of optimizations across languages.
 Measures speedup consistency across language boundaries.
 """
+
 import json
 import time
 import statistics
@@ -175,22 +176,21 @@ def benchmark_python(code: str, iterations: int = 5) -> float:
 
 def benchmark_cpp(code: str, iterations: int = 5) -> float:
     """Compile and run C++ code, return P50 in ms."""
-    with tempfile.NamedTemporaryFile(suffix='.cpp', mode='w', delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=".cpp", mode="w", delete=False) as f:
         f.write(code)
         f.flush()
         cpp_path = f.name
-    
-    exe_path = cpp_path.replace('.cpp', '.exe')
-    
+
+    exe_path = cpp_path.replace(".cpp", ".exe")
+
     try:
         # Compile with -O3
         compile = subprocess.run(
-            ['g++', '-O3', '-o', exe_path, cpp_path],
-            capture_output=True, timeout=10
+            ["g++", "-O3", "-o", exe_path, cpp_path], capture_output=True, timeout=10
         )
         if compile.returncode != 0:
             return None
-        
+
         times = []
         for _ in range(iterations):
             t0 = time.perf_counter()
@@ -198,7 +198,7 @@ def benchmark_cpp(code: str, iterations: int = 5) -> float:
             t1 = time.perf_counter()
             if run.returncode == 0:
                 times.append((t1 - t0) * 1000)
-        
+
         times.sort()
         return times[len(times) // 2] if times else None
     finally:
@@ -211,31 +211,33 @@ def benchmark_rust(code: str, iterations: int = 5) -> float:
     rust_dir = Path(tempfile.mkdtemp())
     main_rs = rust_dir / "main.rs"
     main_rs.write_text(code)
-    
+
     try:
         # Compile with rustc -O
         compile = subprocess.run(
-            ['rustc', '-O', str(main_rs), '-o', str(rust_dir / 'main')],
-            capture_output=True, timeout=10,
-            cwd=rust_dir
+            ["rustc", "-O", str(main_rs), "-o", str(rust_dir / "main")],
+            capture_output=True,
+            timeout=10,
+            cwd=rust_dir,
         )
         if compile.returncode != 0:
             return None
-        
+
         times = []
         for _ in range(iterations):
             t0 = time.perf_counter()
-            run = subprocess.run([str(rust_dir / 'main')], capture_output=True, timeout=30)
+            run = subprocess.run([str(rust_dir / "main")], capture_output=True, timeout=30)
             t1 = time.perf_counter()
             if run.returncode == 0:
                 times.append((t1 - t0) * 1000)
-        
+
         times.sort()
         return times[len(times) // 2] if times else None
     except FileNotFoundError:
         return None  # rustc not installed
     finally:
         import shutil
+
         shutil.rmtree(rust_dir, ignore_errors=True)
 
 
@@ -246,9 +248,9 @@ def run_cross_language_benchmark() -> dict:
         "tasks": [],
         "summary": {},
     }
-    
-    has_rust = Path('/usr/bin/rustc').exists() or Path('/usr/local/bin/rustc').exists()
-    
+
+    has_rust = Path("/usr/bin/rustc").exists() or Path("/usr/local/bin/rustc").exists()
+
     for task in ROSETTA_TASKS:
         task_result = {
             "name": task.name,
@@ -256,9 +258,13 @@ def run_cross_language_benchmark() -> dict:
             "python_original_ms": benchmark_python(task.python_original),
             "python_optimized_ms": benchmark_python(task.python_optimized),
             "cpp_ms": benchmark_cpp(task.cpp_equivalent) if task.cpp_equivalent else None,
-            "rust_ms": benchmark_rust(task.rust_equivalent) if (task.rust_equivalent and has_rust) else None,
+            "rust_ms": (
+                benchmark_rust(task.rust_equivalent)
+                if (task.rust_equivalent and has_rust)
+                else None
+            ),
         }
-        
+
         # Calculate speedups
         if task_result["python_original_ms"] and task_result["python_optimized_ms"]:
             speedup = task_result["python_original_ms"] / task_result["python_optimized_ms"]
@@ -267,16 +273,16 @@ def run_cross_language_benchmark() -> dict:
         else:
             task_result["python_speedup"] = None
             task_result["status"] = "failed"
-        
+
         if task_result["cpp_ms"] and task_result["python_optimized_ms"]:
             task_result["cpp_vs_python"] = round(
                 task_result["python_optimized_ms"] / max(task_result["cpp_ms"], 1e-6), 2
             )
         else:
             task_result["cpp_vs_python"] = None
-        
+
         results["tasks"].append(task_result)
-    
+
     speedups = [t["python_speedup"] for t in results["tasks"] if t.get("python_speedup")]
     results["summary"] = {
         "n_tasks": len(results["tasks"]),
@@ -284,17 +290,19 @@ def run_cross_language_benchmark() -> dict:
         "mean_python_speedup": round(statistics.mean(speedups), 3) if speedups else 0,
         "median_python_speedup": round(statistics.median(speedups), 3) if speedups else 0,
     }
-    
+
     return results
 
 
 if __name__ == "__main__":
     print("=== Rosetta Code Cross-Language Benchmark ===")
     results = run_cross_language_benchmark()
-    
+
     for t in results["tasks"]:
         print(f"\n  [{t['name']}]")
-        print(f"    Python: {t.get('python_original_ms','?') and round(t['python_original_ms'],2)}ms → {t.get('python_optimized_ms') and round(t['python_optimized_ms'],2)}ms")
+        print(
+            f"    Python: {t.get('python_original_ms','?') and round(t['python_original_ms'],2)}ms → {t.get('python_optimized_ms') and round(t['python_optimized_ms'],2)}ms"
+        )
         if t.get("python_speedup"):
             print(f"    Python speedup: {t['python_speedup']:.2f}x")
         if t.get("cpp_ms"):
@@ -303,12 +311,12 @@ if __name__ == "__main__":
                 print(f"    C++ vs Python optimized: {t['cpp_vs_python']:.2f}x")
         if t.get("rust_ms"):
             print(f"    Rust (-O): {round(t['rust_ms'],2)}ms")
-    
+
     s = results["summary"]
     print(f"\nMean Python speedup: {s['mean_python_speedup']:.2f}x")
     print(f"Median Python speedup: {s['median_python_speedup']:.2f}x")
     print(f"Rust available: {s['rust_available']}")
-    
+
     out = Path("benchmarks/results_rosetta.json")
     with open(out, "w") as f:
         json.dump(results, f, indent=2)

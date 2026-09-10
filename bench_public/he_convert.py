@@ -127,13 +127,9 @@ class _Checker(ast.NodeVisitor):
         if not _all_literals(arg_nodes):
             return None
         expected = _literal(exp_node)
-        if expected is None and not (
-            isinstance(exp_node, ast.Constant) and exp_node.value is None
-        ):
+        if expected is None and not (isinstance(exp_node, ast.Constant) and exp_node.value is None):
             return None
-        floaty = _is_floaty(expected) or any(
-            _is_floaty(_literal(a)) for a in arg_nodes
-        )
+        floaty = _is_floaty(expected) or any(_is_floaty(_literal(a)) for a in arg_nodes)
         comparison = "float_close" if floaty else "equal"
         return self._mk(fn_name, arg_nodes, expected, comparison)
 
@@ -166,9 +162,7 @@ class _Checker(ast.NodeVisitor):
         if not _all_literals(arg_nodes):
             return None
         expected = _literal(exp_node)
-        if expected is None and not (
-            isinstance(exp_node, ast.Constant) and exp_node.value is None
-        ):
+        if expected is None and not (isinstance(exp_node, ast.Constant) and exp_node.value is None):
             return None
         return self._mk(fn_name, arg_nodes, expected, "float_close")
 

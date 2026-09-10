@@ -4,6 +4,7 @@ GPU-Accelerated NSGA-II Optimizer for MutaLambda.
 Uses PyTorch CUDA tensors for parallel population evaluation.
 Auto-fallback to CPU when no GPU is available.
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import torch
+
     _HAS_TORCH = True
 except ImportError:
     _HAS_TORCH = False
@@ -26,6 +28,7 @@ except ImportError:
 @dataclass
 class GPUConfig:
     """Configuration for GPU-accelerated optimization."""
+
     enabled: bool = False
     device: int = 0
     batch_size: int = 32
@@ -102,7 +105,9 @@ class GPUOptimizer:
                 return f"cuda:{self.config.device}"
             except Exception:
                 if self.config.fallback_to_cpu:
-                    logger.warning("GPU device %d unavailable, falling back to CPU", self.config.device)
+                    logger.warning(
+                        "GPU device %d unavailable, falling back to CPU", self.config.device
+                    )
                     return "cpu"
                 raise
         return "cpu"
@@ -168,8 +173,12 @@ class GPUOptimizer:
                     # Move results back to CPU
                     scores[start_idx:end_idx] = result.cpu().numpy()
                 except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
-                    logger.warning("GPU OOM or error, falling back to CPU for batch %d-%d: %s",
-                                   start_idx, end_idx, e)
+                    logger.warning(
+                        "GPU OOM or error, falling back to CPU for batch %d-%d: %s",
+                        start_idx,
+                        end_idx,
+                        e,
+                    )
                     for i in range(start_idx, end_idx):
                         scores[i] = fitness_fn(batch[i - start_idx])
             else:
@@ -189,13 +198,18 @@ class GPUOptimizer:
 
         logger.info(
             "GPU eval: %d individuals in %.3fs (%.1f/s) on %s",
-            n, elapsed, stats["throughput"], device,
+            n,
+            elapsed,
+            stats["throughput"],
+            device,
         )
 
         self._batch_stats = stats
         return scores, stats
 
-    def _evaluate_batch_gpu(self, tensor: "torch.Tensor", fitness_fn) -> "torch.Tensor":  # noqa: F821
+    def _evaluate_batch_gpu(
+        self, tensor: "torch.Tensor", fitness_fn
+    ) -> "torch.Tensor":  # noqa: F821
         """Evaluate a batch of individuals on GPU."""
         # Apply fitness function to tensor batch
         # This is where GPU parallelism happens
@@ -236,15 +250,28 @@ class GPUOptimizer:
 
         if not self._ensure_torch():
             logger.info("Running NSGA-II in CPU-only mode (no PyTorch)")
-            return self._nsga2_cpu(individuals, fitness_fn, n_generations, population_size,
-                                   mutation_rate, crossover_rate, result)
+            return self._nsga2_cpu(
+                individuals,
+                fitness_fn,
+                n_generations,
+                population_size,
+                mutation_rate,
+                crossover_rate,
+                result,
+            )
 
         device = self._get_device()
-        logger.info("Starting NSGA-II on %s with %d generations, pop=%d",
-                     device, n_generations, population_size)
+        logger.info(
+            "Starting NSGA-II on %s with %d generations, pop=%d",
+            device,
+            n_generations,
+            population_size,
+        )
 
         start_time = time.perf_counter()
-        current_pop = individuals[:population_size] if len(individuals) >= population_size else individuals
+        current_pop = (
+            individuals[:population_size] if len(individuals) >= population_size else individuals
+        )
 
         for gen in range(n_generations):
             gen_start = time.perf_counter()
@@ -258,16 +285,19 @@ class GPUOptimizer:
                 result["best_individual"] = current_pop[np.argmin(scores)].copy()
 
             # Selection, crossover, mutation (simplified NSGA-II)
-            current_pop = self._next_generation(
-                current_pop, scores, mutation_rate, crossover_rate
-            )
+            current_pop = self._next_generation(current_pop, scores, mutation_rate, crossover_rate)
 
             gen_time = time.perf_counter() - gen_start
             result["generations_completed"] = gen + 1
 
             if gen % 5 == 0:
-                logger.info("Gen %d/%d — best: %.4f — %.3fs",
-                            gen, n_generations, result["best_score"], gen_time)
+                logger.info(
+                    "Gen %d/%d — best: %.4f — %.3fs",
+                    gen,
+                    n_generations,
+                    result["best_score"],
+                    gen_time,
+                )
 
         total_time = time.perf_counter() - start_time
         result["gpu_stats"] = {

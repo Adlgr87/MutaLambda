@@ -21,10 +21,13 @@ from pathlib import Path
 import random
 import sys
 import time
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 from uuid import uuid4
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from island_evolution import IslandSnapshot  # noqa: F401
 
 # Package-internal dependencies. These are defined in the package ``__init__``
 # *before* it imports this module, which avoids a circular-import problem:
@@ -66,10 +69,11 @@ from muta_lambda import (
     logger,
 )
 
+
 class MutaLambdaAgent:
     """Orquestador principal del ciclo evolutivo MutaLambda."""
 
-    def __init__(
+    def __init__(  # noqa: C901
         self,
         config: EvolveConfig,
         test_cases: Optional[List[Dict]] = None,
@@ -98,12 +102,9 @@ class MutaLambdaAgent:
                     getattr(config, "llm_max_calls_per_generation", 0) or 0
                 ),
                 max_total_calls=int(getattr(config, "llm_max_total_calls", 0) or 0),
-                max_cost_usd=float(
-                    getattr(config, "llm_max_cost_usd", 0.0) or 0.0
-                ),
-                privacy_allow_external=bool(
-                    getattr(config, "privacy_allow_external_llm", True)
-                ),
+                max_cost_usd=float(getattr(config, "llm_max_cost_usd", 0.0) or 0.0),
+                privacy_allow_external=bool(getattr(config, "privacy_allow_external_llm", True)),
+                privacy_redact_secrets=bool(getattr(config, "privacy_redact_secrets", True)),
                 replay_log_path=getattr(config, "llm_replay_log", None)
                 or (
                     str(Path(config.checkpoint_dir) / "llm_replay.jsonl")
@@ -128,9 +129,7 @@ class MutaLambdaAgent:
         cases = list(test_cases or [])
         allow_untested = bool(getattr(config, "allow_untested", True))
         if getattr(config, "require_tests", False) and not cases and not allow_untested:
-            raise ValueError(
-                "No test cases configured. Use --allow-untested only for development."
-            )
+            raise ValueError("No test cases configured. Use --allow-untested only for development.")
         self.evaluator = SandboxEvaluator(
             test_cases=cases,
             timeout_sec=timeout_sec,
@@ -318,6 +317,7 @@ class MutaLambdaAgent:
         self._operator_bandit = None
         if getattr(config, "operator_bandit_enabled", False):
             from operator_bandit import OperatorBandit
+
             self._operator_bandit = OperatorBandit(
                 operators=["ast", "llm", "crossover", "redesign", "component"],
                 strategy=getattr(config, "operator_bandit_strategy", "ucb1"),
@@ -325,6 +325,7 @@ class MutaLambdaAgent:
             )
         # Register optional engines under EvolutionExtension contract (WF#20)
         from extensions import wrap_engine
+
         for eng, name in (
             (self._hfc, "hfc"),
             (getattr(self, "_thc_engine", None), "thc"),
@@ -348,7 +349,7 @@ class MutaLambdaAgent:
         trace_dict = trace.to_dict()
         self._protocol_traces.append(trace_dict)
         if len(self._protocol_traces) > self.config.workflow_trace_limit:
-            self._protocol_traces = self._protocol_traces[-self.config.workflow_trace_limit:]
+            self._protocol_traces = self._protocol_traces[-self.config.workflow_trace_limit :]
 
         decision = trace_dict.get("decision", "pending")
         if decision == "promote":
@@ -368,8 +369,7 @@ class MutaLambdaAgent:
             trace_dict.get("subject_id"),
             decision,
             " -> ".join(
-                f"{stage['name']}:{stage['status']}"
-                for stage in trace_dict.get("stages", [])
+                f"{stage['name']}:{stage['status']}" for stage in trace_dict.get("stages", [])
             ),
         )
 
@@ -389,11 +389,12 @@ class MutaLambdaAgent:
         logger.info(
             "Seeded %d islands with differentiated populations "
             "(island 0 = original, islands 1..%d = mutated variants)",
-            len(self.islands), len(self.islands) - 1,
+            len(self.islands),
+            len(self.islands) - 1,
         )
 
     def _process_hitl_hints(self) -> None:
-        hints = getattr(self, '_pending_hints', [])
+        hints = getattr(self, "_pending_hints", [])
         if not hints:
             return
         for code in hints:
@@ -403,14 +404,13 @@ class MutaLambdaAgent:
             logger.info("HITL: hint injected into island %d", island.id)
         self._pending_hints = []
 
-
     def _random(self) -> random.Random:
         """Session RNG (falls back to module random if not initialized)."""
         rng = getattr(self, "_rng", None)
         return rng if rng is not None else random
 
     def inject_hint(self, code: str) -> None:
-        pending = getattr(self, '_pending_hints', [])
+        pending = getattr(self, "_pending_hints", [])
         pending.append(code)
         self._pending_hints = pending
 
@@ -483,13 +483,16 @@ class MutaLambdaAgent:
         for isl_idx, total_boost in island_boosts.items():
             island = self.islands[isl_idx]
             for ind in island.population:
-                ind.score *= (1.0 + total_boost)
+                ind.score *= 1.0 + total_boost
                 boosted_count += 1
             island.recompute_local_best()
 
         logger.debug(
             "ConvergentBoost: %d inds boosted (%.0f%% x%d pairs, threshold=%.2f)",
-            boosted_count, factor * 100, len(convergent_pairs), threshold,
+            boosted_count,
+            factor * 100,
+            len(convergent_pairs),
+            threshold,
         )
         return {"boosted": boosted_count, "pairs": len(convergent_pairs)}
 
@@ -547,7 +550,9 @@ class MutaLambdaAgent:
         )
         logger.info(
             "♜ Branch resurrected: node=%s gen=%d score=%.4f",
-            node.id[:8], node.generation, node.score,
+            node.id[:8],
+            node.generation,
+            node.score,
         )
         return resurrected
 
@@ -582,8 +587,9 @@ class MutaLambdaAgent:
                 continue
             dist = self._lineage.get_genealogical_distance(node_a.id, node_b.id)
             if dist is not None and dist >= min_dist:
-                candidates_a = [isl for isl in self.islands
-                                if isl.id != island.id and isl.local_best]
+                candidates_a = [
+                    isl for isl in self.islands if isl.id != island.id and isl.local_best
+                ]
                 if not candidates_a:
                     return None
                 parent_a = self._random().choice(candidates_a).local_best
@@ -596,7 +602,9 @@ class MutaLambdaAgent:
                 )
                 logger.debug(
                     "Cross-branch crossover: nodes %s × %s (dist=%d)",
-                    node_a.id[:8], node_b.id[:8], dist,
+                    node_a.id[:8],
+                    node_b.id[:8],
+                    dist,
                 )
                 return child
 
@@ -609,7 +617,9 @@ class MutaLambdaAgent:
         alpha = self.config.novelty_alpha
         return (1.0 - alpha) * individual.score + alpha * novelty * 100.0
 
-    def step_generation(self, generation: Optional[int] = None, task: str = "") -> "GenerationResult":
+    def step_generation(  # noqa: C901
+        self, generation: Optional[int] = None, task: str = ""
+    ) -> "GenerationResult":
         """Ejecuta exactamente una generación y devuelve un resultado estructurado.
 
         API incremental compartida por CLI, dashboard y core. No cierra el evaluator.
@@ -694,15 +704,14 @@ class MutaLambdaAgent:
                 cross_diversity,
             )
 
-        if (
-            self._hfc is None
-            and gen % max(1, self.config.migration_interval) == 0
-        ):
+        if self._hfc is None and gen % max(1, self.config.migration_interval) == 0:
             boost_stats = self._apply_convergent_boost()
             if boost_stats.get("boosted", 0) > 0:
                 logger.info(
                     "Gen %d — convergent boost: %d inds × %d pairs",
-                    gen + 1, boost_stats["boosted"], boost_stats.get("pairs", 0),
+                    gen + 1,
+                    boost_stats["boosted"],
+                    boost_stats.get("pairs", 0),
                 )
 
         global_best = self._global_best
@@ -725,16 +734,16 @@ class MutaLambdaAgent:
             except Exception as e:
                 logger.warning("Lineage compression failed: %s", e)
 
-        if (self.config.resurrection_enabled
-                and self._early_stop.stagnant_generations
-                >= self.config.resurrection_threshold
-                and self._lineage._resurrection_count
-                < self.config.resurrection_max_attempts
-                and global_best is not None):
-            threshold = (self.config.resurrection_min_score_ratio
-                         * global_best.score)
+        if (
+            self.config.resurrection_enabled
+            and self._early_stop.stagnant_generations >= self.config.resurrection_threshold
+            and self._lineage._resurrection_count < self.config.resurrection_max_attempts
+            and global_best is not None
+        ):
+            threshold = self.config.resurrection_min_score_ratio * global_best.score
             candidates = self._lineage.find_abandoned_branches(
-                global_best.id, threshold,
+                global_best.id,
+                threshold,
             )
             if candidates:
                 resurrected = self._resurrect_branch(candidates[0])
@@ -743,16 +752,15 @@ class MutaLambdaAgent:
                     stagnant_island.population[0] = resurrected
                     logger.info(
                         "Gen %d — ♜ resurrected branch → island %d",
-                        gen + 1, stagnant_island.id,
+                        gen + 1,
+                        stagnant_island.id,
                     )
 
         if gen % 5 == 0:
             try:
                 from nsga2 import get_nsga2_stats
-                all_inds = [
-                    ind for isl in self.islands
-                    for ind in isl.population
-                ]
+
+                all_inds = [ind for isl in self.islands for ind in isl.population]
                 nsga_stats = get_nsga2_stats(all_inds)
                 logger.debug(
                     "NSGA-II fronts=%d pareto=%d crowding=%.3f",
@@ -788,21 +796,18 @@ class MutaLambdaAgent:
         self._generation_times.append(gen_elapsed)
         current_score = global_best.score if global_best else float("-inf")
         current_combined_score = (
-            self._score_with_novelty(global_best)
-            if global_best is not None
-            else float("-inf")
+            self._score_with_novelty(global_best) if global_best is not None else float("-inf")
         )
         self._global_best_history.append(current_score)
 
         if gen % 5 == 0 or gen == self.config.generations - 1:
-            avg_time = (
-                sum(self._generation_times[-5:]) /
-                min(5, len(self._generation_times[-5:]))
-            )
+            avg_time = sum(self._generation_times[-5:]) / min(5, len(self._generation_times[-5:]))
             logger.info(
                 "Gen %d/%d | best=%.4f | avg_time=%.2fs | "
                 "archive=%d | stagnant=%d | protocol(promote=%d reject=%d)",
-                gen + 1, self.config.generations, current_score,
+                gen + 1,
+                self.config.generations,
+                current_score,
                 avg_time,
                 self.archive.size if self.archive else 0,
                 self._early_stop.stagnant_generations,
@@ -828,7 +833,8 @@ class MutaLambdaAgent:
         if should_stop:
             logger.info(
                 "Early stop en gen %d: sin mejora ≥%.4f en %d generaciones.",
-                gen + 1, self.config.early_stop_delta,
+                gen + 1,
+                self.config.early_stop_delta,
                 self.config.early_stop_patience,
             )
             self._stopped = True
@@ -936,6 +942,7 @@ class MutaLambdaAgent:
             # Workflow §16 artifacts + optional elite auto-doc (WF#22)
             try:
                 from run_artifacts import write_run_artifacts
+
                 art_dir = Path(self.config.checkpoint_dir) / f"run_{self.run_id}"
                 baseline = ""
                 if self.config.seed_codes:
@@ -951,6 +958,7 @@ class MutaLambdaAgent:
                 if best is not None and getattr(self.config, "autodoc_elites", True):
                     try:
                         from interpretability import CodeDocumenter
+
                         doc_path = art_dir / "best_solution_documented.md"
                         # Lightweight report without extra LLM if documenter needs one
                         report_body = (
@@ -973,16 +981,16 @@ class MutaLambdaAgent:
         try:
             from checkpoint_manager import save_full_checkpoint
 
-            raw_config = getattr(self, '_raw_config', None)
+            raw_config = getattr(self, "_raw_config", None)
             return save_full_checkpoint(
-                self, generation, self.config,
+                self,
+                generation,
+                self.config,
                 raw_config=raw_config,
             )
         except ImportError:
             os.makedirs(self.config.checkpoint_dir, exist_ok=True)
-            path = os.path.join(
-                self.config.checkpoint_dir, f"checkpoint_gen{generation:04d}.json"
-            )
+            path = os.path.join(self.config.checkpoint_dir, f"checkpoint_gen{generation:04d}.json")
             best = self._get_global_best()
             data = {
                 "generation": generation,
@@ -991,7 +999,8 @@ class MutaLambdaAgent:
                 "island_generations": [isl.generation for isl in self.islands],
                 "avg_gen_time": (
                     sum(self._generation_times) / len(self._generation_times)
-                    if self._generation_times else 0
+                    if self._generation_times
+                    else 0
                 ),
             }
             with open(path, "w", encoding="utf-8") as f:
@@ -1018,17 +1027,18 @@ class MutaLambdaAgent:
             dialectic_metrics = self._dialectic_engine.metrics.__dict__
         spatial = getattr(self.migration_bus, "spatial_topology", None)
         spatial_metrics = spatial.metrics.__dict__ if spatial is not None else {}
-        pattern_count = (
-            len(self._pattern_memory.records)
-            if self._pattern_memory is not None else 0
-        )
+        pattern_count = len(self._pattern_memory.records) if self._pattern_memory is not None else 0
         return {
             "run_id": self.run_id,
             "total_generations": len(self._generation_times),
             "total_time_sec": round(sum(self._generation_times), 4),
             "avg_generation_time_sec": round(
-                sum(self._generation_times) / len(self._generation_times)
-                if self._generation_times else 0, 4
+                (
+                    sum(self._generation_times) / len(self._generation_times)
+                    if self._generation_times
+                    else 0
+                ),
+                4,
             ),
             "best_score_history": self._global_best_history,
             "archive_size": self.archive.size if self.archive else 0,
@@ -1050,5 +1060,3 @@ class MutaLambdaAgent:
                 "recent_traces": list(self._protocol_traces),
             },
         }
-
-

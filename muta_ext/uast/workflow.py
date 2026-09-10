@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """UAST mutation workflow orchestration."""
+
 import logging
 import random
 from typing import Optional
@@ -8,8 +9,12 @@ from muta_ext.uast.core_uast import CoreUAST, Node
 from muta_ext.uast.adapters import get_adapter
 from muta_ext.uast.emitters import PythonEmitter
 from muta_ext.uast.mutators.base_mutator import (
-    BaseMutator, SwapConditionMutator, NegateConditionMutator,
-    LoopBoundMutator, ReorderStatementsMutator, InlineVariableMutator
+    BaseMutator,
+    SwapConditionMutator,
+    NegateConditionMutator,
+    LoopBoundMutator,
+    ReorderStatementsMutator,
+    InlineVariableMutator,
 )
 
 _logger = logging.getLogger(__name__)
@@ -27,7 +32,12 @@ _DEFAULT_MUTATORS = {
 class UASTWorkflow:
     """Orchestrate UAST-based mutation workflow."""
 
-    def __init__(self, use_uast: bool = False, mutator_names: Optional[list[str]] = None, seed: Optional[int] = None):
+    def __init__(
+        self,
+        use_uast: bool = False,
+        mutator_names: Optional[list[str]] = None,
+        seed: Optional[int] = None,
+    ):
         self.use_uast = use_uast
         self._adapter_registry = {}
         self._emitter = PythonEmitter()
@@ -56,20 +66,20 @@ class UASTWorkflow:
 
     def mutate(self, uast: CoreUAST, mutator_name: Optional[str] = None) -> CoreUAST:
         """Apply mutation to CoreUAST.
-        
+
         Returns a NEW mutated UAST (immutability preserved).
         If mutation fails, returns the original unchanged.
         """
         mutator_names = [mutator_name] if mutator_name else self._mutator_names
-        
+
         # Select a random mutator
         chosen_name = self._rng.choice(mutator_names)
         mutator = self._get_mutator(chosen_name)
-        
+
         if mutator is None:
             _logger.warning(f"No mutator found for {chosen_name}")
             return uast
-        
+
         try:
             mutated = mutator.mutate(uast, self._rng)
             # Verify mutation actually changed something

@@ -23,7 +23,6 @@ from cli.checkpoint_manager import CheckpointManager
 from cli.config_manager import ConfigManager
 from muta_lambda import MutaLambdaAgent, EvolveConfig
 
-
 console = Console()
 
 
@@ -46,7 +45,7 @@ class MutaLambdaCLI:
         self,
         config_path: Optional[str] = None,
         generations: int = 50,
-        animation: str = 'retro',
+        animation: str = "retro",
         verbose: bool = False,
         source: Optional[str] = None,
         tests: Optional[str] = None,
@@ -83,9 +82,9 @@ class MutaLambdaCLI:
             return False
 
         # Run with selected animation style
-        if animation == 'retro':
+        if animation == "retro":
             return self._run_with_retro_animation(generations, verbose)
-        elif animation == 'minimal':
+        elif animation == "minimal":
             return self._run_minimal_animation(generations, verbose)
         else:
             return self._run_no_animation(generations, verbose)
@@ -179,9 +178,7 @@ class MutaLambdaCLI:
     def _create_agent(self, config: EvolveConfig) -> Optional[MutaLambdaAgent]:
         """Create and initialize MutaLambda agent"""
         try:
-            timeout = float(
-                (self.current_config or {}).get('sandbox', {}).get('timeout_sec', 10.0)
-            )
+            timeout = float((self.current_config or {}).get("sandbox", {}).get("timeout_sec", 10.0))
             agent = MutaLambdaAgent(
                 config,
                 test_cases=self._test_cases,
@@ -220,7 +217,9 @@ class MutaLambdaCLI:
                     result = self.agent.step_generation(generation=gen, task=self._task)
                     best = result.best or self.agent.migration_bus.get_global_best()
                     if best:
-                        best_score = max(best_score, best.score if best.score > float("-inf") else best_score)
+                        best_score = max(
+                            best_score, best.score if best.score > float("-inf") else best_score
+                        )
                         history.append(best_score)
 
                     # Build and update display
@@ -252,6 +251,7 @@ class MutaLambdaCLI:
             console.print(f"\n[red]Evolution error: {e}[/red]")
             if verbose:
                 import traceback
+
                 traceback.print_exc()
             return False
 
@@ -350,19 +350,21 @@ class MutaLambdaCLI:
             best_score = best.score if best else 0.0
             pop_size = len(island.population)
 
-            islands_data.append({
-                'id': island.id,
-                'best_score': best_score,
-                'population': pop_size,
-            })
+            islands_data.append(
+                {
+                    "id": island.id,
+                    "best_score": best_score,
+                    "population": pop_size,
+                }
+            )
 
         global_best = self.agent.migration_bus.get_global_best()
         global_best_score = global_best.score if global_best else 0.0
 
         return {
-            'generation': self.generation,
-            'islands': islands_data,
-            'global_best_score': global_best_score,
+            "generation": self.generation,
+            "islands": islands_data,
+            "global_best_score": global_best_score,
         }
 
     def _create_evolution_layout(self, state: dict, total_gens: int) -> Layout:
@@ -381,26 +383,30 @@ class MutaLambdaCLI:
             Layout(name="stats"),
         )
 
-        gen = state['generation']
-        best = state['global_best_score']
+        gen = state["generation"]
+        best = state["global_best_score"]
 
         # Header
-        layout["header"].update(Panel(
-            Text.assemble(
-                (" MutaΛ ", "bold magenta"),
-                (f"Gen {gen}/{total_gens}", "bold cyan"),
-                ("  Best: ", "bold"),
-                (f"{best:.4f}", "bold green"),
-            ),
-            border_style="cyan"
-        ))
+        layout["header"].update(
+            Panel(
+                Text.assemble(
+                    (" MutaΛ ", "bold magenta"),
+                    (f"Gen {gen}/{total_gens}", "bold cyan"),
+                    ("  Best: ", "bold"),
+                    (f"{best:.4f}", "bold green"),
+                ),
+                border_style="cyan",
+            )
+        )
 
         # Progress bar
-        layout["progress"].update(Panel(
-            self.animator.progress_bar(gen, total_gens, best),
-            title="[bold]Progress[/bold]",
-            border_style="green"
-        ))
+        layout["progress"].update(
+            Panel(
+                self.animator.progress_bar(gen, total_gens, best),
+                title="[bold]Progress[/bold]",
+                border_style="green",
+            )
+        )
 
         # Stats table
         stats_table = Table.grid(padding=(0, 1))
@@ -409,22 +415,16 @@ class MutaLambdaCLI:
 
         stats_table.add_row("Generation:", str(gen))
         stats_table.add_row("Best Score:", f"{best:.4f}")
-        stats_table.add_row("Islands:", str(len(state['islands'])))
-        stats_table.add_row("Total Pop:", str(sum(i['population'] for i in state['islands'])))
+        stats_table.add_row("Islands:", str(len(state["islands"])))
+        stats_table.add_row("Total Pop:", str(sum(i["population"] for i in state["islands"])))
 
-        layout["stats"].update(Panel(
-            stats_table,
-            title="[bold]Stats[/bold]",
-            border_style="blue"
-        ))
+        layout["stats"].update(Panel(stats_table, title="[bold]Stats[/bold]", border_style="blue"))
 
         # Island grid
         island_panels = []
-        for island_data in state['islands']:
+        for island_data in state["islands"]:
             panel = self.animator.island_display(
-                island_data['id'],
-                island_data['best_score'],
-                island_data['population']
+                island_data["id"], island_data["best_score"], island_data["population"]
             )
             island_panels.append(Panel(panel))
 
@@ -441,12 +441,14 @@ class MutaLambdaCLI:
                 layout["bot_islands"].split_row(*[Layout(p) for p in island_panels[mid:]])
 
         # Footer with fitness graph (last 50 generations)
-        history = [i['best_score'] for i in state['islands']][-50:]
+        history = [i["best_score"] for i in state["islands"]][-50:]
         if history:
-            layout["footer"].update(Panel(
-                self.animator.fitness_graph(history, width=60, height=1),
-                title="[bold]Fitness Trend[/bold]"
-            ))
+            layout["footer"].update(
+                Panel(
+                    self.animator.fitness_graph(history, width=60, height=1),
+                    title="[bold]Fitness Trend[/bold]",
+                )
+            )
 
         return layout
 
@@ -454,16 +456,16 @@ class MutaLambdaCLI:
         """Save JSON checkpoint (no pickle)."""
         try:
             state = {
-                'generation': generation,
-                'best_score': score,
-                'islands': [
+                "generation": generation,
+                "best_score": score,
+                "islands": [
                     {
-                        'id': island.id,
-                        'best_score': island.local_best.score if island.local_best else 0.0,
-                        'population': len(island.population)
+                        "id": island.id,
+                        "best_score": island.local_best.score if island.local_best else 0.0,
+                        "population": len(island.population),
                     }
                     for island in self.agent.islands
-                ]
+                ],
             }
 
             self.checkpoint_manager.save(
@@ -500,25 +502,22 @@ class MutaLambdaCLI:
             results.add_row("Improvement:", f"{improvement:+.4f}")
 
         console.print()
-        console.print(Panel(
-            results,
-            title="[bold green]🏆 Final Results[/bold green]",
-            border_style="green"
-        ))
+        console.print(
+            Panel(results, title="[bold green]🏆 Final Results[/bold green]", border_style="green")
+        )
         console.print()
 
         # Fitness graph
-        console.print(Panel(
-            self.animator.fitness_graph(history, width=60, height=6),
-            title="[bold]Evolution History[/bold]",
-            border_style="cyan"
-        ))
+        console.print(
+            Panel(
+                self.animator.fitness_graph(history, width=60, height=6),
+                title="[bold]Evolution History[/bold]",
+                border_style="cyan",
+            )
+        )
 
     def resume_evolution(
-        self,
-        checkpoint_path: str,
-        additional_gens: int = 50,
-        animation: str = 'retro'
+        self, checkpoint_path: str, additional_gens: int = 50, animation: str = "retro"
     ) -> bool:
         """Resume evolution from a core or CLI checkpoint (JSON only)."""
 
@@ -679,22 +678,21 @@ class MutaLambdaCLI:
             return False
 
     def run_mutation(
-        self,
-        target: str,
-        mutation_type: str = 'prompt',
-        strategy: str = 'adaptive'
+        self, target: str, mutation_type: str = "prompt", strategy: str = "adaptive"
     ) -> bool:
         """Run mutation operations (ML-UI01: never report success if nothing changed)."""
 
-        console.print(Panel(
-            Text.assemble(
-                ("Mutation ", "bold"),
-                (mutation_type, "bold cyan"),
-                (f" → {target}", "bold"),
-            ),
-            title="[bold]MutaΛ Mutation[/bold]",
-            border_style="cyan"
-        ))
+        console.print(
+            Panel(
+                Text.assemble(
+                    ("Mutation ", "bold"),
+                    (mutation_type, "bold cyan"),
+                    (f" → {target}", "bold"),
+                ),
+                title="[bold]MutaΛ Mutation[/bold]",
+                border_style="cyan",
+            )
+        )
 
         console.print(f"\n[cyan]Strategy: {strategy}[/cyan]")
         console.print(f"[cyan]Target: {target}[/cyan]\n")
@@ -704,8 +702,7 @@ class MutaLambdaCLI:
             # Non-file targets (prompt strings) are accepted only for 'prompt'
             if mutation_type != "prompt":
                 console.print(
-                    f"[red]✗ Target file not found: {target}. "
-                    "No mutation applied.[/red]"
+                    f"[red]✗ Target file not found: {target}. " "No mutation applied.[/red]"
                 )
                 return False
 
@@ -822,7 +819,7 @@ class MutaLambdaCLI:
 
             # Load and parse results
             try:
-                with open(results_path, 'r') as f:
+                with open(results_path, "r") as f:
                     results = json.load(f)
 
                 # Display summary
@@ -849,11 +846,7 @@ class MutaLambdaCLI:
         console.print()
         return True
 
-    def create_config(
-        self,
-        output_path: str,
-        template: str = 'basic'
-    ) -> bool:
+    def create_config(self, output_path: str, template: str = "basic") -> bool:
         """Create configuration from template"""
 
         success = self.config_manager.create_from_template(template, output_path)
@@ -938,26 +931,26 @@ class InteractiveREPL:
                 cmd = parts[0].lower()
                 args = parts[1:]
 
-                if cmd == 'help':
+                if cmd == "help":
                     self.show_help()
-                elif cmd == 'status':
+                elif cmd == "status":
                     self.show_status()
-                elif cmd == 'run':
+                elif cmd == "run":
                     gens = int(args[0]) if args else 10
                     self.cli.run_evolution(generations=gens)
-                elif cmd == 'pause':
+                elif cmd == "pause":
                     self.paused = True
                     console.print("[yellow]⏸ Paused[/yellow]")
-                elif cmd == 'resume':
+                elif cmd == "resume":
                     self.paused = False
                     console.print("[green]▶ Resumed[/green]")
-                elif cmd == 'save':
+                elif cmd == "save":
                     path = args[0] if args else None
                     if path:
                         console.print(f"[green]✓ Saved to {path}[/green]")
                     else:
                         console.print("[yellow]Usage: save <checkpoint_path>[/yellow]")
-                elif cmd in ['quit', 'exit', 'q']:
+                elif cmd in ["quit", "exit", "q"]:
                     self.running = False
                     console.print("[dim]Goodbye![/dim]")
                 else:
@@ -991,8 +984,10 @@ class InteractiveREPL:
 
         state = self.cli._get_agent_state()
 
-        console.print(Panel(
-            self.cli.animator.island_grid(state['islands']),
-            title=f"[bold]Status - Generation {state['generation']}[/bold]",
-            border_style="cyan"
-        ))
+        console.print(
+            Panel(
+                self.cli.animator.island_grid(state["islands"]),
+                title=f"[bold]Status - Generation {state['generation']}[/bold]",
+                border_style="cyan",
+            )
+        )

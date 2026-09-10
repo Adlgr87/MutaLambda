@@ -31,7 +31,9 @@ class TestPerformanceMonitor:
         monitor.start()
         time.sleep(0.1)
 
-        monitor.record_evolution_step(generation=5, best_score=0.95, duration_sec=1.2, population_size=10)
+        monitor.record_evolution_step(
+            generation=5, best_score=0.95, duration_sec=1.2, population_size=10
+        )
 
         snapshot = monitor.get_latest()
         assert snapshot is not None
@@ -54,7 +56,9 @@ class TestPerformanceMonitor:
         monitor = PerformanceMonitor(MonitorConfig(sampling_interval_sec=0.05))
         monitor.start()
         time.sleep(0.1)
-        monitor.record_evolution_step(generation=3, best_score=0.8, duration_sec=1.0, population_size=8)
+        monitor.record_evolution_step(
+            generation=3, best_score=0.8, duration_sec=1.0, population_size=8
+        )
 
         output = monitor.export_prometheus()
         assert "mutalambda_cpu_percent" in output
@@ -62,7 +66,6 @@ class TestPerformanceMonitor:
         assert "mutalambda_evolution_best_score 0.8" in output
 
         monitor.stop()
-
 
     def test_singleton(self):
         m1 = get_monitor()
@@ -74,10 +77,9 @@ class TestPerformanceMonitor:
             get_registry,
             reset_registry,
         )
+
         reset_registry()
-        monitor = PerformanceMonitor(
-            MonitorConfig(sampling_interval_sec=0.05)
-        )
+        monitor = PerformanceMonitor(MonitorConfig(sampling_interval_sec=0.05))
         monitor.start()
         time.sleep(0.1)
         monitor.record_evolution_step(

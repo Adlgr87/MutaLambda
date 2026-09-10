@@ -10,6 +10,7 @@ Usage::
 
     python scripts/gen_inventory.py [--out docs/architecture_inventory.md]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,6 +27,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
+
 
 @dataclasses.dataclass
 class ModuleInfo:
@@ -54,6 +56,7 @@ class InventoryReport:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _run_git(args: List[str]) -> str:
     """Run a git command inside the repo root and return stdout."""
@@ -125,6 +128,7 @@ def _package_of(file_rel: str) -> str:
 # Core inventory
 # ---------------------------------------------------------------------------
 
+
 def build_inventory(files: Optional[List[str]] = None) -> InventoryReport:
     """Build the full inventory report.
 
@@ -147,14 +151,16 @@ def build_inventory(files: Optional[List[str]] = None) -> InventoryReport:
         lines = _count_lines(file_rel)
         pub_classes = [c for c in classes if _is_public(c)]
         pub_funcs = [f for f in functions if _is_public(f)]
-        modules.append(ModuleInfo(
-            path=file_rel,
-            classes=classes,
-            functions=functions,
-            line_count=lines,
-            public_class_count=len(pub_classes),
-            public_function_count=len(pub_funcs),
-        ))
+        modules.append(
+            ModuleInfo(
+                path=file_rel,
+                classes=classes,
+                functions=functions,
+                line_count=lines,
+                public_class_count=len(pub_classes),
+                public_function_count=len(pub_funcs),
+            )
+        )
         packages[_package_of(file_rel)] += 1
         total_classes += len(classes)
         total_functions += len(functions)
@@ -225,7 +231,11 @@ def _render_module_table(report: InventoryReport) -> str:
 
 def render_markdown(report: InventoryReport) -> str:
     """Render the full inventory report as Markdown."""
-    sections = [_render_summary(report), _render_package_matrix(report), _render_module_table(report)]
+    sections = [
+        _render_summary(report),
+        _render_package_matrix(report),
+        _render_module_table(report),
+    ]
     sections.append("## Public API Highlights")
     sections.append("")
     sections.append("The following public classes and functions are the primary extension points:")
@@ -236,7 +246,7 @@ def render_markdown(report: InventoryReport) -> str:
         if m.public_class_count or m.public_function_count:
             classes = ", ".join(m.classes)
             funcs = ", ".join(m.functions)
-            sections.append(f"| `{m.path}` | {classes or "—"} | {funcs or "—"} |")
+            sections.append(f"| `{m.path}` | {classes or '—'} | {funcs or '—'} |")
     sections.append("")
     return "\n".join(sections)
 
@@ -244,6 +254,7 @@ def render_markdown(report: InventoryReport) -> str:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
@@ -271,10 +282,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         fh.write(markdown)
 
     print(f"Inventory written to {args.out}")
-    print(f"  {report.total_files} source files · "
-          f"{report.total_lines:,} lines · "
-          f"{report.total_classes} classes · "
-          f"{report.total_functions} functions")
+    print(
+        f"  {report.total_files} source files · "
+        f"{report.total_lines:,} lines · "
+        f"{report.total_classes} classes · "
+        f"{report.total_functions} functions"
+    )
     return 0
 
 

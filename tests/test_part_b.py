@@ -7,14 +7,17 @@ import random
 from muta_ext.lineage.compression import LineageCompressor
 from muta_ext.evaluation.cache import CanonicalCache
 from muta_ext.evaluation.numerical_health import (
-    evaluate_numerical_health, NumericalHealth,
+    evaluate_numerical_health,
+    NumericalHealth,
 )
 from muta_ext.diagnostics.tipping import detect_tipping, mad, TippingEvent
 from muta_ext.diagnostics.evolution_report import EvolutionReport
 from muta_ext.mutation.stepper_protocol import (
-    MutationComposer, MutationResult, ASTStepper, CrossBranchStepper,
+    MutationComposer,
+    MutationResult,
+    ASTStepper,
+    CrossBranchStepper,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # B1: Canonical AST Cache
@@ -121,22 +124,17 @@ class TestTippingDetection:
 
     def test_detects_sudden_drop(self):
         # Gradual change with sudden outlier — easier for MAD to catch
-        series = [10.0, 10.5, 9.8, 10.2, 10.1, 9.9, 10.3, 10.0,
-                  3.0, 2.5, 2.8, 3.2, 2.9, 3.1, 2.7]
-        events = detect_tipping(series, window=7, n_deviations=2.0,
-                                min_magnitude=0.3)
+        series = [10.0, 10.5, 9.8, 10.2, 10.1, 9.9, 10.3, 10.0, 3.0, 2.5, 2.8, 3.2, 2.9, 3.1, 2.7]
+        events = detect_tipping(series, window=7, n_deviations=2.0, min_magnitude=0.3)
         assert len(events) >= 1
 
     def test_detects_sudden_spike(self):
-        series = [1.0, 1.2, 0.9, 1.1, 1.0, 1.3, 0.8, 1.0,
-                  50.0, 55.0, 48.0, 52.0, 51.0, 49.0, 53.0]
-        events = detect_tipping(series, window=7, n_deviations=2.0,
-                                min_magnitude=0.3)
+        series = [1.0, 1.2, 0.9, 1.1, 1.0, 1.3, 0.8, 1.0, 50.0, 55.0, 48.0, 52.0, 51.0, 49.0, 53.0]
+        events = detect_tipping(series, window=7, n_deviations=2.0, min_magnitude=0.3)
         assert len(events) >= 1
 
     def test_event_has_metadata(self):
-        series = [10.0, 10.0, 10.0, 10.0, 10.0,
-                  2.0, 2.0, 2.0, 2.0, 2.0]
+        series = [10.0, 10.0, 10.0, 10.0, 10.0, 2.0, 2.0, 2.0, 2.0, 2.0]
         events = detect_tipping(series, window=5, n_deviations=2.0)
         if events:
             e = events[0]
@@ -163,7 +161,10 @@ class TestEvolutionReport:
         assert report.best_fitness == -7.0
         assert report.mean_fitness < 0
         assert report.stability_classification in (
-            "converging", "exploring", "stalled", "unstable",
+            "converging",
+            "exploring",
+            "stalled",
+            "unstable",
         )
 
     def test_classification_converging(self):

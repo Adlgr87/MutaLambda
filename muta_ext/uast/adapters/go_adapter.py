@@ -1,25 +1,47 @@
 #!/usr/bin/env python3
 """Go → CoreUAST adapter using tree-sitter."""
+
 from typing import Any, Optional, List
 
 try:
     from tree_sitter import Language, Parser
+
     TREE_SITTER_AVAILABLE = True
 except ImportError:
     TREE_SITTER_AVAILABLE = False
 
 from muta_ext.uast.adapters.base import BaseAdapter
 from muta_ext.uast.core_uast import (
-    CoreUAST, LiteralNode, Identifier, BinaryOp, UnaryOp, Call,
-    Assign, If, For, While, Return, Function, Comment, Opaque,
-    TryExcept, ExceptClause, StructDef, FieldDef, TypeAnnotation,
-    Match, MatchArm, Reference, Break, Node
+    CoreUAST,
+    LiteralNode,
+    Identifier,
+    BinaryOp,
+    UnaryOp,
+    Call,
+    Assign,
+    If,
+    For,
+    While,
+    Return,
+    Function,
+    Comment,
+    Opaque,
+    TryExcept,
+    ExceptClause,
+    StructDef,
+    FieldDef,
+    TypeAnnotation,
+    Match,
+    MatchArm,
+    Reference,
+    Break,
+    Node,
 )
 
 
 def _get_text(node: Any, source: bytes) -> str:
     """Extract text from node, handling both str and bytes."""
-    text = source[node.start_byte:node.end_byte]
+    text = source[node.start_byte : node.end_byte]
     if isinstance(text, bytes):
         return text.decode("utf-8", errors="replace")
     return text
@@ -34,6 +56,7 @@ class GoAdapter(BaseAdapter):
         if not TREE_SITTER_AVAILABLE:
             raise ImportError("tree-sitter is required for Go adapter")
         from tree_sitter_go import language as go_lang
+
         self._parser = Parser(Language(go_lang()))
 
     @property
@@ -69,9 +92,7 @@ class GoAdapter(BaseAdapter):
                 body.append(uast_node)
 
         return CoreUAST(
-            body=body,
-            language="go",
-            metadata={"source": source.decode("utf-8", errors="replace")}
+            body=body, language="go", metadata={"source": source.decode("utf-8", errors="replace")}
         )
 
     def _visit(self, node: Any, source: bytes) -> Optional[Node]:
@@ -130,7 +151,7 @@ class GoAdapter(BaseAdapter):
             name=name_id or Identifier(name="unknown"),
             params=params,
             body=body,
-            return_type=return_type
+            return_type=return_type,
         )
 
     def _visit_method_declaration(self, node: Any, source: bytes) -> Function:
@@ -250,7 +271,26 @@ class GoAdapter(BaseAdapter):
 
         for child in node.children:
             text = _get_text(child, source)
-            if text in ("+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", "&&", "||", "&", "|", "^", "<<", ">>"):
+            if text in (
+                "+",
+                "-",
+                "*",
+                "/",
+                "%",
+                "==",
+                "!=",
+                "<",
+                ">",
+                "<=",
+                ">=",
+                "&&",
+                "||",
+                "&",
+                "|",
+                "^",
+                "<<",
+                ">>",
+            ):
                 op_map = {"&&": "and", "||": "or"}
                 op = op_map.get(text, text)
             else:
@@ -289,7 +329,7 @@ class GoAdapter(BaseAdapter):
         if text.startswith('"') or text.startswith("'"):
             return LiteralNode(value=text.strip('"').strip("'"), type_hint="str")
         try:
-            if '.' in text:
+            if "." in text:
                 return LiteralNode(value=float(text), type_hint="f64")
             return LiteralNode(value=int(text), type_hint="i64")
         except ValueError:
@@ -375,7 +415,7 @@ class GoAdapter(BaseAdapter):
         return If(
             condition=condition or Opaque(original_text="true", lang="go"),
             then_body=then_body or [Opaque(original_text="{}", lang="go")],
-            else_body=else_body if else_body else None
+            else_body=else_body if else_body else None,
         )
 
     def _visit_for_statement(self, node: Any, source: bytes) -> For:
@@ -400,7 +440,7 @@ class GoAdapter(BaseAdapter):
         return For(
             var=var or Identifier(name="i"),
             iterable=iterable or Opaque(original_text="range", lang="go"),
-            body=body
+            body=body,
         )
 
     def _visit_return_statement(self, node: Any, source: bytes) -> Return:

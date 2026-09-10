@@ -8,6 +8,7 @@ from muta_ext.uast.mutators.scientific.base_mutator import BaseScientificMutator
 
 class NumericalStabilityMutator(BaseScientificMutator):
     """Mutador que mejora la estabilidad numérica de expresiones."""
+
     _name = "numerical_stability"
     strength = 0.25
 
@@ -27,14 +28,15 @@ class NumericalStabilityMutator(BaseScientificMutator):
 
         if not changed:
             return MutationResult(
-                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)),
-                applied=False
+                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)), applied=False
             )
 
         return MutationResult(
             CoreUAST(new_body, uast.language, dict(uast.metadata)),
-            applied=True, description="; ".join(descs),
-            score_impact=0.1, confidence=0.6
+            applied=True,
+            description="; ".join(descs),
+            score_impact=0.1,
+            confidence=0.6,
         )
 
     def _stabilize_func(self, func: Function, rng: random.Random, descs: list) -> Function:
@@ -47,8 +49,12 @@ class NumericalStabilityMutator(BaseScientificMutator):
                 descs.append(f"Stabilized in {func.name.name}")
         if changed:
             return Function(
-                func.name, list(func.params), new_body,
-                list(func.decorators), func.return_type, func.tag
+                func.name,
+                list(func.params),
+                new_body,
+                list(func.decorators),
+                func.return_type,
+                func.tag,
             )
         return func
 
@@ -60,9 +66,6 @@ class NumericalStabilityMutator(BaseScientificMutator):
         # (a + b) - c → a + (b - c)
         if node.op == "-" and isinstance(node.left, BinaryOp) and node.left.op == "+":
             if rng.random() < 0.4:
-                return BinaryOp(
-                    node.left.left, "+",
-                    BinaryOp(node.left.right, "-", node.right)
-                )
+                return BinaryOp(node.left.left, "+", BinaryOp(node.left.right, "-", node.right))
 
         return None

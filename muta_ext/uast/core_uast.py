@@ -1,19 +1,38 @@
 #!/usr/bin/env python3
 """CoreUAST - Universal AST representation for multi-language mutation."""
+
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Union
 import json
 import hashlib
 
-
 # Forward reference for Node types
 Node = Union[
-    "LiteralNode", "Identifier", "BinaryOp", "UnaryOp", "Call",
-    "Assign", "If", "For", "While", "Return", "Function",
-    "ParallelFor", "Comment", "Opaque", "Break", "TryExcept",
-    "ExceptClause", "StructDef", "FieldDef", "TypeAnnotation",
-    "MatchArm", "Match", "Reference", dict
+    "LiteralNode",
+    "Identifier",
+    "BinaryOp",
+    "UnaryOp",
+    "Call",
+    "Assign",
+    "If",
+    "For",
+    "While",
+    "Return",
+    "Function",
+    "ParallelFor",
+    "Comment",
+    "Opaque",
+    "Break",
+    "TryExcept",
+    "ExceptClause",
+    "StructDef",
+    "FieldDef",
+    "TypeAnnotation",
+    "MatchArm",
+    "Match",
+    "Reference",
+    dict,
 ]
 
 # Registry for deserialization
@@ -46,12 +65,13 @@ def _from_serializable(obj: Any, registry: Optional[Dict[str, Any]] = None) -> A
     """Reconstruct object from serializable form."""
     if registry is None:
         registry = _NODE_REGISTRY
-    
+
     if isinstance(obj, dict) and "__type__" in obj:
         node_type = obj["__type__"]
         if node_type in registry:
             node_cls = registry[node_type]
             import inspect
+
             fields = {}
             for k, v in obj.items():
                 if k != "__type__":
@@ -217,6 +237,7 @@ class Break:
 @dataclass(frozen=True)
 class TryExcept:
     """Try/except/finally block. Maps to Rust match on Result, C++ try/catch."""
+
     body: List[Node] = field(default_factory=list)
     except_clauses: List["ExceptClause"] = field(default_factory=list)
     finally_body: Optional[List[Node]] = None
@@ -228,8 +249,9 @@ class TryExcept:
 @dataclass(frozen=True)
 class ExceptClause:
     """Single except/catch clause."""
+
     exception_type: Optional[Node] = None  # None = catch-all
-    binding: Optional[str] = None     # variable name for the exception
+    binding: Optional[str] = None  # variable name for the exception
     body: List[Node] = field(default_factory=list)
     tag: Optional[str] = None
     location: Optional[Dict[str, int]] = None
@@ -239,6 +261,7 @@ class ExceptClause:
 @dataclass(frozen=True)
 class StructDef:
     """Struct/class definition. Maps to Rust struct, C++ struct/class."""
+
     name: str
     fields: List["FieldDef"] = field(default_factory=list)
     methods: List[Function] = field(default_factory=list)
@@ -250,6 +273,7 @@ class StructDef:
 @dataclass(frozen=True)
 class FieldDef:
     """A field in a struct/class."""
+
     name: str
     type_annotation: Optional[Node] = None
     default: Optional[Node] = None
@@ -261,6 +285,7 @@ class FieldDef:
 @dataclass(frozen=True)
 class TypeAnnotation:
     """Type annotation node. Critical for Rust (mandatory) and C++."""
+
     type_name: str
     generic_args: List[Node] = field(default_factory=list)
     is_reference: bool = False
@@ -273,6 +298,7 @@ class TypeAnnotation:
 @dataclass(frozen=True)
 class MatchArm:
     """Pattern matching arm. Maps to Rust match, C++ pattern matching."""
+
     pattern: Node
     guard: Optional[Node] = None
     body: List[Node] = field(default_factory=list)
@@ -284,6 +310,7 @@ class MatchArm:
 @dataclass(frozen=True)
 class Match:
     """Match/switch expression. Maps to Rust match, C++ switch."""
+
     subject: Node
     arms: List[MatchArm] = field(default_factory=list)
     tag: Optional[str] = None
@@ -294,6 +321,7 @@ class Match:
 @dataclass(frozen=True)
 class Reference:
     """Reference/pointer. Maps to Rust &/&mut, C++ */&."""
+
     target: Node
     is_mutable: bool = False
     tag: Optional[str] = None
@@ -312,7 +340,12 @@ class CoreUAST:
         return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
     def to_dict(self) -> Dict[str, Any]:
-        d = {"body": [(_to_serializable(n) if hasattr(n, "__dataclass_fields__") else n) for n in self.body]}
+        d = {
+            "body": [
+                (_to_serializable(n) if hasattr(n, "__dataclass_fields__") else n)
+                for n in self.body
+            ]
+        }
         d["language"] = self.language
         d["metadata"] = _to_serializable(self.metadata)
         return d
@@ -321,7 +354,5 @@ class CoreUAST:
     def from_dict(cls, data: Dict[str, Any]) -> "CoreUAST":
         body = _from_serializable(data.get("body", []))
         return cls(
-            body=body,
-            language=data.get("language", "python"),
-            metadata=data.get("metadata", {})
+            body=body, language=data.get("language", "python"), metadata=data.get("metadata", {})
         )

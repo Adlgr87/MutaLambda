@@ -170,13 +170,18 @@ if __name__ == "__main__":
 
     if coverage_only:
         report = coverage_report(path)
-        print(f"Coverage: {report['convertible']}/{report['total']} "
-              f"(excluded {report['excluded']})")
+        print(
+            f"Coverage: {report['convertible']}/{report['total']} "
+            f"(excluded {report['excluded']})"
+        )
         sys.exit(0)
 
     report = coverage_report(path)
-    print(f"Coverage: {report['convertible']}/{report['total']} "
-          f"(excluded {report['excluded']})")
+    print(
+        f"Coverage: {report['convertible']}/{report['total']} " f"(excluded {report['excluded']})"
+    )
     tasks = load_tasks(path)
-    print(f"Loaded {len(tasks)} tasks; first: #{tasks[0].problem_idx} "
-          f"{tasks[0].task_name} ({len(tasks[0].test_expressions)} asserts)")
+    print(
+        f"Loaded {len(tasks)} tasks; first: #{tasks[0].problem_idx} "
+        f"{tasks[0].task_name} ({len(tasks[0].test_expressions)} asserts)"
+    )

@@ -1,8 +1,8 @@
-
 TARGET_NAME = "normalize_minmax"
 TIER = 4
 function_name = "normalize_minmax"
 import numpy as np
+
 source = """
 import numpy as np
 def normalize_minmax(data, feature_min=0.0, feature_max=1.0):
@@ -28,15 +28,31 @@ def normalize_minmax(data, feature_min=0.0, feature_max=1.0):
     return out
 """
 import numpy as np
+
+
 def _ref(data, feature_min=0.0, feature_max=1.0):
-    arr=np.asarray(data,dtype=float)
-    mins=arr.min(axis=0); maxs=arr.max(axis=0); rng=maxs-mins
-    rng=np.where(rng==0,1.0,rng)
-    return ((arr-mins)/rng*(feature_max-feature_min)+feature_min).tolist()
-DATA=[[1.0,10.0],[2.0,20.0],[3.0,30.0],[4.0,40.0]]
+    arr = np.asarray(data, dtype=float)
+    mins = arr.min(axis=0)
+    maxs = arr.max(axis=0)
+    rng = maxs - mins
+    rng = np.where(rng == 0, 1.0, rng)
+    return ((arr - mins) / rng * (feature_max - feature_min) + feature_min).tolist()
+
+
+DATA = [[1.0, 10.0], [2.0, 20.0], [3.0, 30.0], [4.0, 40.0]]
 test_cases = [
-    {"function": "normalize_minmax", "args": [DATA, 0.0, 1.0], "expected": _ref(DATA,0.0,1.0), "comparison": "array_allclose"},
-    {"function": "normalize_minmax", "args": [[[5.0,5.0,5.0]], 0.0, 1.0], "expected": [[0.5,0.5,0.5]], "comparison": "array_allclose"},
+    {
+        "function": "normalize_minmax",
+        "args": [DATA, 0.0, 1.0],
+        "expected": _ref(DATA, 0.0, 1.0),
+        "comparison": "array_allclose",
+    },
+    {
+        "function": "normalize_minmax",
+        "args": [[[5.0, 5.0, 5.0]], 0.0, 1.0],
+        "expected": [[0.5, 0.5, 0.5]],
+        "comparison": "array_allclose",
+    },
 ]
-invariants = ['all(x[1] <= float(v) <= x[2] for row in out for v in row)']
+invariants = ["all(x[1] <= float(v) <= x[2] for row in out for v in row)"]
 input_strategy = "st.sampled_from([2, 3, 4]).flatmap(lambda cols: st.tuples(st.lists(st.lists(st.floats(min_value=-100,max_value=100,allow_nan=False,allow_infinity=False), min_size=cols, max_size=cols), min_size=2, max_size=8), st.floats(min_value=-100,max_value=100,allow_nan=False,allow_infinity=False), st.floats(min_value=-100,max_value=100,allow_nan=False,allow_infinity=False)).filter(lambda x: x[1] <= x[2]))"

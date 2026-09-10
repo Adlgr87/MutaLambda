@@ -8,6 +8,7 @@ speedup dropped by more than the threshold (default 10%).
 Exit codes:
   0 = no regression, 1 = regression detected, 2 = error
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,8 +42,10 @@ def check_regression(results_dir: Path, threshold: float = 0.10) -> int:
 
     if not baseline_path.exists():
         # First run — save as baseline
-        baseline = {k: {"speedup": v["speedup"], "median_ms": v["baseline"]["median_s"] * 1000}
-                    for k, v in current.items()}
+        baseline = {
+            k: {"speedup": v["speedup"], "median_ms": v["baseline"]["median_s"] * 1000}
+            for k, v in current.items()
+        }
         baseline_path.write_text(json.dumps(baseline, indent=2))
         print(f"No baseline found. Saved {len(baseline)} targets as baseline.")
         print("All targets:")
@@ -61,7 +64,9 @@ def check_regression(results_dir: Path, threshold: float = 0.10) -> int:
 
         if base_speedup > 0 and cur_speedup < base_speedup * (1 - threshold):
             regressions.append((target, base_speedup, cur_speedup))
-            print(f"  ⚠ {target}: speedup dropped {base_speedup:.2f}× → {cur_speedup:.2f}× (CORRECT={correct})")
+            print(
+                f"  ⚠ {target}: speedup dropped {base_speedup:.2f}× → {cur_speedup:.2f}× (CORRECT={correct})"
+            )
         elif cur_speedup < 1.0 and correct:
             print(f"  ✗ {target}: slower {cur_speedup:.2f}× (CORRECT={correct})")
         else:
@@ -77,7 +82,9 @@ def check_regression(results_dir: Path, threshold: float = 0.10) -> int:
 def main():
     parser = argparse.ArgumentParser(description="Check benchmark regression")
     parser.add_argument("--results", type=Path, default=Path("results"), help="Results directory")
-    parser.add_argument("--threshold", type=float, default=0.10, help="Speedup drop threshold (default 0.10)")
+    parser.add_argument(
+        "--threshold", type=float, default=0.10, help="Speedup drop threshold (default 0.10)"
+    )
     args = parser.parse_args()
 
     sys.exit(check_regression(args.results, args.threshold))

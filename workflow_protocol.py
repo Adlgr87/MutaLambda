@@ -157,6 +157,7 @@ def security_findings(code: str) -> List[str]:
 
 # ── Complexity Gate (MutaLambda 2.0) ─────────────────────────────────────────
 
+
 class ComplexityGate:
     """Pre-evolutive gate: decide if a function is worth deep evolution.
 
@@ -164,10 +165,9 @@ class ComplexityGate:
     and skip island_evolution entirely.
     """
 
-    def __init__(self, 
-                 min_ast_nodes: int = 15,
-                 require_loops: bool = True,
-                 max_trivial_depth: int = 1):
+    def __init__(
+        self, min_ast_nodes: int = 15, require_loops: bool = True, max_trivial_depth: int = 1
+    ):
         self.min_ast_nodes = min_ast_nodes
         self.require_loops = require_loops
         self.max_trivial_depth = max_trivial_depth
@@ -211,7 +211,7 @@ class ComplexityGate:
 
         # Check for I/O
         has_io = False
-        io_funcs = {'open', 'read', 'write', 'print', 'input', 'socket'}
+        io_funcs = {"open", "read", "write", "print", "input", "socket"}
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Name) and node.func.id in io_funcs:

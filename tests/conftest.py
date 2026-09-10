@@ -25,27 +25,32 @@ def _reset_global_state():
     """
     try:
         from evaluation_service import shutdown_all_pools
+
         shutdown_all_pools()
     except Exception:
         pass
     try:
         import hfc_tiers
+
         hfc_tiers.HFCLeagueEngine.clear_caches()
     except Exception:
         pass
     try:
         from metrics_exporter import reset_registry
+
         reset_registry()
     except Exception:
         pass
     yield
     try:
         from evaluation_service import shutdown_all_pools
+
         shutdown_all_pools()
     except Exception:
         pass
     try:
         import hfc_tiers
+
         hfc_tiers.HFCLeagueEngine.clear_caches()
     except Exception:
         pass
