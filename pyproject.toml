@@ -38,6 +38,9 @@ archive = [
   "faiss-cpu>=1.13,<2",
   "sentence-transformers>=5,<6",
 ]
+headroom = [
+  "headroom-ai>=0.37,<1",
+]
 cli = [
   "click>=8,<9",
   "rich>=13,<16",
@@ -113,6 +116,10 @@ py-modules = [
   "cost_ledger",
   "fitness_cache",
   "optimization_flags",
+  "trace_compressor",
+  "ast_stubs",
+  "structured_ops",
+  "headroom_integration",
   "extensions",
   "fitness_normalize",
   "rng_session",

@@ -122,6 +122,33 @@ Enfoque científico con trazabilidad completa:
 - Evolución tracking en JSON
 - Validación cross-benchmark
 
+### 9. 💸 Capa de Optimización de Costo (Headroom)
+Capa de reducción de costo (tokens LLM + GPU) con **medición before/after
+obligatoria** y **todas las palancas desactivables** por flag:
+
+```yaml
+# config/optimization.yaml  (override: MUTALAMBDA_OPT_<SECCION>__<CLAVE>=1|0)
+optimization:
+  cost_ledger:        { enabled: true,  gpu_hour_usd: 0.5 }   # A5: tokens $ + GPU $
+  checkpoint:         { every: 5 }                            # A5: --resume-from
+  fitness_cache:      { enabled: true, backend: sqlite }      # A2: hash canónico
+  deterministic_prompt:{ enabled: true }                       # O2: gemelas byte-idénticas
+  headroom:
+    smart_crusher:    { enabled: false }      # O1: tracebacks/logs → SmartCrusher/LogCompressor
+    ast_stubs:        { enabled: false }      # O3: stubs + headroom_retrieve(stub_id)
+    json_schema_output:{ enabled: false }     # A1: op_type/location/unified_diff/rationale
+    batching:         { enabled: false, batch_size: 5 }  # A3: N mutaciones por llamada
+    bandit:           { enabled: false }      # A3: reward = Δfitness/tokens (UCB)
+  # Fase 2/3: profiling_filter, economic_gate, pareto_archive (desactivadas)
+```
+
+- **Ledger de costo** (`cost_ledger.py`): interceptado centralmente en el
+  wrapper LLM, el sandbox y la regression gate; `dump_json` por ejecución.
+- **Medición de la Fase 1** (LLM simulado, 200 candidatos): input tokens
+  **−95.5%**, output tokens **−55.5%**, reparación **±0pp** vs baseline,
+  **100%** de propuestas con schema válido, **−80%** llamadas (batching N=5).
+  Ver `bench_headroom_fase1.py` y `reports/fase1_before_after.json`.
+
 ## Arquitectura
 
 ```

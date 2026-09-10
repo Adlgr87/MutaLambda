@@ -50,6 +50,9 @@ class Individual:
     evaluated_at: float = 0.0
     benchmark_samples: List[float] = field(default_factory=list)
     language: str = "python"
+    # A3 (Fase 1): LLM token spend attributed to producing this individual
+    # (prompt + completion, heuristic estimate). 0 for non-LLM arms.
+    llm_tokens: int = 0
 
     def __lt__(self, other: "Individual") -> bool:
         return self.score < other.score

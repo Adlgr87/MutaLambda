@@ -7,6 +7,11 @@ pydantic>=2.13,<3
 pyyaml>=6.0,<7
 requests>=2.31,<3
 
+# Cost-optimization layer (Fase 1, "Headroom"): trace/log compression +
+# retrieval. The levers degrade gracefully (deterministic fallback) if the
+# package is absent, but install it to get the full O1 compression.
+headroom-ai>=0.37,<1
+
 # Core extras (install one or more):
 #   pip install -e .[core]          # numpy, pydantic, etc. (this file)
 #   pip install -e .[uast]          # tree-sitter grammars

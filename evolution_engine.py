@@ -7,7 +7,7 @@ import builtins
 import copy
 import random
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from mutation_filters import _filter_mutant, ProfileMode
 from component_evolution import ComponentGraph, ComponentMutator, ModuleExtractor
@@ -306,7 +306,19 @@ class CoreEvolutionEngine:
         score: float,
         error_info: str = "",
     ) -> str:
-        """Prompt para mutación heurística: cambios pequeños y conservadores."""
+        """Prompt para mutación heurística: cambios pequeños y conservadores.
+
+        O1 (Fase 1, flag ``headroom.smart_crusher.enabled``): the error block
+        (sandbox stderr / regression tracebacks) is compressed with Headroom
+        before it enters the prompt; passthrough byte-identical when off.
+        """
+        if error_info:
+            try:
+                from trace_compressor import compress_for_llm
+
+                error_info = compress_for_llm(error_info)
+            except Exception:  # pragma: no cover - compression is best-effort
+                pass
         region_block = self._format_region(region)
         error_block = f"\nCURRENT ERROR:\n{error_info}\n" if error_info else ""
         return f"""SYSTEM: You are MutaLambda Core Evolution Engine.
@@ -412,11 +424,45 @@ RULES:
         score: float,
         error_info: str,
         llm_fn: Callable[[str], str],
+        stats_sink: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """Ejecuta mutación dirigida por LLM con fallback AST local."""
-        region = self._top_region(code)
-        prompt = self.build_mutation_prompt(code, region, score, error_info)
-        generated = self.extract_valid_code(llm_fn(prompt))
+        """Ejecuta mutación dirigida por LLM con fallback AST local.
+
+        Fase 1 (Headroom): when ``headroom.json_schema_output.enabled`` is on,
+        the call goes through the structured pipeline (O1 trace compression +
+        O3 stubs/retrieval + A1 JSON-schema ops + A3 batching) with a legacy
+        fallback, so a run is never broken.  ``stats_sink`` (optional dict)
+        receives per-call token/op statistics for the cost-aware bandit and
+        the ROI report.  With the flag off the pre-Fase-1 prompt path is
+        reproduced exactly.
+        """
+        from optimization_flags import get_optimization_flags
+
+        generated: Optional[str]
+        if get_optimization_flags().enabled("headroom.json_schema_output.enabled", False):
+            from headroom_integration import llm_mutation_candidate
+
+            generated = llm_mutation_candidate(
+                engine=self,
+                code=code,
+                score=score,
+                error_info=error_info,
+                llm_fn=llm_fn,
+                stats_sink=stats_sink,
+            )
+        else:
+            region = self._top_region(code)
+            prompt = self.build_mutation_prompt(code, region, score, error_info)
+            generated = self.extract_valid_code(llm_fn(prompt))
+            if stats_sink is not None:
+                stats_sink.update(
+                    {
+                        "mode": "legacy",
+                        "prompt_chars": len(prompt),
+                        "tokens_in_est": max(1, len(prompt) // 4),
+                        "fallback": generated is None,
+                    }
+                )
         result = generated if generated is not None else ASTMutator.apply_random_mutation(code)
         filtered = _filter_mutant(result, ProfileMode.PERMISSIVE)
         return filtered if filtered is not None else result
@@ -442,10 +488,37 @@ RULES:
         score: float,
         task: str,
         llm_fn: Callable[[str], str],
+        stats_sink: Optional[Dict[str, Any]] = None,
     ) -> Optional[str]:
-        """Ejecuta rediseño radical dirigido por LLM."""
+        """Ejecuta rediseño radical dirigido por LLM.
+
+        Fase 1: structured pipeline (O3+A1) when the schema flag is on.
+        """
+        from optimization_flags import get_optimization_flags
+
+        if get_optimization_flags().enabled("headroom.json_schema_output.enabled", False):
+            from headroom_integration import llm_redesign_candidate
+
+            return llm_redesign_candidate(
+                engine=self,
+                code=code,
+                score=score,
+                task=task,
+                llm_fn=llm_fn,
+                stats_sink=stats_sink,
+            )
         prompt = self.build_redesign_prompt(code, self._top_region(code), score, task)
-        return self.extract_valid_code(llm_fn(prompt))
+        generated = self.extract_valid_code(llm_fn(prompt))
+        if stats_sink is not None:
+            stats_sink.update(
+                {
+                    "mode": "legacy-redesign",
+                    "prompt_chars": len(prompt),
+                    "tokens_in_est": max(1, len(prompt) // 4),
+                    "fallback": generated is None,
+                }
+            )
+        return generated
 
     def _top_region(self, code: str) -> Optional[CodeRegion]:
         regions = self.select_code_regions(code, max_regions=1)

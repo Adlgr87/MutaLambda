@@ -256,6 +256,7 @@ class LLMBackend:
         backoff_base_sec: float = 0.5,
         connect_timeout_sec: Optional[float] = None,
         read_timeout_sec: Optional[float] = None,
+        max_tokens: Optional[int] = None,
         max_calls_per_generation: int = 0,
         max_total_calls: int = 0,
         max_cost_usd: float = 0.0,
@@ -280,6 +281,20 @@ class LLMBackend:
         self.read_timeout_sec = float(
             read_timeout_sec if read_timeout_sec is not None else self.timeout_sec
         )
+        # A1 (Fase 1): capped output for the JSON-schema contract.  When not
+        # explicit, the cap comes from headroom.json_schema_output.max_tokens
+        # (only while the schema mode flag is on — legacy runs stay uncapped).
+        if max_tokens is None:
+            try:
+                from optimization_flags import get_optimization_flags
+
+                flags = get_optimization_flags()
+                if flags.enabled("headroom.json_schema_output.enabled", False):
+                    mt = flags.get("headroom.json_schema_output.max_tokens", 0)
+                    max_tokens = int(mt) if mt else None
+            except Exception:  # pragma: no cover - flag layer must not break init
+                max_tokens = None
+        self.max_tokens = int(max_tokens) if max_tokens else None
         self.max_calls_per_generation = max(0, int(max_calls_per_generation))
         self.max_total_calls = max(0, int(max_total_calls))
         self.max_cost_usd = float(max_cost_usd)
@@ -479,6 +494,8 @@ class LLMBackend:
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": self.temperature,
             }
+            if self.max_tokens is not None:  # A1: capped structured output
+                payload["max_tokens"] = self.max_tokens
             resp = self._session.post(
                 self._url,
                 json=payload,
@@ -495,6 +512,8 @@ class LLMBackend:
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": self.temperature,
             }
+            if self.max_tokens is not None:
+                payload["max_tokens"] = self.max_tokens
             resp = self._session.post(
                 self._url,
                 json=payload,
@@ -511,6 +530,8 @@ class LLMBackend:
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": self.temperature,
             }
+            if self.max_tokens is not None:
+                payload["max_tokens"] = self.max_tokens
             resp = self._session.post(
                 self._url,
                 json=payload,
@@ -522,9 +543,14 @@ class LLMBackend:
             return data["choices"][0]["message"]["content"]
 
         if self.backend == "anthropic":
+            # A1: the structured contract cap wins when set; otherwise the
+            # legacy env-driven default.
+            cap = self.max_tokens if self.max_tokens is not None else int(
+                _env("MUTALAMBDA_ANTHROPIC_MAX_TOKENS", "1024")
+            )
             payload = {
                 "model": self.model,
-                "max_tokens": int(_env("MUTALAMBDA_ANTHROPIC_MAX_TOKENS", "1024")),
+                "max_tokens": cap,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": self.temperature,
             }

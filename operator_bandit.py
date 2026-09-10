@@ -22,6 +22,9 @@ class OperatorStats:
     improved: int = 0
     total_reward: float = 0.0
     mean_gain: float = 0.0
+    # A3 (Fase 1): cumulative LLM token spend credited to this arm — feeds
+    # the ROI report (reward-per-dollar) and cost-aware rewards.
+    tokens: int = 0
 
     def to_dict(self) -> Dict[str, float]:
         return {
@@ -32,6 +35,7 @@ class OperatorStats:
             "mean_reward": self.mean_reward,
             "mean_gain": self.mean_gain,
             "success_rate": self.success_rate,
+            "tokens": float(self.tokens),
         }
 
     @property
@@ -61,6 +65,37 @@ def compute_operator_reward(
     if improved:
         return 1.0 + max(0.0, min(1.0, gain))
     return 0.2
+
+
+# A3 (Fase 1): cost-aware reward scale — Δfitness per 1k tokens.
+COST_AWARE_SCALE = 1000.0
+
+
+def compute_cost_aware_reward(
+    *,
+    syntax_or_security_failure: bool = False,
+    correct: bool = False,
+    improved: bool = False,
+    delta_fitness: float = 0.0,
+    tokens: int = 0,
+) -> float:
+    """Fase 1 A3: reward = Δfitness / tokens (scaled, clamped to [-1, 1]).
+
+    Failure penalties match the legacy scheme (cost never excuses a failure);
+    on success the reward scales with improvement per 1k tokens, so the UCB
+    selection prefers operators that buy fitness cheaply.  No token spend
+    available (non-LLM arms, e.g. pure AST) → the legacy neutral reward.
+    """
+    if syntax_or_security_failure:
+        return -0.5
+    if not correct:
+        return -1.0
+    if not improved:
+        return 0.2
+    if tokens <= 0:
+        return 1.0  # improved without measurable cost (AST arm)
+    reward = (float(delta_fitness) / float(tokens)) * COST_AWARE_SCALE
+    return max(-1.0, min(1.0, reward))
 
 
 class OperatorBandit:
@@ -127,6 +162,30 @@ class OperatorBandit:
         if improved:
             s.improved += 1
             # running mean of positive gains
+            n = s.improved
+            s.mean_gain = s.mean_gain + (gain - s.mean_gain) / max(1, n)
+
+    def update_cost_aware(
+        self,
+        operator: str,
+        reward: float,
+        *,
+        valid: bool = False,
+        improved: bool = False,
+        gain: float = 0.0,
+        tokens: int = 0,
+    ) -> None:
+        """Fase 1 A3: update with cost-aware reward + per-arm token accounting."""
+        self.register(operator)
+        s = self.stats[operator]
+        s.attempts += 1
+        self._total_pulls += 1
+        s.total_reward += float(reward)
+        s.tokens += int(tokens or 0)
+        if valid:
+            s.valid += 1
+        if improved:
+            s.improved += 1
             n = s.improved
             s.mean_gain = s.mean_gain + (gain - s.mean_gain) / max(1, n)
 

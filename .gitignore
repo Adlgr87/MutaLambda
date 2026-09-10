@@ -34,7 +34,8 @@ REPOPACK.md
 
 # generated reports
 reports/benchmark_report.json
-reports/fase0_*.json
+reports/fase*_before_after.json
+reports/fase*_cost_ledger.json
 .mutalambda/
 examples/target_benchmark.json
 status_report.json

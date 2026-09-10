@@ -95,6 +95,16 @@ def test_env_override_scalar(monkeypatch):
     assert flags.get("checkpoint.every") == 7
 
 
+def test_env_override_nested_key(monkeypatch):
+    """Nested paths: MUTALAMBDA_OPT_HEADROOM__SMART_CRUSHER__ENABLED."""
+    monkeypatch.setenv("MUTALAMBDA_OPT_HEADROOM__SMART_CRUSHER__ENABLED", "1")
+    flags = load_optimization_config()
+    assert flags.enabled("headroom.smart_crusher.enabled") is True
+    # Siblings stay untouched.
+    assert flags.enabled("headroom.ast_stubs.enabled") is False
+    assert flags.get("headroom.batching.batch_size") == 5
+
+
 def test_env_config_path_pointer(monkeypatch, tmp_path: Path):
     p = tmp_path / "custom.yaml"
     p.write_text("checkpoint:\n  every: 9\n", encoding="utf-8")

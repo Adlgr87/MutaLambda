@@ -76,7 +76,7 @@ DEFAULTS: Dict[str, Dict[str, Any]] = {
     },
     "headroom": {
         "enabled": False,
-        "package": "headroom",
+        "package": "headroom-ai",
         "smart_crusher": {"enabled": False, "max_traceback_chars": 4000, "max_log_lines": 80},
         "ast_stubs": {"enabled": False, "retrieve_tool": True},
         "json_schema_output": {"enabled": False, "max_tokens": 2048},
@@ -137,22 +137,31 @@ def _parse_scalar(raw: str) -> Any:
 
 
 def _apply_env_overrides(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Apply ``MUTALAMBDA_OPT_<SECTION>__<KEY>`` environment overrides."""
+    """Apply ``MUTALAMBDA_OPT_<SECTION>__<KEY>`` environment overrides.
+
+    ``__`` (double underscore) is the path separator, so nested keys work:
+    ``MUTALAMBDA_OPT_HEADROOM__SMART_CRUSHER__ENABLED=1`` sets
+    ``headroom.smart_crusher.enabled``.  Single underscores are part of
+    names.
+    """
     for name, raw in os.environ.items():
         if not name.startswith(ENV_PREFIX) or name == ENV_CONFIG_PATH:
             continue
         rest = name[len(ENV_PREFIX):]
-        if "__" not in rest:
+        parts = [p.strip().lower() for p in rest.split("__")]
+        parts = [p for p in parts if p]
+        if len(parts) < 2:
             continue
-        section, key = rest.split("__", 1)
-        section = section.strip().lower()
-        key = key.strip().lower()
-        if not section or not key:
-            continue
-        data.setdefault(section, {})
-        if not isinstance(data[section], dict):
-            data[section] = {}
-        data[section][key] = _parse_scalar(raw)
+        section, *key_path = parts
+        node = data
+        if not isinstance(node.get(section), dict):
+            node[section] = {}
+        node = node[section]
+        for part in key_path[:-1]:
+            if not isinstance(node.get(part), dict):
+                node[part] = {}
+            node = node[part]
+        node[key_path[-1]] = _parse_scalar(raw)
     return data
 
 

@@ -41,29 +41,34 @@ optimization:
     enabled: true
 
   # ── FASE 1 ─────────────────────────────────────────────────────────────
-  # Headroom (github.com/headroomlabs-ai/headroom): compresión de tracebacks,
-  # AST stubs con recuperación bajo demanda, salida por JSON Schema y
-  # batching N=5 con bandit UCB. Desactivado hasta que el paquete se
-  # verifique e instale (Setup Fase 1).
+  # Headroom (paquete `headroom-ai`, github.com/headroomlabs-ai/headroom —
+  # instalado y verificado en Fase 1). Con todos los sub-flags en `false` el
+  # comportamiento es idéntico al pre-Fase-1 (byte a byte); actívalos por
+  # palanca. `enabled` es el paraguas informativo; cada sub-flag manda.
   headroom:
     enabled: false
-    package: "headroom"
+    package: "headroom-ai"     # PyPI: pip install "headroom-ai"
     smart_crusher:
+      # O1: comprime tracebacks/logs (regression_gate/sandbox) antes del LLM.
       enabled: false
       max_traceback_chars: 4000
       max_log_lines: 80
     ast_stubs:
+      # O3: AST stubs (no cuerpos completos) + tool headroom_retrieve(stub_id).
       enabled: false
-      retrieve_tool: true      # expone headroom_retrieve(stub_id) al LLM
+      retrieve_tool: true
     json_schema_output:
+      # A1: salida por JSON Schema (op_type, location, unified_diff,
+      # rationale) con 1 ronda de reparación y fallback legado seguro.
       enabled: false
-      # max_tokens ajustado a la salida estructurada (op_type, location,
-      # unified_diff, rationale) — cero prosa libre.
+      # max_tokens ajustado a la salida estructurada — cero prosa libre.
       max_tokens: 2048
     batching:
+      # A3: N mutaciones por llamada única al LLM.
       enabled: false
       batch_size: 5
     bandit:
+      # A3: reward = Δfitness/tokens (UCB) en vez del esquema plano legacy.
       enabled: false
       ucb_c: 1.414             # coeficiente de exploración UCB1
 
