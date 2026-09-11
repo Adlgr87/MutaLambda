@@ -182,7 +182,9 @@ class AblationTester:
         def workload(**cfg):
             return MutaLambdaAgent(EvolveConfig(**cfg)).run()
         tester = AblationTester(workload, baseline_cfg)
-        results = tester.run_ablation([AblationVariant("no_migration", migration=False)])
+        results = tester.run_ablation(
+            [AblationVariant("no_migration", enabled_components={"migration": False})]
+        )
     """
 
     def __init__(
