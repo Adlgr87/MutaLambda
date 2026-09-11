@@ -66,6 +66,9 @@ def cli(ctx):
 @click.option(
     "--allow-untested", is_flag=True, help="Permitir corridas sin tests (solo desarrollo)"
 )
+@click.option("--scientific", is_flag=True, help="Activar Scientific Validation Layer (SVL) + operadores de dominio")
+@click.option("--hotpath", is_flag=True, help="Activar hot-path profiling y mutación inter-procedural")
+@click.option("--scientific-strength", type=float, default=0.3, help="Prob. relativa de operadores de dominio (0.0-1.0)")
 @click.option(
     "--uast-engine",
     type=click.Choice(["legacy", "v2"]),
@@ -90,6 +93,9 @@ def run(
     tests,
     task,
     allow_untested,
+    scientific,
+    hotpath,
+    scientific_strength,
     uast_engine,
     uast_shadow,
     uast_verify,
@@ -108,6 +114,9 @@ def run(
         tests=tests,
         task=task,
         allow_untested=allow_untested,
+        scientific=scientific,
+        hotpath=hotpath,
+        scientific_strength=scientific_strength,
         uast_overrides={
             "engine": uast_engine,
             "shadow": uast_shadow,

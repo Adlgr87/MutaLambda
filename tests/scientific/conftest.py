@@ -32,3 +32,17 @@ def scientific_config() -> Dict[str, Any]:
 def default_invariants():
     """Lista de invariantes base."""
     return list(BASE_INVARIANTS)
+
+
+@pytest.fixture
+def hot_code():
+    """Devuelve el código fuente del PDF (fast/slow/main) para tests de hot-path."""
+    return '''def fast():
+    return 1
+
+def slow():
+    return 2
+
+def main():
+    return fast() + slow()
+'''

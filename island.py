@@ -41,6 +41,11 @@ from workflow_protocol import (
     security_findings,
 )
 
+try:
+    from muta_ext.scientific.validation import run_scientific_validation_stage
+except Exception:  # noqa: BLE001 - SVL is opt-in
+    run_scientific_validation_stage = None
+
 logger = logging.getLogger("MutaLambda")
 
 
@@ -85,6 +90,7 @@ class Island:
         self._api_policy: str = "strict"
         self._enforce_api_fingerprint: bool = False
         self._enforce_differential: bool = False
+        self._scientific_config = {}
 
         self.migration_bus.register_island(island_id, self)
 
@@ -108,6 +114,7 @@ class Island:
         self._workflow_require_score_improvement = bool(
             getattr(config, "workflow_require_score_improvement", False)
         )
+        self._scientific_config = getattr(config, "scientific_config", {}) or {}
         self._workflow_enforce_security = bool(getattr(config, "workflow_enforce_security", True))
         self._api_policy = str(getattr(config, "target_api_policy", "strict") or "strict")
         self._enforce_api_fingerprint = bool(getattr(config, "enforce_api_fingerprint", False))
@@ -666,6 +673,7 @@ class Island:
                         ProtocolStage("evaluate_candidate", self._stage_evaluate_candidate),
                         ProtocolStage("tests_gate", self._stage_tests_gate),
                         ProtocolStage("differential_gate", self._stage_differential_gate),
+                        ProtocolStage("scientific_validation", self._stage_scientific_validation),
                         ProtocolStage("performance_gate", self._stage_performance_gate),
                         ProtocolStage("decision_gate", self._stage_decision_gate),
                     ]
@@ -910,6 +918,28 @@ class Island:
                 metadata={"attempt": attempt},
                 artifacts={"candidate_ref": artifact_ref(code)},
             )
+
+    def _stage_scientific_validation(self, context: Dict[str, Any]):
+        """Scientific Validation Layer gate (FASE 1).
+
+        Opt-in gate between tests/differential and performance. When scientific
+        validation is disabled it is a no-op PASS. A hard invariant failure yields
+        FAIL (candidate rejected per PDF: 'Falla hard -> FAIL')."""
+        result = context.get("candidate_result")
+        context["eval_result"] = result
+        context["scientific_config"] = self._scientific_config
+        if run_scientific_validation_stage is None:
+            return make_stage_result(
+                "scientific_validation", PASS,
+                "scientific validation unavailable",
+                metadata={"scientific_score": 1.0, "available": False},
+            )
+        stage_result = run_scientific_validation_stage(context)
+        if result is not None:
+            score = stage_result.metadata.get("scientific_score", 1.0)
+            result.metrics["scientific_score"] = score
+            result.scientific_score = score
+        return stage_result
 
     def _stage_performance_gate(self, context: Dict[str, Any]):
         result = context["candidate_result"]

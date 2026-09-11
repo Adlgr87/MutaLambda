@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import random
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -44,6 +44,7 @@ class EvolveConfig:
     workflow_require_score_improvement: bool = False
     workflow_enforce_security: bool = True
     workflow_trace_limit: int = 200
+    scientific_config: Dict[str, Any] = field(default_factory=dict)
     convergent_boost_enabled: bool = True
     convergent_boost_threshold: float = 0.85
     convergent_boost_factor: float = 0.15
@@ -168,6 +169,7 @@ class EvolveConfig:
         patterns = cfg.get("pattern_memory", {})
         privacy = cfg.get("privacy", {})
         target = cfg.get("target", {})
+        scientific = cfg.get("scientific", {})
 
         config = cls(
             num_islands=evo.get("num_islands", 4),
@@ -273,6 +275,7 @@ class EvolveConfig:
             uast_strict=cfg.get("uast", {}).get("strict", False),
             uast_arena=cfg.get("uast", {}).get("arena", False),
             uast_extended_dialect=cfg.get("uast", {}).get("extended_dialect", False),
+            scientific_config=scientific,
         )
 
         config.sandbox_timeout = sand.get("timeout_sec", 10.0)
