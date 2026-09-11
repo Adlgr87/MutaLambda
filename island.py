@@ -266,6 +266,7 @@ class Island:
 
     def _pick_parent(self, elites: List[Individual], use_nsga2: bool) -> Individual:
         if use_nsga2 and len(elites) >= 2 and self.rng.random() < 0.7:
+            from nsga2 import nsga2_tournament_select
             parents = nsga2_tournament_select(elites, 1, rng=self.rng)
             return parents[0] if parents else self.rng.choice(elites)
         return self.rng.choice(elites)
