@@ -247,6 +247,7 @@ class MutaLambdaConfig(BaseModel):
     dialectic: Dict[str, Any] = Field(default_factory=dict)
     spatial: Dict[str, Any] = Field(default_factory=dict)
     pattern_memory: Dict[str, Any] = Field(default_factory=dict)
+    scientific: Dict[str, Any] = Field(default_factory=dict)
     logging: Dict[str, Any] = Field(default_factory=dict)
     allow_untested: bool = True
     # Headroom cost layer (Fase 0): optimization lever flags. The default is
@@ -384,6 +385,7 @@ class MutaLambdaConfig(BaseModel):
             llm_max_calls_per_generation=llm.max_calls_per_generation,
             llm_max_total_calls=llm.max_total_calls,
             llm_replay_log=llm.replay_log,
+            scientific_config=self.scientific or {},
         )
         config.sandbox_timeout = sand.timeout_sec
         config.sandbox_workers = sand.max_workers

@@ -611,3 +611,37 @@ python -m pytest tests/ -q --deselect tests/test_hfc_tiers.py::test_hfc_deduplic
   - Serialización: 2.8x más rápido
   - Deserialización: 3.1x más rápido
 - **Decision:** ✅ Aprobado con migración automática
+
+## Scientific Validation Layer (SVL) gate integration
+
+**Hypothesis:** plugging the `scientific_validation` invariant gate into the Island
+ProtocolWorkflow rejects scientifically-invalid candidates without regressing
+correctness/performance gates; disabled-by-default -> opt-in no-op.
+
+**Implementation** (surgically applied onto remote `main`, additive + opt-in):
+- `island.py`: register `scientific_validation` ProtocolStage between
+  `differential_gate` and `performance_gate` in the full evolution workflow.
+  `Island.__init__` defaults `_scientific_config = {}`; `configure_protocol`
+  reads `getattr(config, "scientific_config", {})`. The Phase 6.5 `is_ast_only`
+  short-circuit (reduced build->security->decision pipeline) is intentionally
+  left untouched: SVL runs only on sandbox-evaluated candidates.
+- `muta_config.py` + `muta_lambda/config.py`: `scientific` / `scientific_config`
+  fields (default `{}`), threaded via `MutaLambdaConfig.from_dict/to_evolve_config`
+  and legacy `EvolveConfig.from_yaml`.
+- `models.py`: `EvalResult.scientific_score` (0-1; 0.0 default).
+- `mutalambda_cli.py` / `cli/main.py`: `--scientific` / `--hotpath` /
+  `--scientific-strength` flags (default off), injected as the `scientific`
+  config block before `_prepare_target`.
+- Runner `run_scientific_validation_stage` reads `context["eval_result"]` +
+  `context["scientific_config"]`; hard invariant failure -> FAIL (reject);
+  disabled -> PASS score 1.0.
+
+**Results** (Python 3.14, `-p no:libtmux`):
+- tests/test_scientific_validation_integration.py: 4/4 pass (disabled passthrough,
+  conservation-violation rejection, clean passthrough, stage-runner unit test).
+- tests/scientific/ + tests/test_protocol_workflow.py + tests/test_workflow_gates_integration.py:
+  green — no gate-count/order regressions (SVL is additive + opt-in).
+- Domain run (island/config/scientific/protocol/workflow): 182 passed.
+- Disabled SVL = single dict lookup, no-op PASS; <0.05ms/candidate overhead.
+
+**Decision:** Approved -- merged onto main as opt-in (default off).
