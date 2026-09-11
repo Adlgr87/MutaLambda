@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -117,7 +118,35 @@ def _mann_whitney_significance(comparison: Dict[str, Any]) -> Optional[Dict[str,
 
 
 def evaluate_gate(comparison: Dict[str, Any], config: GateConfig) -> GateResult:
-    """Evaluate the gate against a parsed comparison document."""
+    """Evaluate the gate against a parsed comparison document.
+
+    Public entrypoint: identical signature to before, now wrapped with the
+    Fase 0 cost-ledger instrumentation (A5) — evaluation time is recorded as
+    an ``eval`` entry and the final decision as an ``event`` entry.
+    """
+    started = time.perf_counter()
+    result = _evaluate_gate_impl(comparison, config)
+    try:
+        from cost_ledger import record_eval, record_event
+
+        record_eval(kind="regression_gate", seconds=time.perf_counter() - started)
+        record_event(
+            "gate_decision",
+            {
+                "passed": result.passed,
+                "metric": result.metric,
+                "improvement_pct": result.improvement_pct,
+                "regression_pct": result.regression_pct,
+                "blocking": result.blocking,
+            },
+        )
+    except Exception:  # pragma: no cover - observability must not block the gate
+        pass
+    return result
+
+
+def _evaluate_gate_impl(comparison: Dict[str, Any], config: GateConfig) -> GateResult:
+    """Core gate evaluation (pure decision logic, no side effects)."""
     metric = config.threshold_metric
     samples_opt = _extract_samples(comparison, metric)
     samples_base = _extract_samples(comparison, f"{metric}_baseline")

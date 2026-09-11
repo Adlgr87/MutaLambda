@@ -5,10 +5,26 @@ from __future__ import annotations
 import ast
 import copy
 import heapq
+import inspect
 import logging
 import random
 import time
 from typing import Any, Callable, Dict, List, Optional
+
+
+def _accepts_kwarg(func: Callable[..., Any], kwarg: str) -> bool:
+    """True when *func* (possibly a mock) accepts the *kwarg* keyword.
+
+    Keeps the island compatible with injected ``mutate_with_llm`` doubles
+    that predate the Fase 1 ``stats_sink`` parameter.
+    """
+    try:
+        params = inspect.signature(func).parameters
+    except (TypeError, ValueError):  # pragma: no cover - exotic callables
+        return False
+    if kwarg in params:
+        return True
+    return any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
 
 from evolution_engine import ASTMutator, CoreEvolutionEngine, ast_crossover, component_evolve
 from code_hash import cached_parse
@@ -42,6 +58,9 @@ class Island:
         self.id = island_id
         self.config = config
         self.llm_fn = llm_fn
+        # A3 (Fase 1): token spend of the last LLM mutation/redesign call,
+        # attributed to the child individual for cost-aware bandit rewards.
+        self._last_llm_tokens = 0
         self.evaluator = evaluator
         self.migration_bus = migration_bus
         # Per-island RNG (wired from RNGSession when available; FIX 2.1)
@@ -289,6 +308,9 @@ class Island:
             setattr(child, "operator", strategy)
             if child_parents:
                 setattr(child, "parent_score", float(parent.score))
+            # A3 (Fase 1): carry the LLM token spend for cost-aware rewards.
+            if strategy in ("llm", "redesign") and self._last_llm_tokens:
+                setattr(child, "llm_tokens", int(self._last_llm_tokens))
             new_pop.append(child)
 
         self.population = new_pop
@@ -319,14 +341,34 @@ class Island:
         return "mutation"
 
     def _update_operator_bandit(self, results: List[Any]) -> None:
-        """Credit operators from evaluated individuals (WF#17 rewards)."""
+        """Credit operators from evaluated individuals (WF#17 rewards).
+
+        A3 (Fase 1, flag ``headroom.bandit.enabled``): the reward becomes
+        cost-aware — Δfitness per token spent (Δfitness / tokens, scaled)
+        instead of the legacy flat scheme, so the UCB arm selection prefers
+        operators that improve fitness cheaply.
+        """
         bandit = getattr(self.migration_bus, "operator_bandit", None)
         if bandit is None:
             return
         try:
-            from operator_bandit import compute_operator_reward
+            from operator_bandit import (
+                compute_cost_aware_reward,
+                compute_operator_reward,
+                compute_usd_aware_reward,
+                tokens_to_usd,
+            )
         except Exception:
             return
+        try:
+            from optimization_flags import get_optimization_flags
+
+            _flags = get_optimization_flags()
+            cost_aware = _flags.enabled("headroom.bandit.enabled", False)
+            usd_aware = _flags.enabled("bandit_reward_usd.enabled", False)
+        except Exception:
+            cost_aware = False
+            usd_aware = False
         for ind, res in zip(self.population, results):
             op = getattr(ind, "operator", None) or getattr(ind, "creation_reason", None)
             if not op or op in {"seed", "laboratory"}:
@@ -344,20 +386,60 @@ class Island:
                 improved = gain > 0
             elif correct and ind.score > float("-inf"):
                 improved = True
-            reward = compute_operator_reward(
-                syntax_or_security_failure=syntax_fail and not correct,
-                correct=correct,
-                improved=improved,
-                gain=max(0.0, gain) if improved else 0.0,
-            )
-            try:
-                bandit.update(
-                    op,
-                    reward,
-                    valid=correct and not syntax_fail,
+            tokens = int(getattr(ind, "llm_tokens", 0) or 0)
+            if usd_aware:
+                # FASE 3 A3: reward in real $ (ledger pricing model).
+                reward = compute_usd_aware_reward(
+                    syntax_or_security_failure=syntax_fail and not correct,
+                    correct=correct,
                     improved=improved,
-                    gain=gain,
+                    delta_fitness=max(0.0, gain) if improved else 0.0,
+                    cost_usd=tokens_to_usd(tokens),
                 )
+                try:
+                    bandit.update(
+                        op,
+                        reward,
+                        valid=correct and not syntax_fail,
+                        improved=improved,
+                        gain=gain,
+                    )
+                except Exception:
+                    pass
+                continue
+            if cost_aware:
+                reward = compute_cost_aware_reward(
+                    syntax_or_security_failure=syntax_fail and not correct,
+                    correct=correct,
+                    improved=improved,
+                    delta_fitness=max(0.0, gain) if improved else 0.0,
+                    tokens=tokens,
+                )
+            else:
+                reward = compute_operator_reward(
+                    syntax_or_security_failure=syntax_fail and not correct,
+                    correct=correct,
+                    improved=improved,
+                    gain=max(0.0, gain) if improved else 0.0,
+                )
+            try:
+                if cost_aware:
+                    bandit.update_cost_aware(
+                        op,
+                        reward,
+                        valid=correct and not syntax_fail,
+                        improved=improved,
+                        gain=gain,
+                        tokens=tokens,
+                    )
+                else:
+                    bandit.update(
+                        op,
+                        reward,
+                        valid=correct and not syntax_fail,
+                        improved=improved,
+                        gain=gain,
+                    )
             except Exception:
                 pass
 
@@ -379,12 +461,24 @@ class Island:
             return code
 
     def _mutate_with_context(self, code: str, score: float, error_info: str = "") -> str:
-        """Mutación informada: selector AST + prompt estricto + fallback AST."""
-        candidate = self.core_engine.mutate_with_llm(
-            code=code,
-            score=score,
-            error_info=error_info,
-            llm_fn=self.llm_fn,
+        """Mutación informada: selector AST + prompt estricto + fallback AST.
+
+        A3 (Fase 1): per-call token spend is captured in ``self._last_llm_tokens``
+        so the child individual can carry it for cost-aware bandit rewards
+        (reward = Δfitness / tokens).
+        """
+        sink: Dict[str, Any] = {}
+        kwargs: Dict[str, Any] = {
+            "code": code,
+            "score": score,
+            "error_info": error_info,
+            "llm_fn": self.llm_fn,
+        }
+        if _accepts_kwarg(self.core_engine.mutate_with_llm, "stats_sink"):
+            kwargs["stats_sink"] = sink
+        candidate = self.core_engine.mutate_with_llm(**kwargs)
+        self._last_llm_tokens = int(sink.get("tokens_in_est", 0)) + int(
+            sink.get("tokens_out_est", 0)
         )
         if candidate.strip() == code.strip():
             candidate = self._mutate(code)
@@ -392,11 +486,18 @@ class Island:
 
     def _redesign(self, code: str, score: float) -> str:
         """Rediseño radical dirigido por LLM para individuos fallidos."""
-        redesigned = self.core_engine.redesign_with_llm(
-            code=code,
-            score=score,
-            task="Repair correctness first, then improve algorithmic efficiency.",
-            llm_fn=self.llm_fn,
+        sink: Dict[str, Any] = {}
+        kwargs: Dict[str, Any] = {
+            "code": code,
+            "score": score,
+            "task": "Repair correctness first, then improve algorithmic efficiency.",
+            "llm_fn": self.llm_fn,
+        }
+        if _accepts_kwarg(self.core_engine.redesign_with_llm, "stats_sink"):
+            kwargs["stats_sink"] = sink
+        redesigned = self.core_engine.redesign_with_llm(**kwargs)
+        self._last_llm_tokens = int(sink.get("tokens_in_est", 0)) + int(
+            sink.get("tokens_out_est", 0)
         )
         candidate = redesigned if redesigned is not None else ASTMutator.apply_random_mutation(code)
         return self._dialectic_refine(code, candidate)

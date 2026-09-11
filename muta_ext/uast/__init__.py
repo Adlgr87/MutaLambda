@@ -1,3 +1,4 @@
+from muta_ext.uast.canonical import canonical_hash
 from muta_ext.uast.core_uast import (
     CoreUAST,
     LiteralNode,
@@ -19,6 +20,7 @@ from muta_ext.uast.core_uast import (
 
 __all__ = [
     "CoreUAST",
+    "canonical_hash",
     "LiteralNode",
     "Identifier",
     "BinaryOp",

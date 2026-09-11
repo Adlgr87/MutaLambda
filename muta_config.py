@@ -207,6 +207,21 @@ class PromptEvolutionSection(BaseModel):
     elite_frac: float = Field(0.5, ge=0.0, le=1.0)
 
 
+def _optimization_defaults() -> Dict[str, Any]:
+    """Lever flags for the cost-optimization layer (Fase 0).
+
+    Reads config/optimization.yaml via ``optimization_flags`` when available;
+    falls back to an empty dict so a missing flag layer never breaks config
+    loading.
+    """
+    try:
+        from optimization_flags import get_optimization_flags
+
+        return get_optimization_flags().as_dict()
+    except Exception:  # pragma: no cover - defensive
+        return {}
+
+
 class MutaLambdaConfig(BaseModel):
     """Root validated config — shared by CLI and core."""
 
@@ -234,6 +249,10 @@ class MutaLambdaConfig(BaseModel):
     pattern_memory: Dict[str, Any] = Field(default_factory=dict)
     logging: Dict[str, Any] = Field(default_factory=dict)
     allow_untested: bool = True
+    # Headroom cost layer (Fase 0): optimization lever flags. The default is
+    # the merged view from config/optimization.yaml (optimization_flags.py);
+    # an explicit `optimization:` block in the main YAML overrides it.
+    optimization: Dict[str, Any] = Field(default_factory=_optimization_defaults)
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "MutaLambdaConfig":

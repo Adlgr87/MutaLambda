@@ -15,6 +15,7 @@ import multiprocessing
 import os
 import sys
 import threading
+import time
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
@@ -334,7 +335,35 @@ class EvaluationService:
         return results[0]
 
     def evaluate_batch(self, codes: List[str]) -> List[EvalResult]:
-        """Evaluate codes with cache + optional process pool (subprocess mode)."""
+        """Evaluate codes with cache + optional process pool (subprocess mode).
+
+        Public entrypoint — identical behaviour to before, plus the Fase 0
+        cost-ledger instrumentation (A5): wall time of the batch is recorded
+        as an ``eval`` entry (sandbox episodes), including cache-hit count so
+        the ROI report can attribute savings to the eval cache.
+        """
+        if not codes:
+            return []
+        started = time.perf_counter()
+        results = self._evaluate_batch_impl(codes)
+        try:
+            from cost_ledger import record_eval
+
+            record_eval(
+                kind="sandbox_eval",
+                seconds=time.perf_counter() - started,
+                extra={
+                    "n": len(codes),
+                    "cache_hits": self._cache_hits,
+                    "mode": self.last_mode,
+                },
+            )
+        except Exception:  # pragma: no cover - observability only
+            pass
+        return results
+
+    def _evaluate_batch_impl(self, codes: List[str]) -> List[EvalResult]:
+        """Core batch evaluation (cache + runner dispatch)."""
         if not codes:
             return []
         self._ensure_tests()

@@ -1,6 +1,6 @@
 # MutaLambda — Optimized Multi-Agent Evolutionary System
 
-> **MutaLambda v5.0.0**: Sistema de optimización evolutiva multi-agente con integración GPU, pipeline CI/CD completo, benchmarking científico, motor **UAST v2** (mutación in-situ con verificación por nanopass) y 902 tests validados.
+> **MutaLambda v5.0.0**: Sistema de optimización evolutiva multi-agente con integración GPU, pipeline CI/CD completo, benchmarking científico, motor **UAST v2** (mutación in-situ con verificación por nanopass), capa **Headroom** de optimización de costo (F0–F3) y 1089 tests validados.
 > Un framework de alta performance para optimización de código asistida por IA con aceleración hardware.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -17,10 +17,10 @@
 
 | Métrica | Valor | Estado | Última verificación |
 |---------|-------|--------|---------------------|
-| Tests | **902 passed, 19 skipped** | ✅ 921 collected | 2026-09-10 |
+| Tests | **1089 passed, 19 skipped** | ✅ 1108 collected | 2026-09-10 |
 | Cobertura | **61%** | ✅ FASE 8 completada | 2026-09-02 |
 | Versión git | **v5.0.0-phase7-8** | ✅ Tag oficial | 2026-08-23 |
-| Fases completadas | **FASE 0–8 + UAST v2 (F1–F3)** | ✅ Workflow cerrado | 2026-09-10 |
+| Fases completadas | **FASE 0–8 + UAST v2 (F1–F3) + Headroom (F0–F3)** | ✅ Workflow cerrado | 2026-09-10 |
 | Lockfile | **`uv.lock` sincronizado** | ✅ `uv sync --locked` | 2026-09-10 |
 | Hardening producción | **ML-001…ML-016** | ✅ Remediation aplicada | 2026-09-10 |
 | UAST v2 | **opt-in (`uast.engine: v2`)** | ✅ Paridad shadow 0 diffs | 2026-09-10 |
@@ -122,6 +122,97 @@ Enfoque científico con trazabilidad completa:
 - Evolución tracking en JSON
 - Validación cross-benchmark
 
+### 9. 💸 Capa de Optimización de Costo (Headroom)
+Capa de reducción de costo (tokens LLM + GPU) con **medición before/after
+obligatoria** y **todas las palancas desactivables** por flag:
+
+```yaml
+# config/optimization.yaml  (override: MUTALAMBDA_OPT_<SECCION>__<CLAVE>=1|0)
+# Solo la infraestructura FASE 0 va activa por defecto (no cambia calidad ni
+# costo); todas las palancas de costo/calidad de F1–F3 están desactivadas.
+optimization:
+  cost_ledger:        { enabled: true,  gpu_hour_usd: 0.5 }   # F0/A5: tokens $ + GPU $
+  checkpoint:         { every: 5 }                            # F0/A5: --resume-from
+  fitness_cache:      { enabled: true, backend: sqlite }      # F0/A2: hash canónico
+  deterministic_prompt:{ enabled: true }                       # F0/O2: gemelas byte-idénticas
+  headroom:
+    smart_crusher:    { enabled: false }      # O1: tracebacks/logs → SmartCrusher/LogCompressor
+    ast_stubs:        { enabled: false }      # O3: stubs + headroom_retrieve(stub_id)
+    json_schema_output:{ enabled: false }     # A1: op_type/location/unified_diff/rationale
+    batching:         { enabled: false, batch_size: 5 }  # A3: N mutaciones por llamada
+    bandit:           { enabled: false }      # A3: reward = Δfitness/tokens (UCB)
+  profiling_filter:                          # FASE 2 (escalera de evaluación)
+    enabled:          false                  # paraguas: off = comportamiento pre-Fase-2
+    profile_seconds:  10                     # O4: profiling bajo carga ~10 s
+    min_cpu_pct:      0.5                    # O4: excluye funciones con <0.5% CPU
+    nanopass_check:   { enabled: true }      # O6 N1: guard UAST en memoria (<1 ms)
+    test_subset:      { enabled: true, by_coverage: true, max_tests: 0 }  # O6 N2 + A4
+    sandbox_top_pct:  20.0                   # O6 N3: solo top ~20% → Docker + Ray
+    api_policy:       strict
+    uast2_enabled:    false
+    ray_profile:      { enabled: false }
+  economic_gate:                          # FASE 3 (O5)
+    enabled:            false
+    delta_h_threshold:  0.005              # ΔH normalizado mínimo por generación
+    stall_generations:  5                  # generaciones consecutivas → early stop
+    gpu_seconds_per_generation: 0.0        # >0 activa el criterio de costo $GPU
+    production_cpu_savings_hour_usd: 0.0   # $CPU/h que ahorra el candidato
+  bandit_reward_usd:  { enabled: false }   # FASE 3 (A3): reward en $ reales (ledger)
+  pareto_archive:                           # FASE 3 (A5)
+    enabled: false
+    dir: "pareto_archive"
+    warm_start: true           # --no-warm-start lo desactiva (el archivo sigue escribiéndose)
+    max_size: 50
+```
+
+- **Ledger de costo** (`cost_ledger.py`): interceptado centralmente en el
+  wrapper LLM, el sandbox y la regression gate; `dump_json` por ejecución.
+- **FASE 0** (infraestructura de medición, activa por defecto): cost ledger
+  (`A5`), fitness cache por hash canónico (`A2`), resume desde checkpoint
+  (`--resume-from`) y prompts deterministas (`O2`). No cambia calidad ni costo
+  (verificable en `roi_report.json`); su valor es habilitar la medición
+  before/after de F1–F3 y el cacheo de fitness entre generaciones.
+- **Medición de la Fase 1** (LLM simulado, 200 candidatos): input tokens
+  **−95.5%**, output tokens **−55.5%**, reparación **±0pp** vs baseline,
+  **100%** de propuestas con schema válido, **−80%** llamadas (batching N=5).
+  Ver `bench_headroom_fase1.py` y `reports/fase1_before_after.json`.
+- **Medición de la Fase 2** (120 mutantes, suite real de 12 tests, sandbox
+  subprocess real): escalera N1 → N2 → N3 reduce el tiempo de evaluación
+  **−79.5% por mutante** (21.1 → 4.3 ms; gate ≥60%), las evaluaciones de
+  sandbox **120 → 18** (solo **15%** toca N3, ≤20%), **0 falsos positivos**
+  (ningún mutante correcto es rechazado) y N1 promedia **0.52 ms** (<1 ms).
+  Ver `bench_headroom_fase2.py` y `reports/fase2_before_after.json`.
+  * O4 `AmdahlHeadroomFilter` (`hotspot_profiler.py`): profiling bajo carga
+    (~10 s) y exclusión de funciones con <0.5% de CPU de las regiones
+    mutables (`select_code_regions`). Fail-open: sin perfil, se incluye todo.
+  * O6 N1 (`tiered_evaluator.py`): nanopass en memoria — parse + fingerprint
+    de API (strict/relaxed) + walk de seguridad sobre el mismo árbol (<1 ms).
+  * O6 N2 + A4: subset mínimo de tests por set cover / crecimiento guiado por
+    cobertura (`trace`), in-process si es puro, subprocess endurecido si I/O.
+  * O6 N3: solo el top ~20% de sobrevivientes de N2 paga el sandbox completo
+    (Docker si hay engine, fail-closed a subprocess) + Ray opcional.
+- **Medición de la Fase 3** (`run_evolution` real + búsqueda con evaluación
+  subprocess real): O5 detuvo la corrida en **6 de 40 generaciones**
+  (estancamiento de ΔH) con **−0.0% de pérdida de hipervolumen** (gate ≤2%);
+  A5 warm-start (arreglo indexado por hash de firma de API) redujo las
+  generaciones para converger **50%** en función similar (gate ≥30%); costo
+  total acumulado de las palancas F1+F2+F3: **−97.2%** vs baseline (gate
+  ≥60%; modelo compuesto de mediciones por palanca, documentado en el bench).
+  Ver `bench_headroom_fase3.py` y `reports/fase3_before_after.json`.
+  * O5 `EconomicHeadroomGate` (`economic_gate.py`): hipervolumen 3D exacto
+    (barrido) normalizado a [0,1]; parada por estancamiento (ΔH < umbral × N
+    generaciones) o por costo (GPU restante > ahorro CPU en producción);
+    cada parada se loguea en el cost ledger.
+  * A5 `ParetoArchive` (`pareto_archive.py`): mejor individuo por hash de
+    firma de API (`api_fingerprint`); warm-start inyecta el archivo como semilla
+    (siempre re-evaluado, nunca confiado a ciegas); `--no-warm-start`.
+  * A3 reward en $ reales (`operator_bandit.compute_usd_aware_reward`) con
+    precios del ledger, flag `bandit_reward_usd.enabled`; `--mutation-strategy
+    auto` resuelve llm|ast según backend disponible.
+  * `roi_report.json` por corrida (`run_evolution` y flujos HFC): costo total
+    (ledger), palancas activas, stop reason, hipervolumen final, warm-start y
+    caché.
+
 ## Arquitectura
 
 ```
@@ -151,7 +242,7 @@ Enfoque científico con trazabilidad completa:
 │                                 serialización msgpack, shadow   │
 ├─────────────────────────────────────────────────────────────────┤
 │  Infrastructure                                                 │
-│  ├── tests/                    — 902 tests (unit/integration)   │
+│  ├── tests/                    — 1089 tests (unit/integration)  │
 │  ├── scripts/                  — deploy, install, monitoring    │
 │  ├── docs/                     — Full documentation (22 files)  │
 │  └── PLANS/                    — Workflow documentation         │
@@ -233,7 +324,7 @@ uv run pytest tests/e2e/ -v
 uv run pytest tests/stress/ -v
 ```
 
-**Test Results**: `664 passed, 6 skipped` ✅ (670 collected, 2026-09-02)
+**Test Results**: `1089 passed, 19 skipped` ✅ (1108 collected, 2026-09-10)
 
 ## 📊 Benchmarking Científico
 
@@ -291,6 +382,10 @@ Integra providers LLM OpenAI-compatible (Agnes AI, Poolside) y herramientas de m
 | UAST v2 — F1 | Núcleo: nodos+arena+visitantes+convertidores+adaptadores | ✅ | muta_ext/uast2/core.py, arena.py, convert.py | 126 tests |
 | UAST v2 — F2 | Rendimiento: Merkle incremental, serialización plana, coordenadas | ✅ | merkle.py, serialize.py, bench_uast2.py | 50 tests |
 | UAST v2 — F3 | Nanopasses + verificación + rollback atómico + CLI/flags | ✅ | passes.py, verify.py, mutators.py, engine.py | 71 tests |
+| Headroom — F0 | Infra de medición: cost ledger, fitness cache, resume, prompts deterministas | ✅ | cost_ledger.py, fitness_cache.py, evolution_engine.py | 17 tests |
+| Headroom — F1 | Trace compress, AST stubs, schema output, batching+bandit | ✅ | headroom_integration.py, ast_stubs.py, structured_ops.py, llm_backend.py | 110 tests |
+| Headroom — F2 | Amdahl filter, escalera N1/N2/N3, coverage subset | ✅ | hotspot_profiler.py, tiered_evaluator.py, api_fingerprint.py | 44 tests |
+| Headroom — F3 | Economic gate, pareto archive warm-start, reward $ real | ✅ | economic_gate.py, pareto_archive.py, operator_bandit.py | 26 tests |
 
 ## Documentation
 
@@ -320,6 +415,10 @@ Integra providers LLM OpenAI-compatible (Agnes AI, Poolside) y herramientas de m
       `uv sync --locked`, SCA bloqueante, black/unit-tests obligatorios en CI
 - [x] UAST v2 (Fases 1–3): motor in-situ con nanopasses verificados, Merkle incremental
       y serialización msgpack — opt-in y con paridad shadow 0 diffs (2026-09-10)
+- [x] Capa Headroom (F0–F3): reducción de costo LLM+GPU con medición before/after
+      obligatoria y palancas desactivables — input −95.5 %, output −55.5 %,
+      evaluación −79.5 %/mutante, costo total −97.2 %; early-stop sin pérdida de
+      hipervolumen; warm-start −50 % generaciones (2026-09-10)
 - [ ] Graduación de UAST v2: `uast.engine: v2` como motor por defecto del pipeline evolutivo
 - [ ] src-layout packaging migration
 - [x] Market-comparison harness: Agnes AI + Poolside integrados (2026-09-02)

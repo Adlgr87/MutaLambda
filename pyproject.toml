@@ -7,7 +7,7 @@ name = "mutalambda"
 version = "5.0.0"
 description = "Evolutionary multi-island code optimization framework"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Adlgr87" }]
 dependencies = [
@@ -38,6 +38,9 @@ archive = [
   "faiss-cpu>=1.13,<2",
   "sentence-transformers>=5,<6",
 ]
+headroom = [
+  "headroom-ai>=0.37,<1",
+]
 cli = [
   "click>=8,<9",
   "rich>=13,<16",
@@ -54,6 +57,9 @@ scientific = [
 ]
 dev = [
   "pytest>=7,<10",
+  # Required by the coverage CI job (`pytest tests/ --cov=...`); without it
+  # pytest exits with "unrecognized arguments: --cov=...".
+  "pytest-cov>=6,<8",
   # The suite uses ``@pytest.mark.flaky(reruns=...)`` for the timing-sensitive
   # deep-evolution tests; without this plugin the marker is a no-op and those
   # tests fail under load.
@@ -110,6 +116,13 @@ py-modules = [
   "event_bus",
   "massive_adapter",
   "operator_bandit",
+  "cost_ledger",
+  "fitness_cache",
+  "optimization_flags",
+  "trace_compressor",
+  "ast_stubs",
+  "structured_ops",
+  "headroom_integration",
   "extensions",
   "fitness_normalize",
   "rng_session",

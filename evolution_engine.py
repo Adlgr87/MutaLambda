@@ -7,7 +7,7 @@ import builtins
 import copy
 import random
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from mutation_filters import _filter_mutant, ProfileMode
 from component_evolution import ComponentGraph, ComponentMutator, ModuleExtractor
@@ -67,7 +67,7 @@ class ASTMutator:
                 ast.parse(result)
                 if result.strip() != code.strip():
                     return result
-            except (SyntaxError, ValueError, AttributeError):
+            except (SyntaxError, ValueError, AttributeError, TypeError, KeyError, IndexError):
                 continue
 
         return code
@@ -98,10 +98,13 @@ class ASTMutator:
     @staticmethod
     def _wrap_in_if(tree: ast.Module) -> None:
         for node in ast.walk(tree):
-            if hasattr(node, "body") and node.body:
-                idx = random.randrange(len(node.body))
-                original = node.body[idx]
-                node.body[idx] = ast.If(
+            # Only *statement* bodies: ast.IfExp & friends carry `body`
+            # fields that are expressions, not statement lists.
+            body = getattr(node, "body", None)
+            if isinstance(body, list) and body:
+                idx = random.randrange(len(body))
+                original = body[idx]
+                body[idx] = ast.If(
                     test=ast.Constant(value=True),
                     body=[original],
                     orelse=[],
@@ -175,9 +178,11 @@ class ASTMutator:
     @staticmethod
     def _duplicate_statement(tree: ast.Module) -> None:
         for node in ast.walk(tree):
-            if hasattr(node, "body") and node.body and len(node.body) < 50:
-                idx = random.randrange(len(node.body))
-                node.body.insert(idx, copy.deepcopy(node.body[idx]))
+            body = getattr(node, "body", None)
+            # statement bodies only (IfExp.body is an expression)
+            if isinstance(body, list) and body and len(body) < 50:
+                idx = random.randrange(len(body))
+                body.insert(idx, copy.deepcopy(body[idx]))
                 return
 
     @staticmethod
@@ -193,7 +198,8 @@ class ASTMutator:
         replacements: List[Tuple[Any, int, ast.AugAssign]] = []
         for parent in ast.walk(tree):
             body = getattr(parent, "body", None)
-            if not body:
+            # statement bodies only (IfExp.body is an expression, not a list)
+            if not isinstance(body, list):
                 continue
             for idx, child in enumerate(body):
                 if isinstance(child, ast.AugAssign):
@@ -218,20 +224,23 @@ class ASTMutator:
     @staticmethod
     def _add_trivial_loop(tree: ast.Module) -> None:
         for node in ast.walk(tree):
-            if hasattr(node, "body") and node.body:
-                idx = random.randrange(len(node.body))
-                original = node.body[idx]
-                node.body[idx] = ast.For(
-                    target=ast.Name(id="_", ctx=ast.Store()),
-                    iter=ast.Call(
-                        func=ast.Name(id="range", ctx=ast.Load()),
-                        args=[ast.Constant(value=1)],
-                        keywords=[],
-                    ),
-                    body=[original],
-                    orelse=[],
-                )
-                return
+            # statement bodies only (IfExp.body is an expression, not a list)
+            body = getattr(node, "body", None)
+            if not isinstance(body, list) or not body:
+                continue
+            idx = random.randrange(len(body))
+            original = body[idx]
+            body[idx] = ast.For(
+                target=ast.Name(id="_", ctx=ast.Store()),
+                iter=ast.Call(
+                    func=ast.Name(id="range", ctx=ast.Load()),
+                    args=[ast.Constant(value=1)],
+                    keywords=[],
+                ),
+                body=[original],
+                orelse=[],
+            )
+            return
 
 
 @dataclass(frozen=True)
@@ -293,11 +302,57 @@ class CoreEvolutionEngine:
                 )
             )
 
+        # O4 (FASE 2, Amdahl): when profiling_filter is enabled, drop regions
+        # that live inside functions owning <min_cpu_pct of the measured CPU.
+        # Mutating them cannot move end-to-end runtime → pure token spend.
+        spans = self._amdahl_excluded_spans(code)
+        if spans:
+            regions = [
+                r for r in regions
+                if not any(ls <= r.start_line <= le for ls, le in spans)
+            ]
+
         regions.sort(
             key=lambda r: (r.complexity_score, r.end_line - r.start_line),
             reverse=True,
         )
         return regions[:max_regions]
+
+    _AMDHAL_SPANS_CACHE: Dict[str, Tuple[Tuple[int, int], ...]] = {}
+
+    @classmethod
+    def _amdahl_excluded_spans(cls, code: str) -> List[Tuple[int, int]]:
+        """Line spans of functions with *measured* CPU share below threshold.
+
+        Flag-gated (``profiling_filter.enabled``); fail-open — an unprofiled
+        target contributes no spans, so nothing is ever wrongly excluded.
+        """
+        try:
+            from optimization_flags import get_optimization_flags
+            flags = get_optimization_flags()
+            if not flags.enabled("profiling_filter.enabled"):
+                return []
+            from code_hash import stable_code_hash
+            key = stable_code_hash(code)
+            cached = cls._AMDHAL_SPANS_CACHE.get(key)
+            if cached is not None:
+                return list(cached)
+            from hotspot_profiler import AmdahlHeadroomFilter
+            f = AmdahlHeadroomFilter(
+                min_cpu_pct=float(flags.get("profiling_filter.min_cpu_pct", 0.5)),
+                profile_seconds=float(flags.get("profiling_filter.profile_seconds", 10.0)),
+            )
+            prof = f.profile(code)
+            spans: List[Tuple[int, int]] = []
+            if prof.profiled:
+                for name in f.excluded():
+                    s = prof.functions.get(name)
+                    if s is not None and s.line_start:
+                        spans.append((s.line_start, s.line_end or s.line_start))
+            cls._AMDHAL_SPANS_CACHE[key] = tuple(spans)
+            return spans
+        except Exception:
+            return []
 
     def build_mutation_prompt(
         self,
@@ -306,7 +361,19 @@ class CoreEvolutionEngine:
         score: float,
         error_info: str = "",
     ) -> str:
-        """Prompt para mutación heurística: cambios pequeños y conservadores."""
+        """Prompt para mutación heurística: cambios pequeños y conservadores.
+
+        O1 (Fase 1, flag ``headroom.smart_crusher.enabled``): the error block
+        (sandbox stderr / regression tracebacks) is compressed with Headroom
+        before it enters the prompt; passthrough byte-identical when off.
+        """
+        if error_info:
+            try:
+                from trace_compressor import compress_for_llm
+
+                error_info = compress_for_llm(error_info)
+            except Exception:  # pragma: no cover - compression is best-effort
+                pass
         region_block = self._format_region(region)
         error_block = f"\nCURRENT ERROR:\n{error_info}\n" if error_info else ""
         return f"""SYSTEM: You are MutaLambda Core Evolution Engine.
@@ -412,11 +479,45 @@ RULES:
         score: float,
         error_info: str,
         llm_fn: Callable[[str], str],
+        stats_sink: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """Ejecuta mutación dirigida por LLM con fallback AST local."""
-        region = self._top_region(code)
-        prompt = self.build_mutation_prompt(code, region, score, error_info)
-        generated = self.extract_valid_code(llm_fn(prompt))
+        """Ejecuta mutación dirigida por LLM con fallback AST local.
+
+        Fase 1 (Headroom): when ``headroom.json_schema_output.enabled`` is on,
+        the call goes through the structured pipeline (O1 trace compression +
+        O3 stubs/retrieval + A1 JSON-schema ops + A3 batching) with a legacy
+        fallback, so a run is never broken.  ``stats_sink`` (optional dict)
+        receives per-call token/op statistics for the cost-aware bandit and
+        the ROI report.  With the flag off the pre-Fase-1 prompt path is
+        reproduced exactly.
+        """
+        from optimization_flags import get_optimization_flags
+
+        generated: Optional[str]
+        if get_optimization_flags().enabled("headroom.json_schema_output.enabled", False):
+            from headroom_integration import llm_mutation_candidate
+
+            generated = llm_mutation_candidate(
+                engine=self,
+                code=code,
+                score=score,
+                error_info=error_info,
+                llm_fn=llm_fn,
+                stats_sink=stats_sink,
+            )
+        else:
+            region = self._top_region(code)
+            prompt = self.build_mutation_prompt(code, region, score, error_info)
+            generated = self.extract_valid_code(llm_fn(prompt))
+            if stats_sink is not None:
+                stats_sink.update(
+                    {
+                        "mode": "legacy",
+                        "prompt_chars": len(prompt),
+                        "tokens_in_est": max(1, len(prompt) // 4),
+                        "fallback": generated is None,
+                    }
+                )
         result = generated if generated is not None else ASTMutator.apply_random_mutation(code)
         filtered = _filter_mutant(result, ProfileMode.PERMISSIVE)
         return filtered if filtered is not None else result
@@ -442,10 +543,37 @@ RULES:
         score: float,
         task: str,
         llm_fn: Callable[[str], str],
+        stats_sink: Optional[Dict[str, Any]] = None,
     ) -> Optional[str]:
-        """Ejecuta rediseño radical dirigido por LLM."""
+        """Ejecuta rediseño radical dirigido por LLM.
+
+        Fase 1: structured pipeline (O3+A1) when the schema flag is on.
+        """
+        from optimization_flags import get_optimization_flags
+
+        if get_optimization_flags().enabled("headroom.json_schema_output.enabled", False):
+            from headroom_integration import llm_redesign_candidate
+
+            return llm_redesign_candidate(
+                engine=self,
+                code=code,
+                score=score,
+                task=task,
+                llm_fn=llm_fn,
+                stats_sink=stats_sink,
+            )
         prompt = self.build_redesign_prompt(code, self._top_region(code), score, task)
-        return self.extract_valid_code(llm_fn(prompt))
+        generated = self.extract_valid_code(llm_fn(prompt))
+        if stats_sink is not None:
+            stats_sink.update(
+                {
+                    "mode": "legacy-redesign",
+                    "prompt_chars": len(prompt),
+                    "tokens_in_est": max(1, len(prompt) // 4),
+                    "fallback": generated is None,
+                }
+            )
+        return generated
 
     def _top_region(self, code: str) -> Optional[CodeRegion]:
         regions = self.select_code_regions(code, max_regions=1)

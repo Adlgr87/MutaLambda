@@ -34,6 +34,11 @@ REPOPACK.md
 
 # generated reports
 reports/benchmark_report.json
+reports/fase*_before_after.json
+reports/fase*_cost_ledger.json
+.mutalambda/
+# FASE 3 (A5): warm-start store (generated)
+pareto_archive/
 examples/target_benchmark.json
 status_report.json
 status_report.md
@@ -56,3 +61,7 @@ MutaLambda_Commercial/
 
 # AionUi local skills (debug artifacts) — never commit
 .aionrs/
+
+# pytest-cov artefactos (generado en CI)
+coverage.xml
+.coverage

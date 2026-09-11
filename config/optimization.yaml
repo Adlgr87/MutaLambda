@@ -1,0 +1,118 @@
+# MutaLambda — capa de optimización de costo (Headroom)
+# ======================================================
+# Cada palanca de optimización tiene su flag aquí. TODO cambio del motor
+# debe ser desactivable editando este archivo (regla 6).
+#
+# Precedencia de resolución:
+#   1. Variables de entorno  MUTALAMBDA_OPT_<SECCION>__<CLAVE>=1|0|<valor>
+#      (doble guion bajo separa sección de clave, p.ej.
+#       MUTALAMBDA_OPT_COST_LEDGER__ENABLED=0)
+#   2. Este archivo (ruta configurable con MUTALAMBDA_OPT_CONFIG)
+#   3. Valores por defecto embebidos en optimization_flags.py
+#
+# El loader vive en optimization_flags.py (get_optimization_flags()).
+
+optimization:
+  # ── FASE 0 ─────────────────────────────────────────────────────────────
+  # A5: libro de costos (tokens $ + GPU $). Interceptado en el wrapper LLM,
+  # en el servicio de evaluación y en la regression gate.
+  cost_ledger:
+    enabled: true
+    # Ruta del dump JSON (vacío = .mutalambda/cost_ledger.json).
+    path: ""
+    # Precio estimado por hora-GPU (A100 spot) para log_eval(gpu_seconds=...).
+    gpu_hour_usd: 0.5
+
+  # A5: checkpointing. `every` = generaciones entre checkpoints (default 5).
+  # `--resume-from` en el CLI de evolve.py continúa desde un checkpoint JSON.
+  checkpoint:
+    every: 5
+
+  # A2: cache de fitness por hash canónico del código (sqlite | json).
+  fitness_cache:
+    enabled: true
+    backend: sqlite            # sqlite | json
+    path: ".mutalambda/fitness_cache.db"
+    max_entries: 100000
+
+  # O2: prompts deterministas en el wrapper LLM (sin timestamps/UUIDs,
+  # orden fijo). Dos llamadas gemelas ⇒ prompt idéntico byte a byte.
+  deterministic_prompt:
+    enabled: true
+
+  # ── FASE 1 ─────────────────────────────────────────────────────────────
+  # Headroom (paquete `headroom-ai`, github.com/headroomlabs-ai/headroom —
+  # instalado y verificado en Fase 1). Con todos los sub-flags en `false` el
+  # comportamiento es idéntico al pre-Fase-1 (byte a byte); actívalos por
+  # palanca. `enabled` es el paraguas informativo; cada sub-flag manda.
+  headroom:
+    enabled: false
+    package: "headroom-ai"     # PyPI: pip install "headroom-ai"
+    smart_crusher:
+      # O1: comprime tracebacks/logs (regression_gate/sandbox) antes del LLM.
+      enabled: false
+      max_traceback_chars: 4000
+      max_log_lines: 80
+    ast_stubs:
+      # O3: AST stubs (no cuerpos completos) + tool headroom_retrieve(stub_id).
+      enabled: false
+      retrieve_tool: true
+    json_schema_output:
+      # A1: salida por JSON Schema (op_type, location, unified_diff,
+      # rationale) con 1 ronda de reparación y fallback legado seguro.
+      enabled: false
+      # max_tokens ajustado a la salida estructurada — cero prosa libre.
+      max_tokens: 2048
+    batching:
+      # A3: N mutaciones por llamada única al LLM.
+      enabled: false
+      batch_size: 5
+    bandit:
+      # A3: reward = Δfitness/tokens (UCB) en vez del esquema plano legacy.
+      enabled: false
+      ucb_c: 1.414             # coeficiente de exploración UCB1
+
+  # ── FASE 2 ─────────────────────────────────────────────────────────────
+  # O4/AmdahlHeadroomFilter + O6 (3 niveles) + A4 (subset de tests).
+  # `enabled` es el paraguas: con `false` el motor es idéntico a pre-Fase-2
+  # (regla 6). Con `true` se activa la escalera:
+  #   N1 nanopass in-memory (<1ms) → N2 subset mínimo (in-proc/subproc) →
+  #   N3 solo el top `sandbox_top_pct`% a Docker sandbox + Ray (opcional).
+  # Los sub-flags individualmente apagan cada palanca sin tocar las demás.
+  profiling_filter:
+    enabled: false
+    profile_seconds: 10        # O4: profiling bajo carga ~10s
+    min_cpu_pct: 0.5           # O4: excluye funciones con <0.5% de CPU
+    nanopass_check:
+      enabled: true            # O6 N1: chequeo UAST Nanopass en memoria (<1ms)
+    test_subset:
+      enabled: true            # O6 N2 + A4: subset mínimo por cobertura
+      by_coverage: true        # A4: crecimiento guiado por cobertura (trace)
+      max_tests: 0             # 0 = auto (set cover sobre funciones)
+    sandbox_top_pct: 20.0      # O6 N3: solo ~20% top va a Docker + Ray
+    api_policy: strict         # N1: strict | relaxed (fingerprint de API)
+    uast2_enabled: false       # N1: chequeo semántico UAST-core (v2)
+    ray_profile:
+      enabled: false           # N3: distribuir evaluaciones con Ray
+
+  # ── FASE 3 ─────────────────────────────────────────────────────────────
+  # O5: EconomicHeadroomGate — early stop cuando el ΔH por generación no
+  # justifica el $GPU de seguir corriendo.
+  economic_gate:
+    enabled: false
+    delta_h_threshold: 0.005   # hipervolumen mínimo ganado por generación
+    stall_generations: 5       # generaciones consecutivas por debajo del umbral
+    gpu_hour_usd: 0.5
+    production_cpu_savings_hour_usd: 0.0   # 0 = solo criterio de estancamiento
+    gpu_seconds_per_generation: 0.0        # >0 activa el criterio de costo
+                                            # (costo estimado de las generaciones restantes)
+
+  # A3: bandit con reward en $ reales del ledger (mutate-strategy auto).
+  bandit_reward_usd:
+    enabled: false
+
+  # A5: pareto_archive/ indexado por hash de firma + warm-start.
+  pareto_archive:
+    enabled: false
+    dir: "pareto_archive"
+    warm_start: true           # --no-warm-start lo desactiva en CLI
