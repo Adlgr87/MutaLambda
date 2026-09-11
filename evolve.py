@@ -467,7 +467,7 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
                 total_planned_generations=int(config.generations),
                 ledger=get_cost_ledger(),
             )
-        if _f3.enabled("pareto_archive.enabled") and config.warm_start:
+        if _f3.enabled("pareto_archive.enabled"):
             from pareto_archive import ParetoArchive
 
             archive = ParetoArchive(_f3.get("pareto_archive.dir", "pareto_archive"))
@@ -502,8 +502,9 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
         # FASE 3 (A5): warm-start — a prior best for the SAME public API
         # replaces one random mutant in the seed population.  The archive
         # code is evaluated like any other individual (it is never trusted
-        # blindly).
-        if archive is not None:
+        # blindly).  --no-warm-start disables this *read* only; the run
+        # still stores its best for future runs.
+        if archive is not None and config.warm_start:
             try:
                 entry = archive.lookup(source)
                 if entry and isinstance(entry.get("code"), str) and entry["code"].strip():
@@ -559,6 +560,20 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
         optimized_code = final_best.code if final_best else source
         best_score = engine.best_score if engine.best_score != float("-inf") else 0.0
         engine_stats = engine.stats()
+
+        # FASE 3 (A5/O5): final hypervolume over the tiers' fitness vectors.
+        try:
+            from economic_gate import hypervolume as _hv_fn
+
+            final_hv = _hv_fn(
+                [
+                    ind.fitness
+                    for ind in (engine.tier1 + engine.tier2 + engine.tier3)
+                    if getattr(ind, "fitness", None) is not None
+                ]
+            )
+        except Exception:
+            final_hv = 0.0
     else:
         # Plain single-population evolution using ASTMutator directly.
         population = seed_codes[:]
@@ -749,7 +764,8 @@ def _write_roi_report(
             "fase3": {
                 "economic_gate": flags.enabled("economic_gate.enabled"),
                 "bandit_reward_usd": flags.enabled("bandit_reward_usd.enabled"),
-                "pareto_archive": flags.enabled("pareto_archive.enabled") and config.warm_start,
+                "pareto_archive": flags.enabled("pareto_archive.enabled"),
+                "warm_start_enabled": config.warm_start,
             },
         }
     except Exception:
