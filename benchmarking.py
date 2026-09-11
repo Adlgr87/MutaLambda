@@ -241,7 +241,7 @@ def summarize_ablation(
 
     Output::
 
-        {"baseline_p50": float, "impactful": [{"variant": str, "delta_pct": float}]}
+        {"baseline_p50": float, "impactful_components": [{"variant": str, "delta_pct": float}]}
     """
     base_p50 = results["baseline"].metadata["p50"]
     impactful = [
