@@ -238,16 +238,26 @@ def build_validation_gates(
                 lambda ctx: _run_complexity_gate(ctx["code"]),
             )
         )
-    if cfg.enable_correctness and on_correctness:
-        stages.append(
-            ProtocolStage(
-                "correctness",
-                lambda ctx: make_stage_result(
+    if cfg.enable_correctness:
+        if on_correctness is None:
+            stages.append(
+                ProtocolStage(
                     "correctness",
-                    PASS if on_correctness(ctx["code"]) else FAIL,
-                ),
+                    lambda _ctx: make_stage_result(
+                        "correctness", FAIL, "correctness callback is required"
+                    ),
+                )
             )
-        )
+        else:
+            stages.append(
+                ProtocolStage(
+                    "correctness",
+                    lambda ctx: make_stage_result(
+                        "correctness",
+                        PASS if on_correctness(ctx["code"]) else FAIL,
+                    ),
+                )
+            )
     if cfg.enable_performance:
         stages.append(
             ProtocolStage(
