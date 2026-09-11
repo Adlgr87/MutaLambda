@@ -223,7 +223,7 @@ jobs:
       - name: Locate optimized code artefact
         id: locate-optimized
         run: |
-          OPT_PY=$(find /tmp/optimized-artefact -type f -name optimized.py | head -1)
+          OPT_PY=/tmp/optimized.py
           echo "optimized=$OPT_PY" >> "$GITHUB_OUTPUT"
       - name: Detect invariants on optimized code
         run: |
