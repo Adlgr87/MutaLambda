@@ -52,6 +52,9 @@ class MutaLambdaCLI:
         tests: Optional[str] = None,
         task: Optional[str] = None,
         allow_untested: bool = False,
+        scientific: bool = False,
+        hotpath: bool = False,
+        scientific_strength: float = 0.3,
     ) -> bool:
         """Run a complete evolution process"""
 
@@ -64,6 +67,16 @@ class MutaLambdaCLI:
                 return False
         else:
             self.current_config = self.config_manager.get_default()
+
+        # Inject Scientific Validation Layer (opt-in) configuration.
+        if scientific or hotpath:
+            _sci = self.current_config.setdefault("scientific", {})
+            if scientific:
+                _sci["enabled"] = True
+            if hotpath:
+                _sci.setdefault("hotpath", {})["enabled"] = True
+                _sci.setdefault("domain_operators", {})["enabled"] = True
+            _sci.setdefault("domain_operators", {})["strength"] = scientific_strength
 
         if not self._prepare_target(source=source, tests=tests, task=task):
             return False

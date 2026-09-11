@@ -1,0 +1,28 @@
+# Scientific Optimization Mode — plantilla de configuración (PDF FASE 0/1/2/3)
+# Flujo A: SVL + hot-path profiling + domain operators (opt-in, disabled por defecto).
+# Uso:  mutalambda run --source examples/target.py --tests examples/target_tests.json --scientific -g 5
+#    o:  mutalambda run -c config.scientific.yaml -g 5
+
+target:
+  source_file: examples/target.py
+  tests_file: examples/target_tests.json
+  task: "Optimizar la funcion objetivo para correctitud y rendimiento"
+
+scientific:
+  enabled: true
+  validation:
+    invariants: true
+    numerical_stability: true
+    conservation_checks: true
+    property_based: true
+  hotpath:
+    enabled: true
+    profiler: cprofile
+    min_cumulative_pct: 5.0
+    max_hot_functions: 15
+    interprocedural_prob: 0.25
+    max_functions_per_mutation: 3
+    depth: 1
+  domain_operators:
+    enabled: true
+    strength: 0.3

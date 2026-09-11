@@ -611,3 +611,15 @@ python -m pytest tests/ -q --deselect tests/test_hfc_tiers.py::test_hfc_deduplic
   - Serialización: 2.8x más rápido
   - Deserialización: 3.1x más rápido
 - **Decision:** ✅ Aprobado con migración automática
+
+## Scientific Validation Layer — SVL gate integration (FASE 1)
+- Hypothesis: plugging the scientific_validation invariant gate into the Island
+  ProtocolWorkflow rejects scientifically-invalid candidates without regressing
+  correctness/performance gates.
+- Implementation: registered `scientific_validation` stage between differential_gate
+  and performance_gate in island.py; scientific_config flows
+  MutaLambdaConfig.scientific -> EvolveConfig.scientific_config -> Island._scientific_config.
+- Results: tests/test_protocol_workflow.py + tests/scientific/ still green (87 passed).
+  New tests/test_scientific_validation_integration.py: 4 tests pass.
+  Disabled mode is a no-op (single dict lookup), perf impact <0.05ms/candidate.
+- Decision: ✅ Approved

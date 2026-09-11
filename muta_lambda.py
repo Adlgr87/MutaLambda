@@ -115,6 +115,7 @@ class EvolveConfig:
     workflow_require_score_improvement: bool = False
     workflow_enforce_security: bool = True
     workflow_trace_limit: int = 200
+    scientific_config: Dict[str, Any] = field(default_factory=dict)
     convergent_boost_enabled: bool = True
     convergent_boost_threshold: float = 0.85
     convergent_boost_factor: float = 0.15
@@ -228,6 +229,7 @@ class EvolveConfig:
         patterns = cfg.get("pattern_memory", {})
         privacy = cfg.get("privacy", {})
         target = cfg.get("target", {})
+        scientific = cfg.get("scientific", {})
 
         config = cls(
             num_islands=evo.get("num_islands", 4),
@@ -318,6 +320,7 @@ class EvolveConfig:
             uast_timeout_sec=cfg.get("uast", {}).get("uast_timeout_sec", 30.0),
             uast_cache_enabled=cfg.get("uast", {}).get("cache_enabled", True),
             uast_cache_dir=cfg.get("uast", {}).get("cache_dir", ".uast_cache"),
+            scientific_config=scientific,
         )
 
         config.sandbox_timeout = sand.get("timeout_sec", 10.0)
@@ -495,43 +498,7 @@ class MutaLambdaAgent:
             population_size=config.population_size,
             top_k=config.top_k,
         )
-        self.islands: List[Island] = [
-            Island(
-                island_id=i,
-                config=island_cfg,
-                llm_fn=self._island_llm_fn,
-                evaluator=self.evaluator,
-                migration_bus=self.migration_bus,
-            )
-            for i in range(config.num_islands)
-        ]
-        for island in self.islands:
-            island.configure_protocol(
-                run_id=self.run_id,
-                trace_sink=self._record_protocol_trace,
-                agent=self,
-                config=config,
-            )
-        self._hfc: Optional[HFCLeagueEngine] = None
-        if config.hfc_enabled:
-            self._hfc = HFCLeagueEngine(
-                HFCTierConfig(
-                    max_tier1_size=config.hfc_tier1_size,
-                    max_tier2_size=config.hfc_tier2_size,
-                    max_tier3_size=config.hfc_tier3_size,
-                    lambda_clones=config.hfc_lambda_clones,
-                    promotion_correctness=config.hfc_promotion_correctness,
-                    top_down_distillation=config.hfc_top_down_distillation,
-                    top_down_interval=config.hfc_top_down_interval,
-                ),
-                rng=random.Random(),
-            )
-            if config.seed_codes:
-                self._hfc.seed(config.seed_codes)
-
-        if config.seed_codes:
-            self._seed_islands_differentiated(config.seed_codes)
-
+        self._configure_migration_and_islands(config, island_cfg)
         self.archive: Optional[SolutionArchive] = None
         self._embed_cache: Dict = {}
         if config.archive_solutions:
@@ -539,60 +506,10 @@ class MutaLambdaAgent:
                 self.archive = SolutionArchive()
             except ImportError:
                 logger.warning("FAISS/sentence-transformers not available; archive disabled.")
+        self._initialize_engines(config)
 
-        self._advanced_selection = None
-        if config.advanced_selection_enabled:
-            from muta_ext.advanced_selection import (
-                AdvancedSelectionConfig,
-                AdvancedSelectionEngine,
-            )
-
-            self._advanced_selection = AdvancedSelectionEngine(
-                AdvancedSelectionConfig(
-                    enabled=True,
-                    fitness_weight=config.advanced_fitness_weight,
-                    novelty_weight=config.advanced_novelty_weight,
-                    entropy_weight=config.advanced_entropy_weight,
-                    discovery_weight=config.advanced_discovery_weight,
-                ),
-                archive=self.archive,
-                lineage_graph=None,
-            )
-            self.migration_bus.advanced_selection = self._advanced_selection
-
-        self._thc_engine = None
-        if config.thc_enabled:
-            from muta_ext.thc_engine import HorizontalTransferEngine, THCConfig
-
-            self._thc_engine = HorizontalTransferEngine(
-                THCConfig(
-                    enabled=True,
-                    max_transfers_per_generation=config.thc_max_transfers_per_generation,
-                    min_donor_score=config.thc_min_donor_score,
-                    validate_in_sandbox=config.thc_validate_in_sandbox,
-                ),
-                rng=random.Random(),
-            )
-            self.migration_bus.thc_engine = self._thc_engine
-
-        self._dialectic_engine = None
-        if config.dialectic_enabled:
-            from muta_ext.dialectic_engine import DialecticConfig, DialecticEngine
-
-            self._dialectic_engine = DialecticEngine(
-                DialecticConfig(
-                    enabled=True,
-                    critique_intensity=config.dialectic_critique_intensity,
-                )
-            )
-            self.migration_bus.dialectic_engine = self._dialectic_engine
-
-        self._pattern_memory = None
-        if config.pattern_memory_enabled:
-            from muta_ext.pattern_memory import PatternMemory
-
-            self._pattern_memory = PatternMemory()
-            self.migration_bus.pattern_memory = self._pattern_memory
+        if config.seed_codes:
+            self._seed_islands_differentiated(config.seed_codes)
 
         self.prompt_evolver: Optional[Any] = None
         if config.prompt_evolution:
@@ -659,6 +576,92 @@ class MutaLambdaAgent:
             wrapped = wrap_engine(eng, name=name)
             if wrapped is not None:
                 self.extensions.register(wrapped)
+
+    def _configure_migration_and_islands(self, config: "EvolveConfig", island_cfg: "IslandConfig") -> None:
+        """Create island list and wire each into the protocol workflow."""
+        self.islands: List["Island"] = [
+            Island(
+                island_id=i,
+                config=island_cfg,
+                llm_fn=self._island_llm_fn,
+                evaluator=self.evaluator,
+                migration_bus=self.migration_bus,
+            )
+            for i in range(config.num_islands)
+        ]
+        for island in self.islands:
+            island.configure_protocol(
+                run_id=self.run_id,
+                trace_sink=self._record_protocol_trace,
+                agent=self,
+                config=config,
+            )
+
+    def _initialize_engines(self, config: EvolveConfig) -> None:
+        """Instantiate optional HFC/THC/dialectic/pattern-memory engines."""
+        self._hfc: Optional[HFCLeagueEngine] = None
+        if config.hfc_enabled:
+            self._hfc = HFCLeagueEngine(
+                HFCTierConfig(
+                    max_tier1_size=config.hfc_tier1_size,
+                    max_tier2_size=config.hfc_tier2_size,
+                    max_tier3_size=config.hfc_tier3_size,
+                    lambda_clones=config.hfc_lambda_clones,
+                    promotion_correctness=config.hfc_promotion_correctness,
+                    top_down_distillation=config.hfc_top_down_distillation,
+                    top_down_interval=config.hfc_top_down_interval,
+                ),
+                rng=random.Random(),
+            )
+            if config.seed_codes:
+                self._hfc.seed(config.seed_codes)
+
+        self._advanced_selection = None
+        if config.advanced_selection_enabled:
+            from muta_ext.advanced_selection import (
+                AdvancedSelectionConfig, AdvancedSelectionEngine,
+            )
+            self._advanced_selection = AdvancedSelectionEngine(
+                AdvancedSelectionConfig(
+                    enabled=True,
+                    fitness_weight=config.advanced_fitness_weight,
+                    novelty_weight=config.advanced_novelty_weight,
+                    entropy_weight=config.advanced_entropy_weight,
+                    discovery_weight=config.advanced_discovery_weight,
+                ),
+                archive=self.archive, lineage_graph=None,
+            )
+            self.migration_bus.advanced_selection = self._advanced_selection
+
+        self._thc_engine = None
+        if config.thc_enabled:
+            from muta_ext.thc_engine import HorizontalTransferEngine, THCConfig
+            self._thc_engine = HorizontalTransferEngine(
+                THCConfig(
+                    enabled=True,
+                    max_transfers_per_generation=config.thc_max_transfers_per_generation,
+                    min_donor_score=config.thc_min_donor_score,
+                    validate_in_sandbox=config.thc_validate_in_sandbox,
+                ),
+                rng=random.Random(),
+            )
+            self.migration_bus.thc_engine = self._thc_engine
+
+        self._dialectic_engine = None
+        if config.dialectic_enabled:
+            from muta_ext.dialectic_engine import DialecticConfig, DialecticEngine
+            self._dialectic_engine = DialecticEngine(
+                DialecticConfig(
+                    enabled=True, critique_intensity=config.dialectic_critique_intensity,
+                )
+            )
+            self.migration_bus.dialectic_engine = self._dialectic_engine
+
+        self._pattern_memory = None
+        if config.pattern_memory_enabled:
+            from muta_ext.pattern_memory import PatternMemory
+            self._pattern_memory = PatternMemory()
+            self.migration_bus.pattern_memory = self._pattern_memory
 
     def _island_llm_fn(self, prompt: str) -> str:
         """LLM callable used by islands; steered by best evolved prompt if available."""
@@ -956,55 +959,57 @@ class MutaLambdaAgent:
                 should_stop=True,
                 combined_best_score=float("-inf"),
             )
-        # Drain HITL/control commands
+        self._drain_commands()
+        gen_start = time.perf_counter()
+        island_snapshots, ext_ctx = self._run_evolution_generation(task, gen)
+        self._process_hitl_hints()
+        self._update_spatial_and_diversity(island_snapshots, gen)
+        self._maybe_apply_convergent_boost(gen)
+        self._maybe_compress_lineage()
+        self._maybe_resurrect(gen)
+        self._log_nsga2_stats(gen)
+        self._step_prompt_evolver(task)
+        global_best = self._update_global_best()
+        self._archive_best(gen, global_best)
+        return self._finalize_generation(gen, gen_start, island_snapshots, ext_ctx)
+
+    def _drain_commands(self) -> None:
         for cmd in self.commands.drain():
             c = cmd.get("command")
             if c == "inject_hint" and cmd.get("code"):
                 self.inject_hint(str(cmd["code"]))
             elif c == "stop":
                 self.commands.stop_requested = True
-        gen_start = time.perf_counter()
+
+    def _run_evolution_generation(self, task: str, gen: int):
         island_snapshots: List[IslandSnapshot] = []
         self.event_bus.emit(
-            GENERATION_STARTED,
-            {"generation": gen},
-            run_id=self.run_id,
-            generation=gen,
+            GENERATION_STARTED, {"generation": gen}, run_id=self.run_id, generation=gen,
         )
         ext_ctx = ExtensionContext(
-            generation=gen,
-            run_id=self.run_id,
-            task=task,
-            islands=list(self.islands),
-            best=self._global_best,
+            generation=gen, run_id=self.run_id, task=task,
+            islands=list(self.islands), best=self._global_best,
         )
         self.extensions.on_generation_start(ext_ctx)
-        # Reset per-generation LLM budget when available
         backend = getattr(self, "_llm_backend", None)
         if backend is not None and hasattr(backend, "reset_generation_budget"):
             backend.reset_generation_budget()
-
         if self._hfc is not None:
             hfc_snapshot = self._hfc.step(
-                self.llm_fn,
-                self.evaluator,
-                gen,
-                lineage_graph=self._lineage,
-                task=task,
+                self.llm_fn, self.evaluator, gen,
+                lineage_graph=self._lineage, task=task,
             )
             island_snapshots = []
             logger.debug(
                 "HFC gen %d — tiers=%s | best=%.4f | diversity=%.3f",
-                gen + 1,
-                hfc_snapshot.tier_counts,
-                hfc_snapshot.best_score,
-                hfc_snapshot.diversity,
+                gen + 1, hfc_snapshot.tier_counts,
+                hfc_snapshot.best_score, hfc_snapshot.diversity,
             )
         else:
             island_snapshots = self._island_pool.run_generation(self.islands, gen)
+        return island_snapshots, ext_ctx
 
-        self._process_hitl_hints()
-
+    def _update_spatial_and_diversity(self, island_snapshots: List[IslandSnapshot], gen: int) -> None:
         cross_diversity = self._compute_cross_island_diversity()
         spatial_topology = getattr(self.migration_bus, "spatial_topology", None)
         if spatial_topology is not None:
@@ -1013,15 +1018,12 @@ class MutaLambdaAgent:
             diversities = [s.diversity for s in island_snapshots]
             logger.debug(
                 "Gen %d diversity — intra: [%s] | cross: %.3f",
-                gen + 1,
-                ", ".join(f"{d:.3f}" for d in diversities),
-                cross_diversity,
+                gen + 1, ", ".join(f"{d:.3f}" for d in diversities), cross_diversity,
             )
 
-        if (
-            self._hfc is None
-            and gen % max(1, self.config.migration_interval) == 0
-        ):
+    def _maybe_apply_convergent_boost(self, gen: int) -> None:
+        if (self._hfc is None
+                and gen % max(1, self.config.migration_interval) == 0):
             boost_stats = self._apply_convergent_boost()
             if boost_stats.get("boosted", 0) > 0:
                 logger.info(
@@ -1029,54 +1031,44 @@ class MutaLambdaAgent:
                     gen + 1, boost_stats["boosted"], boost_stats.get("pairs", 0),
                 )
 
-        global_best = self._global_best
-        if (
-            os.getenv("MUTALAMBDA_ENABLE_LINEAGE_COMPRESSION", "0") == "1"
-            and len(self._lineage.nodes) > 1000
-            and global_best is not None
-        ):
+    def _maybe_compress_lineage(self) -> None:
+        if (os.getenv("MUTALAMBDA_ENABLE_LINEAGE_COMPRESSION", "0") == "1"
+                and len(self._lineage.nodes) > 1000
+                and self._global_best is not None):
             try:
                 from muta_ext.lineage.compression import LineageCompressor
-
                 compressor = getattr(self, "_lineage_compressor", None)
                 if compressor is None:
                     compressor = LineageCompressor(self._lineage)
                     setattr(self, "_lineage_compressor", compressor)
-
-                active_branch_ids = set(self._lineage.get_ancestors(global_best.id))
-                active_branch_ids.add(global_best.id)
+                active_branch_ids = set(self._lineage.get_ancestors(self._global_best.id))
+                active_branch_ids.add(self._global_best.id)
                 compressor.compress_inactive(active_branch_ids)
             except Exception as e:
                 logger.warning("Lineage compression failed: %s", e)
 
+    def _maybe_resurrect(self, gen: int) -> None:
+        global_best = self._global_best
         if (self.config.resurrection_enabled
                 and self._early_stop.stagnant_generations
                 >= self.config.resurrection_threshold
                 and self._lineage._resurrection_count
                 < self.config.resurrection_max_attempts
                 and global_best is not None):
-            threshold = (self.config.resurrection_min_score_ratio
-                         * global_best.score)
-            candidates = self._lineage.find_abandoned_branches(
-                global_best.id, threshold,
-            )
+            threshold = self.config.resurrection_min_score_ratio * global_best.score
+            candidates = self._lineage.find_abandoned_branches(global_best.id, threshold)
             if candidates:
                 resurrected = self._resurrect_branch(candidates[0])
                 stagnant_island = self._find_stagnant_island()
                 if stagnant_island:
                     stagnant_island.population[0] = resurrected
-                    logger.info(
-                        "Gen %d — ♜ resurrected branch → island %d",
-                        gen + 1, stagnant_island.id,
-                    )
+                    logger.info("Gen %d — ♜ resurrected branch → island %d", gen + 1, stagnant_island.id)
 
+    def _log_nsga2_stats(self, gen: int) -> None:
         if gen % 5 == 0:
             try:
                 from nsga2 import get_nsga2_stats
-                all_inds = [
-                    ind for isl in self.islands
-                    for ind in isl.population
-                ]
+                all_inds = [ind for isl in self.islands for ind in isl.population]
                 nsga_stats = get_nsga2_stats(all_inds)
                 logger.debug(
                     "NSGA-II fronts=%d pareto=%d crowding=%.3f",
@@ -1087,6 +1079,7 @@ class MutaLambdaAgent:
             except ImportError:
                 pass
 
+    def _step_prompt_evolver(self, task: str) -> None:
         if self.prompt_evolver and task:
             best_so_far = self._get_global_best()
             base_code = best_so_far.code if best_so_far else ""
@@ -1095,70 +1088,83 @@ class MutaLambdaAgent:
             if best_prompt is not None:
                 self._active_prompt_genome = copy.deepcopy(best_prompt)
 
+    def _update_global_best(self) -> Optional[Individual]:
         current_best = self._get_global_best()
-        if current_best:
-            combined = self._score_with_novelty(current_best)
-            if global_best is None or combined > self._score_with_novelty(global_best):
-                global_best = copy.deepcopy(current_best)
-                self._global_best = global_best
+        if current_best is None:
+            return None
+        combined = self._score_with_novelty(current_best)
+        global_best = self._global_best
+        if global_best is None or combined > self._score_with_novelty(global_best):
+            new_best = copy.deepcopy(current_best)
+            new_best.score = current_best.score
+            self._global_best = new_best
+        return self._global_best
 
+    def _archive_best(self, gen: int, global_best: Optional[Individual]) -> None:
         if self.archive and global_best:
             self.archive.add(
-                global_best.code,
-                {"score": global_best.score, "generation": float(gen)},
+                global_best.code, {"score": global_best.score, "generation": float(gen)},
             )
 
+    def _finalize_generation(
+        self, gen: int, gen_start: float, island_snapshots: List[IslandSnapshot],
+        ext_ctx: ExtensionContext,
+    ) -> "GenerationResult":
         gen_elapsed = time.perf_counter() - gen_start
         self._generation_times.append(gen_elapsed)
+        global_best = self._global_best
         current_score = global_best.score if global_best else float("-inf")
         current_combined_score = (
-            self._score_with_novelty(global_best)
-            if global_best is not None
-            else float("-inf")
+            self._score_with_novelty(global_best) if global_best is not None else float("-inf")
         )
         self._global_best_history.append(current_score)
-
         if gen % 5 == 0 or gen == self.config.generations - 1:
-            avg_time = (
-                sum(self._generation_times[-5:]) /
-                min(5, len(self._generation_times[-5:]))
-            )
+            avg_time = sum(self._generation_times[-5:]) / min(5, len(self._generation_times[-5:]))
             logger.info(
-                "Gen %d/%d | best=%.4f | avg_time=%.2fs | "
-                "archive=%d | stagnant=%d | protocol(promote=%d reject=%d)",
-                gen + 1, self.config.generations, current_score,
-                avg_time,
+                "Gen %d/%d | best=%.4f | avg_time=%.2fs | archive=%d | stagnant=%d | protocol(promote=%d reject=%d)",
+                gen + 1, self.config.generations, current_score, avg_time,
                 self.archive.size if self.archive else 0,
                 self._early_stop.stagnant_generations,
-                self._protocol_metrics["promoted"],
-                self._protocol_metrics["rejected"],
+                self._protocol_metrics["promoted"], self._protocol_metrics["rejected"],
             )
-
-        if (
-            self.config.checkpoint_enabled
-            and self.config.checkpoint_interval > 0
-            and (gen + 1) % self.config.checkpoint_interval == 0
-        ):
-            ckpt_path = self._save_checkpoint(gen + 1)
-            if ckpt_path:
-                self.event_bus.emit(
-                    CHECKPOINT_SAVED,
-                    {"path": ckpt_path, "generation": gen + 1},
-                    run_id=self.run_id,
-                    generation=gen + 1,
-                )
-
+        self._maybe_save_checkpoint(gen)
         should_stop = self._early_stop.update(current_combined_score)
         if should_stop:
             logger.info(
                 "Early stop en gen %d: sin mejora ≥%.4f en %d generaciones.",
-                gen + 1, self.config.early_stop_delta,
-                self.config.early_stop_patience,
+                gen + 1, self.config.early_stop_delta, self.config.early_stop_patience,
             )
             self._stopped = True
-
         self._current_generation = gen + 1
         self._generation_completed = gen + 1
+        self._emit_generation_completed(
+            ext_ctx, gen, current_score, current_combined_score,
+            island_snapshots, should_stop,
+        )
+        if self.commands.stop_requested:
+            should_stop = True
+            self._stopped = True
+        return GenerationResult(
+            generation=gen + 1, best=self._global_best,
+            snapshots=island_snapshots, should_stop=should_stop,
+            combined_best_score=current_combined_score,
+        )
+
+    def _maybe_save_checkpoint(self, gen: int) -> None:
+        if (self.config.checkpoint_enabled
+                and self.config.checkpoint_interval > 0
+                and (gen + 1) % self.config.checkpoint_interval == 0):
+            ckpt_path = self._save_checkpoint(gen + 1)
+            if ckpt_path:
+                self.event_bus.emit(
+                    CHECKPOINT_SAVED, {"path": ckpt_path, "generation": gen + 1},
+                    run_id=self.run_id, generation=gen + 1,
+                )
+
+    def _emit_generation_completed(
+        self, ext_ctx, gen: int, current_score: float,
+        current_combined_score: float, island_snapshots: List[IslandSnapshot], should_stop: bool,
+    ) -> None:
         ext_ctx.best = self._global_best
         ext_ctx.metadata["combined_best_score"] = current_combined_score
         self.extensions.on_generation_end(ext_ctx)
@@ -1172,18 +1178,7 @@ class MutaLambdaAgent:
                 "snapshots": len(island_snapshots),
                 "extension_metrics": self.extensions.all_metrics(),
             },
-            run_id=self.run_id,
-            generation=gen + 1,
-        )
-        if self.commands.stop_requested:
-            should_stop = True
-            self._stopped = True
-        return GenerationResult(
-            generation=gen + 1,
-            best=self._global_best,
-            snapshots=island_snapshots,
-            should_stop=should_stop,
-            combined_best_score=current_combined_score,
+            run_id=self.run_id, generation=gen + 1,
         )
 
     def step(self, task: str = "") -> "GenerationResult":

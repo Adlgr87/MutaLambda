@@ -155,7 +155,148 @@ def security_findings(code: str) -> List[str]:
     return findings
 
 
-# ── Complexity Gate (MutaLambda 2.0) ─────────────────────────────────────────
+# ── Validation Gates (FASE 1 framework) ─────────────────────────────────────────
+
+
+@dataclass
+class GateConfig:
+    """Per-gate enable/weight configuration."""
+
+    run_id: str = ""
+    enable_syntax: bool = True
+    enable_security: bool = True
+    enable_complexity: bool = True
+    enable_correctness: bool = True
+    enable_performance: bool = False
+    enable_resource: bool = False
+
+
+def _run_syntax_gate(code: str) -> StageResult:
+    name = "syntax_check"
+    try:
+        ast.parse(code)
+        return make_stage_result(name, PASS, "valid Python syntax")
+    except SyntaxError as exc:
+        return make_stage_result(
+            name, FAIL, f"SyntaxError: {exc.msg} (line {exc.lineno})"
+        )
+
+
+def _run_security_gate(code: str) -> StageResult:
+    findings = security_findings(code)
+    if findings:
+        return make_stage_result(
+            "security_scan", FAIL, "risky calls", metadata={"findings": findings}
+        )
+    return make_stage_result("security_scan", PASS, "no risky patterns")
+
+
+def _run_complexity_gate(code: str, max_complexity: int = 10) -> StageResult:
+    try:
+        tree = ast.parse(code)
+        score = sum(
+            getattr(node, "complexity", 0)
+            for node in ast.walk(tree)
+            if isinstance(getattr(node, "complexity", 0), int)
+        ) or _complexity_node_count(tree)
+    except SyntaxError:
+        score = 0
+    if score > max_complexity:
+        return make_stage_result(
+            "complexity_gate",
+            RETRYABLE_FAIL,
+            f"complexity {score} > {max_complexity}",
+            metadata={"complexity": score},
+        )
+    return make_stage_result("complexity_gate", PASS, f"complexity {score}")
+
+
+def _complexity_node_count(tree: ast.AST) -> int:
+    return sum(1 for _ in ast.walk(tree))
+
+
+def build_validation_gates(
+    cfg: GateConfig, on_correctness: Callable[[str], bool] | None = None
+) -> ProtocolWorkflow:
+    """Build the ordered gate workflow from a :class:`GateConfig`.
+
+    Mirrors the PDF FASE 1 "ValidationGates" (syntax_check, security_scan,
+    complexity_gate, correctness, performance, resource). Each gate is only
+    appended when enabled so the cost is paid only for active checks.
+    """
+    stages: List[ProtocolStage] = []
+    if cfg.enable_syntax:
+        stages.append(ProtocolStage("syntax", lambda ctx: _run_syntax_gate(ctx["code"])))
+    if cfg.enable_security:
+        stages.append(
+            ProtocolStage("security", lambda ctx: _run_security_gate(ctx["code"]))
+        )
+    if cfg.enable_complexity:
+        stages.append(
+            ProtocolStage(
+                "complexity",
+                lambda ctx: _run_complexity_gate(ctx["code"]),
+            )
+        )
+    if cfg.enable_correctness and on_correctness:
+        stages.append(
+            ProtocolStage(
+                "correctness",
+                lambda ctx: make_stage_result(
+                    "correctness",
+                    PASS if on_correctness(ctx["code"]) else FAIL,
+                ),
+            )
+        )
+    if cfg.enable_performance:
+        stages.append(
+            ProtocolStage(
+                "performance",
+                lambda ctx: make_stage_result(
+                    "performance", PASS, "placeholder perf gate"
+                ),
+            )
+        )
+    if cfg.enable_resource:
+        stages.append(
+            ProtocolStage(
+                "resource",
+                lambda ctx: make_stage_result("resource", PASS, "placeholder resource gate"),
+            )
+        )
+    return ProtocolWorkflow(stages)
+
+
+class ValidationGates:
+    """Facade around :class:`ProtocolWorkflow` + :class:`GateConfig`.
+
+    Usage::
+
+        gates = ValidationGates(GateConfig(run_id="r1"))
+        trace = gates.evaluate({"code": new_code})
+        if trace.decision != "promote":
+            ...
+
+    This replaces the ad-hoc inline gate checks scattered in
+    ``EvolutionEngine.mutate`` and ``CoreEvolutionEngine._apply_mutation`` once
+    FASE 2 wires it through.
+    """
+
+    def __init__(self, cfg: GateConfig, on_correctness: Callable[[str], bool] | None = None) -> None:
+        self.cfg = cfg
+        self._correctness_cb = on_correctness
+        self._workflow = build_validation_gates(cfg, on_correctness)
+
+    def evaluate(self, context: Dict[str, Any]) -> ProtocolTrace:
+        trace = ProtocolTrace(
+            run_id=self.cfg.run_id or "",
+            subject_id=artifact_ref(context["code"])[:12],
+        )
+        self._workflow.execute(context, trace)
+        return trace
+
+
+# ── Complexity Gate (legacy, kept) ─────────────────────────────────────────
 
 class ComplexityGate:
     """Pre-evolutive gate: decide if a function is worth deep evolution.

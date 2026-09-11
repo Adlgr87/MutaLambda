@@ -12,7 +12,8 @@
 [![Docker pulls](https://img.shields.io/badge/ghcr.io-adlgr87%2Fmutalambda-blue)](https://github.com/Adlgr87?tab=packages&q=mutalambda)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![Version](https://img.shields.io/badge/version-4.0.0-green.svg)]()
-[![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey.svg)](#license)
+[![License: BSL-1.1](https://img.shields.io/badge/license-BSL%201.1-lightgrey.svg)](#license)
+[![Commercial: Open-Core](https://img.shields.io/badge/commercial-open--core-orange.svg)](#license)
 
 </div>
 
@@ -274,14 +275,17 @@ Current status: **531 test functions** (canonical count via `scripts/report_test
 - [ ] Metrics exporter (Prometheus/OTel) for long-running service deployments
 - [ ] Independent reproduction of validated results on public benchmarks
 
+## Credits
+
+*This README was substantially rewritten by OpenHands (AI agent) as part of the production-readiness workflow.*
+
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+**Community Edition (this repository):** Business Source License 1.1 — see the [LICENSE](LICENSE) file for details.
+Production use of the Licensed Work is restricted until the Change Date (2030-08-23); after that it converts to GPL-3.0-or-later.
 
 > **Commercial availability:** MutaLambda is currently evaluating a dual-license model
 > (open-core). Future releases may be distributed under a commercial license for
 > business use. See [COMMERCIAL.md](COMMERCIAL.md) for details.
 
 ---
-
-*This README was substantially rewritten by OpenHands (AI agent) as part of the production-readiness workflow.*

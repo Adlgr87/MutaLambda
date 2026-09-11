@@ -194,9 +194,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: optimized-artefact
-          path: |
-            artefacts/
-            .mutalambda/checkpoints/
+          path: artefacts/
 
   verify:
     name: Phase 4 — Verification
@@ -222,10 +220,15 @@ jobs:
           name: optimized-artefact
           path: /tmp/
 
+      - name: Locate optimized code artefact
+        id: locate-optimized
+        run: |
+          OPT_PY=$(find /tmp/optimized-artefact -type f -name optimized.py | head -1)
+          echo "optimized=$OPT_PY" >> "$GITHUB_OUTPUT"
       - name: Detect invariants on optimized code
         run: |
-          python universal_parser.py /tmp/optimized-artefact/artefacts/optimized.py -o /tmp/optimized_uast.json --lang python
-          python invariant_detector.py /tmp/optimized_uast.json -o /tmp/opt_invariants.lock --source /tmp/optimized-artefact/artefacts/optimized.py
+          python universal_parser.py "${{ steps.locate-optimized.outputs.optimized }}" -o /tmp/optimized_uast.json --lang python
+          python invariant_detector.py /tmp/optimized_uast.json -o /tmp/opt_invariants.lock --source "${{ steps.locate-optimized.outputs.optimized }}"
           cp /tmp/opt_invariants.lock /tmp/invariants.lock
 
       - name: Verify mathematical equivalence
@@ -234,7 +237,7 @@ jobs:
           from ast_math_verifier import ASTMathVerifier
           from pathlib import Path
           baseline = Path("${{ inputs.target_file }}").read_text()
-          optimized = Path("/tmp/optimized-artefact/artefacts/optimized.py").read_text()
+          optimized = Path("${{ steps.locate-optimized.outputs.optimized }}").read_text()
           verifier = ASTMathVerifier()
           result = verifier.verify(baseline, optimized)
           import json
@@ -253,7 +256,7 @@ jobs:
           python - <<'PY'
           from property_testing import run_property_tests
           from pathlib import Path
-          code = Path("/tmp/optimized-artefact/artefacts/optimized.py").read_text()
+          code = Path("${{ steps.locate-optimized.outputs.optimized }}").read_text()
           results = run_property_tests(code)
           Path("/tmp/property_results.json").write_text(__import__("json").dumps(results, indent=2))
           print(__import__("json").dumps(results, indent=2))
@@ -315,7 +318,8 @@ jobs:
           baseline_samples = result.samples_sec
 
           # Optimized
-          opt_code = Path("/tmp/opt/optimized-artefact/artefacts/optimized.py").read_text()
+          cand = [q for q in Path("/tmp/opt/optimized-artefact").rglob("optimized.py")]
+          opt_code = Path(cand[0]).read_text() if cand else Path("/tmp/opt/optimized-artefact/optimized.py").read_text()
           ns2 = {}
           exec(compile(opt_code, "optimized", "exec"), ns2)
           opt_fn = ns2[func_name]
@@ -400,7 +404,8 @@ jobs:
           target = "${{ inputs.target_file }}"
           baseline_code = Path(target).read_text()
           optimized_code = Path("/tmp/opt/optimized.py").read_text()
-          fitness_report = json.loads(Path("/tmp/opt/fitness_report.json").read_text())
+          candf = [q for q in Path("/tmp/opt/optimized-artefact").rglob("fitness_report.json")]
+          fitness_report = json.loads(Path(candf[0]).read_text()) if candf else json.loads(Path("/tmp/opt/optimized-artefact/fitness_report.json").read_text())
           before = 0.0
           after = fitness_report.get("best_score", 0.0)
 

@@ -24,6 +24,11 @@ from workflow_protocol import (
     make_stage_result,
     security_findings,
 )
+try:
+    from muta_ext.scientific.validation import run_scientific_validation_stage
+except Exception:  # pragma: no cover - graceful degradation
+    run_scientific_validation_stage = None
+
 
 logger = logging.getLogger("MutaLambda")
 
@@ -66,6 +71,7 @@ class Island:
         self._api_policy: str = "strict"
         self._enforce_api_fingerprint: bool = False
         self._enforce_differential: bool = False
+        self._scientific_config = {}
 
         self.migration_bus.register_island(island_id, self)
 
@@ -99,6 +105,7 @@ class Island:
         self._enforce_differential = bool(
             getattr(config, "enforce_differential", False)
         )
+        self._scientific_config = getattr(config, "scientific_config", {}) or {}
         seeds = getattr(config, "seed_codes", None) or []
         if seeds and not self._baseline_code:
             self._baseline_code = seeds[0]
@@ -152,73 +159,76 @@ class Island:
 
         codes = [ind.code for ind in self.population]
         results = self.evaluator.evaluate_batch(codes)
+        self._score_population(results)
+        self._update_operator_bandit(results)
+        self._observe_patterns()
+        self.population = self._apply_thc()
+        self._record_lineage()
+        self._track_local_best()
+        self._score_advanced()
+        elites, use_nsga2, error_map = self._select_elites(results)
+        self.population = self._generate_children(elites, error_map, use_nsga2)
 
+    def _score_population(self, results: List[Any]) -> None:
         for ind, res in zip(self.population, results):
             ind.score = res.score
             ind.fitness = res.fitness
             ind.passed = bool(res.passed and res.fitness.correctness >= 1.0)
 
-        # Operator bandit feedback from this generation's evaluations (WF#17).
-        self._update_operator_bandit(results)
+    def _observe_patterns(self) -> None:
+        pm = getattr(self.migration_bus, "pattern_memory", None)
+        if pm is None:
+            return
+        for ind in self.population:
+            if ind.passed:
+                pm.observe(
+                    "code_shape",
+                    self._pattern_signature(ind.code),
+                    True,
+                    f"island:{self.id}",
+                    ind.id,
+                )
 
-        pattern_memory = getattr(self.migration_bus, "pattern_memory", None)
-        if pattern_memory is not None:
-            for ind in self.population:
-                if ind.passed:
-                    pattern_memory.observe(
-                        "code_shape",
-                        self._pattern_signature(ind.code),
-                        True,
-                        f"island:{self.id}",
-                        ind.id,
-                    )
+    def _apply_thc(self) -> List:
+        engine = getattr(self.migration_bus, "thc_engine", None)
+        if engine is None:
+            return self.population
+        return engine.apply(self.population, self.evaluator, self.generation)
 
-        thc_engine = getattr(self.migration_bus, "thc_engine", None)
-        if thc_engine is not None:
-            self.population = thc_engine.apply(
-                self.population,
-                self.evaluator,
-                self.generation,
-            )
-
-        if (self.migration_bus is not None
-                and getattr(self.migration_bus, "lineage_graph", None) is not None
-                and self.generation > 0):
-            lineage = self.migration_bus.lineage_graph
-            # Resolve real parent code from current population or lineage store.
-            pop_by_id = {p.id: p for p in self.population}
-            for ind in self.population:
-                if ind.parent_ids:
-                    try:
-                        parents = []
-                        for pid in ind.parent_ids:
-                            if pid in pop_by_id:
-                                parents.append(pop_by_id[pid])
-                            elif pid in getattr(lineage, "nodes", {}):
-                                node = lineage.nodes[pid]
-                                parents.append(
-                                    Individual(
-                                        id=pid,
-                                        code=node.code or "",
-                                        score=node.score,
-                                    )
-                                )
-                            else:
-                                parents.append(Individual(id=pid, code=""))
-                        reason = getattr(ind, "creation_reason", "mutation")
-                        lineage.record(
-                            ind, parents, self.generation, self.id, reason=reason,
+    def _record_lineage(self) -> None:
+        if (self.migration_bus is None
+                or getattr(self.migration_bus, "lineage_graph", None) is None
+                or self.generation <= 0):
+            return
+        lineage = self.migration_bus.lineage_graph
+        pop_by_id = {p.id: p for p in self.population}
+        for ind in self.population:
+            if not ind.parent_ids:
+                continue
+            try:
+                parents = []
+                for pid in ind.parent_ids:
+                    if pid in pop_by_id:
+                        parents.append(pop_by_id[pid])
+                    elif pid in getattr(lineage, "nodes", {}):
+                        node = lineage.nodes[pid]
+                        parents.append(
+                            Individual(id=pid, code=node.code or "", score=node.score)
                         )
-                    except Exception as exc:
-                        logger.warning(
-                            "Failed to record lineage for individual %s: %s",
-                            ind.id,
-                            exc,
-                        )
+                    else:
+                        parents.append(Individual(id=pid, code=""))
+                reason = getattr(ind, "creation_reason", "mutation")
+                lineage.record(
+                    ind, parents, self.generation, self.id, reason=reason,
+                )
+            except Exception as exc:
+                logger.warning("Failed to record lineage for %s: %s", ind.id, exc)
 
+    def _track_local_best(self) -> None:
+        if not self.population:
+            return
         top = max(self.population, key=lambda x: x.score)
         self._history.append(top.score)
-
         if self.local_best is None or top.score > self.local_best.score:
             self.local_best = copy.deepcopy(top)
             logger.info(
@@ -226,77 +236,74 @@ class Island:
                 self.id, self.generation, top.score,
             )
 
-        advanced_selection = getattr(self.migration_bus, "advanced_selection", None)
-        if advanced_selection is not None:
-            advanced_selection.score_population(self.population)
+    def _score_advanced(self) -> None:
+        adv = getattr(self.migration_bus, "advanced_selection", None)
+        if adv is not None:
+            adv.score_population(self.population)
 
+    def _select_elites(self, results: List[Any]):
         try:
             from nsga2 import nsga2_select, nsga2_tournament_select
             elites = nsga2_select(self.population, self.config.top_k)
             use_nsga2 = True
         except ImportError:
-            elites = heapq.nlargest(
-                self.config.top_k, self.population, key=lambda x: x.score
-            )
+            import heapq
+            elites = heapq.nlargest(self.config.top_k, self.population, key=lambda x: x.score)
             use_nsga2 = False
-
         error_map: Dict[str, str] = {}
         for ind, res in zip(self.population, results):
             if res.stderr and not res.passed:
                 error_map[ind.id] = "\n".join(res.stderr.splitlines()[:3])
+        return elites, use_nsga2, error_map
 
+    def _generate_children(self, elites: List[Individual], error_map: Dict[str, str], use_nsga2: bool) -> List[Individual]:
         new_pop: List[Individual] = list(elites)
         while len(new_pop) < self.config.population_size:
-            if use_nsga2 and len(elites) >= 2 and self.rng.random() < 0.7:
-                parents = nsga2_tournament_select(elites, 1, rng=self.rng)
-                parent = parents[0] if parents else self.rng.choice(elites)
-            else:
-                parent = self.rng.choice(elites)
-
-            child_parents: List[Individual] = [parent]
-            strategy = self._select_operator_strategy(parent, elites)
-            if strategy == "redesign":
-                mutated_code = self._redesign(parent.code, parent.score)
-            elif strategy == "crossover":
-                mate_candidates = [e for e in elites if e.id != parent.id]
-                if mate_candidates:
-                    other = self.rng.choice(mate_candidates)
-                    mutated_code = self._crossover(parent.code, other.code)
-                    child_parents.append(other)
-                else:
-                    strategy = "mutation"
-                    error_info = error_map.get(parent.id, "")
-                    mutated_code = self._mutate_with_context(
-                        parent.code, parent.score, error_info
-                    )
-            elif strategy == "ast":
-                from evolution_engine import ASTMutator
-
-                mutated_code = ASTMutator.apply_random_mutation(parent.code)
-            elif strategy == "component":
-                mutated_code = component_evolve(parent.code, rng=self.rng)
-            else:
-                # llm / mutation — context-aware LLM path with AST fallback
-                strategy = "llm" if strategy == "llm" else "mutation"
-                error_info = error_map.get(parent.id, "")
-                mutated_code = self._mutate_with_context(
-                    parent.code, parent.score, error_info
-                )
-
-            child = self._build_child_candidate(
-                parent=parent,
-                child_parents=child_parents,
-                mutated_code=mutated_code,
-                strategy=strategy,
-                candidate_index=len(new_pop),
-            )
-            # Bandit arm label (do not clobber workflow creation_reason like mutation_retry).
-            setattr(child, "operator", strategy)
-            if child_parents:
-                setattr(child, "parent_score", float(parent.score))
+            parent = self._pick_parent(elites, use_nsga2)
+            child = self._reproduce(parent, elites, error_map)
             new_pop.append(child)
+        return new_pop
 
-        self.population = new_pop
+    def _pick_parent(self, elites: List[Individual], use_nsga2: bool) -> Individual:
+        if use_nsga2 and len(elites) >= 2 and self.rng.random() < 0.7:
+            parents = nsga2_tournament_select(elites, 1, rng=self.rng)
+            return parents[0] if parents else self.rng.choice(elites)
+        return self.rng.choice(elites)
+
+    def _reproduce(self, parent: Individual, elites: List[Individual], error_map: Dict[str, str]) -> Individual:
+        child_parents: List[Individual] = [parent]
+        strategy = self._select_operator_strategy(parent, elites)
+        if strategy == "redesign":
+            mutated_code = self._redesign(parent.code, parent.score)
+        elif strategy == "crossover":
+            mate_candidates = [e for e in elites if e.id != parent.id]
+            if mate_candidates:
+                other = self.rng.choice(mate_candidates)
+                mutated_code = self._crossover(parent.code, other.code)
+                child_parents.append(other)
+            else:
+                strategy = "mutation"
+                error_info = error_map.get(parent.id, "")
+                mutated_code = self._mutate_with_context(parent.code, parent.score, error_info)
+        elif strategy == "ast":
+            mutated_code = ASTMutator.apply_random_mutation(parent.code)
+        elif strategy == "component":
+            mutated_code = component_evolve(parent.code, rng=self.rng)
+        else:
+            strategy = "llm" if strategy == "llm" else "mutation"
+            error_info = error_map.get(parent.id, "")
+            mutated_code = self._mutate_with_context(parent.code, parent.score, error_info)
+        child = self._build_child_candidate(
+            parent=parent,
+            child_parents=child_parents,
+            mutated_code=mutated_code,
+            strategy=strategy,
+            candidate_index=len(self.population),
+        )
+        setattr(child, "operator", strategy)
+        if child_parents:
+            setattr(child, "parent_score", float(parent.score))
+        return child
 
     def _select_operator_strategy(
         self, parent: Individual, elites: List[Individual]
@@ -514,6 +521,7 @@ class Island:
                     ProtocolStage("evaluate_candidate", self._stage_evaluate_candidate),
                     ProtocolStage("tests_gate", self._stage_tests_gate),
                     ProtocolStage("differential_gate", self._stage_differential_gate),
+                    ProtocolStage("scientific_validation", self._stage_scientific_validation),
                     ProtocolStage("performance_gate", self._stage_performance_gate),
                     ProtocolStage("decision_gate", self._stage_decision_gate),
                 ]
@@ -745,6 +753,28 @@ class Island:
                 metadata={"attempt": attempt},
                 artifacts={"candidate_ref": artifact_ref(code)},
             )
+
+    def _stage_scientific_validation(self, context: Dict[str, Any]):
+        """Scientific Validation Layer gate (FASE 1).
+
+        Opt-in gate between tests/differential and performance. When scientific
+        validation is disabled it is a no-op PASS. A hard invariant failure yields
+        FAIL (candidate rejected per PDF: 'Falla hard -> FAIL')."""
+        result = context.get("candidate_result")
+        context["eval_result"] = result
+        context["scientific_config"] = self._scientific_config
+        if run_scientific_validation_stage is None:
+            return make_stage_result(
+                "scientific_validation", PASS,
+                "scientific validation unavailable",
+                metadata={"scientific_score": 1.0, "available": False},
+            )
+        stage_result = run_scientific_validation_stage(context)
+        if result is not None:
+            score = stage_result.metadata.get("scientific_score", 1.0)
+            result.metrics["scientific_score"] = score
+            result.scientific_score = score
+        return stage_result
 
     def _stage_performance_gate(self, context: Dict[str, Any]):
         result = context["candidate_result"]

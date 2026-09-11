@@ -150,3 +150,107 @@ def percentiles_from_samples(samples: Sequence[float]) -> Dict[str, float]:
     """Convenience helper for pre-collected samples."""
     br = BenchmarkResult(samples_sec=list(samples))
     return {"p50": br.p50, "p95": br.p95, "p99": br.p99, "mean": br.mean, "n": float(br.n)}
+
+
+# ── Ablation Testing (FASE 1 framework) ───────────────────────────────────────
+
+
+@dataclass
+class AblationVariant:
+    """A single variant of the ablation (e.g. a component toggled off)."""
+
+    name: str
+    enabled_components: Dict[str, bool]
+    config_overrides: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class AblationResult:
+    """Result of running the full benchmark for one variant."""
+
+    variant: AblationVariant
+    benchmark: BenchmarkResult
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+class AblationTester:
+    """Run a baseline benchmark and an ablation sweep, comparing p50 latency.
+
+    Mirrors the PDF FASE 1 "ablation_testing.py" contract while reusing the
+    existing :func:`run_callable_benchmark` percentile infra. Usage::
+
+        def workload(**cfg):
+            return MutaLambdaAgent(EvolveConfig(**cfg)).run()
+        tester = AblationTester(workload, baseline_cfg)
+        results = tester.run_ablation([AblationVariant("no_migration", migration=False)])
+    """
+
+    def __init__(
+        self,
+        workload_fn: Callable[..., Any],
+        baseline_config: Dict[str, Any],
+        benchmark_config: BenchmarkConfig | None = None,
+    ) -> None:
+        self._workload = workload_fn
+        self._baseline = baseline_config
+        self._bench = benchmark_config or BenchmarkConfig(warmups=2, samples=15)
+
+    def run_baseline(self) -> BenchmarkResult:
+        return run_callable_benchmark(
+            lambda: self._workload(**self._baseline), self._bench
+        )
+
+    def run_ablation(self, variants: List[AblationVariant]) -> Dict[str, AblationResult]:
+        baseline = self.run_baseline()
+        out: Dict[str, AblationResult] = {
+            "baseline": AblationResult(
+                variant=AblationVariant(
+                    name="baseline",
+                    enabled_components={},
+                ),
+                benchmark=baseline,
+                metadata={"p50": baseline.p50},
+            )
+        }
+        base_p50 = baseline.p50
+        for v in variants:
+            cfg = {**self._baseline, **v.config_overrides}
+            # component flags that are disabled get zeroed
+            for comp, en in v.enabled_components.items():
+                if not en:
+                    cfg[comp] = False if isinstance(cfg.get(comp), bool) else cfg.get(comp)
+            br = run_callable_benchmark(lambda: self._workload(**cfg), self._bench)
+            delta_pct = ((br.p50 - base_p50) / base_p50) if base_p50 else 0.0
+            out[v.name] = AblationResult(
+                variant=v,
+                benchmark=br,
+                metadata={
+                    "p50": br.p50,
+                    "delta_pct_vs_baseline": round(delta_pct * 100, 3),
+                    "baseline_p50": base_p50,
+                },
+            )
+        return out
+
+
+def summarize_ablation(
+    results: Dict[str, AblationResult],
+    min_impact_pct: float = 5.0,
+) -> Dict[str, Any]:
+    """Summarize which ablated components have >= ``min_impact_pct`` effect.
+
+    Output::
+
+        {"baseline_p50": float, "impactful": [{"variant": str, "delta_pct": float}]}
+    """
+    base_p50 = results["baseline"].metadata["p50"]
+    impactful = [
+        {
+            "variant": name,
+            "delta_pct": res.metadata["delta_pct_vs_baseline"],
+        }
+        for name, res in results.items()
+        if name != "baseline"
+        and abs(res.metadata["delta_pct_vs_baseline"]) >= min_impact_pct
+    ]
+    return {"baseline_p50": base_p50, "impactful_components": sorted(impactful, key=lambda x: x["delta_pct"])}

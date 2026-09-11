@@ -58,8 +58,11 @@ def cli(ctx):
 @click.option('--tests', type=click.Path(exists=True), help='Casos de prueba JSON declarativos')
 @click.option('--task', type=str, default=None, help='Descripción de la tarea evolutiva')
 @click.option('--allow-untested', is_flag=True, help='Permitir corridas sin tests (solo desarrollo)')
+@click.option('--scientific', is_flag=True, help='Activar Scientific Validation Layer (SVL) + operadores de dominio')
+@click.option('--hotpath', is_flag=True, help='Activar hot-path profiling y mutación inter-procedural')
+@click.option('--scientific-strength', type=float, default=0.3, help='Prob. relativa de operadores de dominio (0.0-1.0)')
 @click.pass_context
-def run(ctx, config, generations, animation, verbose, source, tests, task, allow_untested):
+def run(ctx, config, generations, animation, verbose, source, tests, task, allow_untested, scientific, hotpath, scientific_strength):
     """🚀 Ejecutar corrida evolutiva completa."""
     cli_instance = ctx.obj['cli']
     success = cli_instance.run_evolution(
@@ -71,6 +74,9 @@ def run(ctx, config, generations, animation, verbose, source, tests, task, allow
         tests=tests,
         task=task,
         allow_untested=allow_untested,
+        scientific=scientific,
+        hotpath=hotpath,
+        scientific_strength=scientific_strength,
     )
     sys.exit(0 if success else 1)
 

@@ -1,0 +1,71 @@
+2. Duplicación de código / nombres (verificado por mí)
+
+
+Encontré varios archivos con el mismo nombre en rutas distintas, con **contenido diferente** (no son copias exactas, pero es confuso saber cuál es "canónico"):
+
+
+| Archivo | Ubicación 1 | Ubicación 2 | Riesgo |
+
+|---|---|---|---|
+
+| `checkpoint_manager.py` | raíz (603 líneas) | `cli/` (212 líneas) | Distinto contenido — ¿cuál es la fuente de verdad? |
+
+| `comparison.py` | raíz (50 líneas) | `benchmarks/` (61 líneas) | Idem |
+
+| `differential.py` | raíz (172 líneas) | `benchmarks/` (120 líneas) | Idem |
+
+| `llm_backend.py` | raíz (625 líneas) | `examples/` (12 líneas, probablemente un stub de ejemplo) | Menor riesgo, pero el nombre idéntico invita a importar el equivocado |
+
+| `base.py` / `base_mutator.py` | 2 y 2 ubicaciones dentro de `muta_ext/uast/` | — | Naming poco descriptivo dentro de un paquete grande |
+
+
+Además hay confusión histórica ya reconocida: `legacy/README.md` documenta que `muta_lambda.py` (módulo único) fue reemplazado por el paquete `muta_lambda/`, y que `document_intelligence.py` está **"unused by core"** pero sigue en el repo "por si algún fork externo depende de él" — código muerto retenido a propósito, sin fecha de eliminación.
+
+
+---
+
+
+## 3. Manejo de errores — patrón sistemático de riesgo
+
+
+- `except Exception:` seguido de `pass` (o vacío) aparece **~115 veces** fuera de `tests/`. Esto es un patrón de "silenciar errores" muy extendido — típico de sistemas evolutivos (para que un candidato roto no tumbe el loop), pero sin trazabilidad ni logging consistente puede ocultar bugs reales del propio motor, no solo del código mutado. No verifiqué caso por caso si cada uno está justificado; señalo el volumen, no la corrección individual.
+
+- 1 `except:` desnudo (bare except) fuera de tests — captura hasta `KeyboardInterrupt`/`SystemExit`, generalmente mala práctica.
+
+
+## 4. Superficie de riesgo: `eval`/`exec`/`pickle`/`shell=True`
+
+
+27 coincidencias fuera de `tests/`, en archivos como `progressive_pipeline.py`, `differential.py`, `hotspot_profiler.py`, `runners.py`, `benchmarks/*.py`, `massive_adapter.py`, `ray_scheduler.py`, `muta_ext/uast/mutators/llm_generator.py`.
+
+
+Esto **no es necesariamente un bug** — es un motor de evolución de código que por diseño ejecuta código generado dinámicamente. Pero es exactamente la superficie que su propia auditoría (`MODIFICACIONES_PLAN.md`, punto 6) marca como pendiente: `sandbox.py` implementa `resource.setrlimit` (límites de CPU/memoria) y timeout vía `subprocess.run`, pero **no** hay aislamiento fuerte tipo contenedor (`nsjail`/Docker) — lo confirmé yo mismo con `grep`, no hay ninguna coincidencia de esas herramientas en el sandbox real. Es aislamiento "blando" (a nivel de proceso/rlimit), no una jaula real. Si en algún momento planeas ejecutar código no confiable de terceros con esto, no lo trates como sandbox de seguridad fuerte.
+
+
+## 5. Gestión de dependencias inconsistente
+
+
+- `requirements.txt` (raíz) es una lista plana sin extras y **le falta `msgpack`**, pese a que `muta_lambda/config.py` usa `checkpoint_format="auto"` que internamente prefiere msgpack (confirmado en `MODIFICACIONES_PLAN.md`, fase 6).
+
+- `pyproject.toml` en cambio define dependencias por *extras* (`core`, `uast`, `archive`, `cli`, `dashboard`, `scientific`) con `msgpack` sí incluido.
+
+- Ningún archivo pinea versiones exactas (todo `numpy`, `pyyaml`, etc. sin `==`), lo que en un proyecto de investigación con FAISS/sentence-transformers/Z3 es una fuente típica de "funciona en mi máquina" al reproducir experimentos.
+
+
+**Recomendación concreta:** eliminar `requirements.txt` y dejar `pyproject.toml` como única fuente de verdad (`pip install -e .[core,archive,...]`), o generar `requirements.txt` automáticamente desde ahí.
+
+
+## 6. Drift entre documentación (README) y código real
+
+
+- El README describe la arquitectura con `muta_lambda.py` como "Core orchestrator", pero ese archivo **ya no existe** — es el paquete `muta_lambda/` (confirmado). El README no refleja la refactorización.
+
+- La propia auditoría interna (`MODIFICACIONES_PLAN.md`, punto 2) ya señala esto: *"pyproject.toml = 4.0.0; 206 modules .py; README viejo v2 con 562 tests aún referenciado"* — es decir, el README está desactualizado con respecto al número real de tests y módulos.
+
+- El README presenta el "Cross-language mutation" (Rust/C++) como si funcionara plenamente, cuando su propia auditoría confirma que `muta_ext/uast/emitters/{rust,cpp_emitter}.py` degradan silenciosamente a `Opaque` en vez de fallar explícitamente — honestidad de estado pendiente (marcada como Fase 4, "4b").
+
+
+## 7. Optimización de rendimiento — oportunidad ya validada pero no aplicada
+
+
+`NSGA2_REFACTOR_REPORT.md` documenta un experimento propio (no especulación mía) donde vectorizar `dominates()`/`non_dominated_sort()` con NumPy da **2.9×–3.5× de speedup** con paridad de resultados en 10/10 escenarios de corrección. El propio reporte dice explícitamente: *"Prototype location: `benchmark_nsga2_numpy.py` (does NOT modify production `nsga2.py`)"*. Es decir: **la ganancia de rendimiento está probada pero no está mergeada** al `nsga2.py` de producción. Esto es la oportunidad de optimización de mayor ROI que encontré, porque ya viene con benchmark y validación de corrección hechos — solo falta integrarla (con la salvedad que ellos mismos anotan: footprint O(N²) de memoria, aceptable para poblaciones ≤~300).

@@ -343,6 +343,7 @@ class EvalResult:
     stdout: str = ""
     stderr: str = ""
     timed_out: bool = False
+    scientific_score: float = 0.0  # SVL gate output (0-1); 1.0 when disabled
 
     @property
     def score(self) -> float:

@@ -26,7 +26,7 @@ python scripts/benchmark_checkpoint_serialization.py
 python -m pytest tests/ -q --deselect tests/test_hfc_tiers.py::test_hfc_deduplicates_demoted_elite_duplicate_in_factory
 ```
 > Resultados actuales (post-optimización memoización HFC): ~458 tests OK.  
-> Tests preexistentes en error de colección: 7 (dependencia `tree_sitter` no instalada en el entorno local — ver `DEPENDENCIES note` más abajo; no correlacionados con los cambios).
+> Tests preexistentes en error de colección: 8 (dependencias opcionales `tree-sitter` + language packs en el extra `[uast]`, y `rich` para el CLI — ver `DEPENDENCIES note` más abajo; instalar con `pip install -e ".[uast,cli]"` los resuelve. No correlacionados con los cambios de refactor).
 
 # AGENTS.md — MutaLambda Workflow Guide
 

@@ -1,0 +1,152 @@
+# MutaLambda: Master Implementation & Benchmarking Guide
+
+Este documento contiene la estrategia completa para transformar **MutaLambda** en una herramienta de grado industrial mediante la validación autónoma de **OpenHands**.
+
+---
+
+## 1. Estrategia de Benchmarking (El Valor de Mercado)
+
+Para que MutaLambda sea tomado en serio, el enfoque no es la velocidad, sino la **calidad y la optimización multi-objetivo**.
+
+### Áreas de Evaluación:
+1. **Calidad de Código (Exactitud):** Uso de benchmarks como *HumanEval* y *MBPP* para medir el `% de éxito` (pass@k).
+2. **Optimización Multi-Objetivo (Pareto):** Demostrar que el motor NSGA-II encuentra soluciones que equilibran `Menor Tiempo de Ejecución` vs `Menor Consumo de Memoria`.
+3. **Eficiencia de Recursos:** Medir la relación `Calidad / Consumo de GPU/RAM`.
+
+---
+
+## 2. El Workflow de Auditoría (OpenHands)
+
+Implementaremos un sistema de "Separación de Poderes":
+- **MutaLambda:** El motor que optimiza (usa las API Keys).
+- **OpenHands:** El Auditor Independiente (verifica resultados sin sesgo).
+
+### Ciclo de Vida:
+1. **Setup:** OpenHands prepara el entorno de pruebas.
+2. **Ejecución:** OpenHands lanza el `benchmark_runner.py`.
+3. **Vigilancia:** OpenHands monitorea la convergencia de la población y el uso de hardware.
+4. **Certificación:** OpenHands genera un reporte técnico final.
+
+---
+
+## 3. Prompt de Configuración para OpenHands
+
+*Copia y pega este prompt en la interfaz de OpenHands para iniciar la auditoría:*
+
+> **ROLE:** You are an Independent AI Auditor specialized in Software Engineering and Computational Complexity. Your goal is to certify the performance of the **MutaLambda** engine.
+>
+> **OBJECTIVE:** Execute a formal benchmark, monitor the evolutionary process, and generate a technical audit report.
+>
+> **WORKFLOW:**
+> 1. **Environment Setup:** Ensure the workspace is ready. Check if `benchmark_runner.py` is present.
+> 2. **Execution:** Run the following command: `python benchmark_runner.py [NOMBRE_DEL_PROBLEMA]`. 
+> 3. **Active Monitoring:** 
+>    - Watch the terminal output.
+>    - Monitor the `evolution_log.json` file. If the fitness curve shows stagnation, log it.
+> 4. **Validation Audit:** 
+>    - Inspect `benchmark_results.json`.
+>    - Compare `execution_time_s` and `peak_memory_kb` against standard baselines.
+> 5. **Final Reporting:** Create `FINAL_AUDIT_REPORT.md` including: Executive Summary, Evolutionary Analysis (Fitness trajectory), and Performance Metrics (Table).
+>
+> **CONSTRAINTS:** Do not attempt to fix the code. Be strictly objective.
+
+---
+
+## 4. Script de Puente: `benchmark_runner.py`
+
+*Este es el script que debe estar en tu repositorio para que el auditor pueda trabajar. Este script actúa como el puente entre la evolución y la medición técnica.*
+
+```python
+import subprocess
+import time
+import json
+import tracemalloc
+import sys
+
+class BenchmarkRunner:
+    def __init__(self, target_problem):
+        self.target = target_problem
+        self.evolution_log = "evolution_log.json"
+        self.results_file = "benchmark_results.json"
+
+    def run_evolution(self):
+        """
+        Simula o llama al motor MutaLambda.
+        En producción, esto llamaría a tu clase principal de MutaLambda.
+        """
+        print(f"[*] Iniciando evolución para: {self.target}")
+        
+        # Simulación de progresión de fitness para el log
+        fitness_history = [0.1, 0.25, 0.4, 0.6, 0.85, 0.92]
+        with open(self.evolution_log, 'w') as f:
+            json.dump({"target": self.target, "fitness_history": fitness_history}, f)
+        
+        # Simulamos que el código final generado es una función
+        # En la realidad, MutaLambda guardaría esto en un archivo .py
+        with open("candidate_code.py", "w") as f:
+            f.write("def target_func(x): return x * x # Simulación de código optimizado")
+            
+        print("[*] Evolución completada. Candidato guardado.")
+
+    def validate_candidate(self):
+        """
+        Ejecuta el código del candidato en un entorno controlado
+        para medir tiempo y memoria de forma precisa.
+        """
+        print("[*] Validando candidato con profiling...")
+        
+        tracemalloc.start()
+        start_time = time.perf_counter()
+        
+        try:
+            # Ejecutar el código generado
+            namespace = {}
+            with open("candidate_code.py", "r") as f:
+                exec(f.read(), namespace)
+            
+            # Test de ejecución (ejemplo con x=10)
+            result = namespace['target_func'](10)
+            
+            end_time = time.perf_counter()
+            current, peak = tracemalloc.get_traced_memory()
+            tracemalloc.stop()
+
+            execution_time = end_time - start_time
+            peak_memory_kb = peak / 1024
+
+            results = {
+                "status": "success" if result == 100 else "failed",
+                "execution_time_s": execution_time,
+                "peak_memory_kb": peak_memory_kb,
+                "audit": {
+                    "verified_by": "OpenHands_Auditor",
+                    "target": self.target
+                }
+            }
+            
+            with open(self.results_file, 'w') as f:
+                json.dump(results, f, indent=4)
+            
+            print(f"[+] Validación exitosa: {results}")
+
+        except Exception as e:
+            tracemalloc.stop()
+            print(f"[-] Error en validación: {e}")
+            with open(self.results_file, 'w') as f:
+                json.dump({"status": "error", "error": str(e)}, f)
+
+    def run_all(self):
+        self.run_evolution()
+        self.validate_candidate()
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Uso: python benchmark_runner.py [target_problem]")
+    else:
+        runner = BenchmarkRunner(sys.argv[1])
+        runner.run_all()
+```
+
+---
+
+**FIN DEL DOCUMENTO**
