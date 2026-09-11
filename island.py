@@ -352,15 +352,23 @@ class Island:
         if bandit is None:
             return
         try:
-            from operator_bandit import compute_cost_aware_reward, compute_operator_reward
+            from operator_bandit import (
+                compute_cost_aware_reward,
+                compute_operator_reward,
+                compute_usd_aware_reward,
+                tokens_to_usd,
+            )
         except Exception:
             return
         try:
             from optimization_flags import get_optimization_flags
 
-            cost_aware = get_optimization_flags().enabled("headroom.bandit.enabled", False)
+            _flags = get_optimization_flags()
+            cost_aware = _flags.enabled("headroom.bandit.enabled", False)
+            usd_aware = _flags.enabled("bandit_reward_usd.enabled", False)
         except Exception:
             cost_aware = False
+            usd_aware = False
         for ind, res in zip(self.population, results):
             op = getattr(ind, "operator", None) or getattr(ind, "creation_reason", None)
             if not op or op in {"seed", "laboratory"}:
@@ -379,6 +387,26 @@ class Island:
             elif correct and ind.score > float("-inf"):
                 improved = True
             tokens = int(getattr(ind, "llm_tokens", 0) or 0)
+            if usd_aware:
+                # FASE 3 A3: reward in real $ (ledger pricing model).
+                reward = compute_usd_aware_reward(
+                    syntax_or_security_failure=syntax_fail and not correct,
+                    correct=correct,
+                    improved=improved,
+                    delta_fitness=max(0.0, gain) if improved else 0.0,
+                    cost_usd=tokens_to_usd(tokens),
+                )
+                try:
+                    bandit.update(
+                        op,
+                        reward,
+                        valid=correct and not syntax_fail,
+                        improved=improved,
+                        gain=gain,
+                    )
+                except Exception:
+                    pass
+                continue
             if cost_aware:
                 reward = compute_cost_aware_reward(
                     syntax_or_security_failure=syntax_fail and not correct,

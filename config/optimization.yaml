@@ -104,6 +104,8 @@ optimization:
     stall_generations: 5       # generaciones consecutivas por debajo del umbral
     gpu_hour_usd: 0.5
     production_cpu_savings_hour_usd: 0.0   # 0 = solo criterio de estancamiento
+    gpu_seconds_per_generation: 0.0        # >0 activa el criterio de costo
+                                            # (costo estimado de las generaciones restantes)
 
   # A3: bandit con reward en $ reales del ledger (mutate-strategy auto).
   bandit_reward_usd:

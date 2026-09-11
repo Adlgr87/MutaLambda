@@ -67,7 +67,7 @@ class ASTMutator:
                 ast.parse(result)
                 if result.strip() != code.strip():
                     return result
-            except (SyntaxError, ValueError, AttributeError):
+            except (SyntaxError, ValueError, AttributeError, TypeError, KeyError, IndexError):
                 continue
 
         return code
@@ -98,10 +98,13 @@ class ASTMutator:
     @staticmethod
     def _wrap_in_if(tree: ast.Module) -> None:
         for node in ast.walk(tree):
-            if hasattr(node, "body") and node.body:
-                idx = random.randrange(len(node.body))
-                original = node.body[idx]
-                node.body[idx] = ast.If(
+            # Only *statement* bodies: ast.IfExp & friends carry `body`
+            # fields that are expressions, not statement lists.
+            body = getattr(node, "body", None)
+            if isinstance(body, list) and body:
+                idx = random.randrange(len(body))
+                original = body[idx]
+                body[idx] = ast.If(
                     test=ast.Constant(value=True),
                     body=[original],
                     orelse=[],
@@ -175,9 +178,11 @@ class ASTMutator:
     @staticmethod
     def _duplicate_statement(tree: ast.Module) -> None:
         for node in ast.walk(tree):
-            if hasattr(node, "body") and node.body and len(node.body) < 50:
-                idx = random.randrange(len(node.body))
-                node.body.insert(idx, copy.deepcopy(node.body[idx]))
+            body = getattr(node, "body", None)
+            # statement bodies only (IfExp.body is an expression)
+            if isinstance(body, list) and body and len(body) < 50:
+                idx = random.randrange(len(body))
+                body.insert(idx, copy.deepcopy(body[idx]))
                 return
 
     @staticmethod
@@ -193,7 +198,8 @@ class ASTMutator:
         replacements: List[Tuple[Any, int, ast.AugAssign]] = []
         for parent in ast.walk(tree):
             body = getattr(parent, "body", None)
-            if not body:
+            # statement bodies only (IfExp.body is an expression, not a list)
+            if not isinstance(body, list):
                 continue
             for idx, child in enumerate(body):
                 if isinstance(child, ast.AugAssign):
@@ -218,20 +224,23 @@ class ASTMutator:
     @staticmethod
     def _add_trivial_loop(tree: ast.Module) -> None:
         for node in ast.walk(tree):
-            if hasattr(node, "body") and node.body:
-                idx = random.randrange(len(node.body))
-                original = node.body[idx]
-                node.body[idx] = ast.For(
-                    target=ast.Name(id="_", ctx=ast.Store()),
-                    iter=ast.Call(
-                        func=ast.Name(id="range", ctx=ast.Load()),
-                        args=[ast.Constant(value=1)],
-                        keywords=[],
-                    ),
-                    body=[original],
-                    orelse=[],
-                )
-                return
+            # statement bodies only (IfExp.body is an expression, not a list)
+            body = getattr(node, "body", None)
+            if not isinstance(body, list) or not body:
+                continue
+            idx = random.randrange(len(body))
+            original = body[idx]
+            body[idx] = ast.For(
+                target=ast.Name(id="_", ctx=ast.Store()),
+                iter=ast.Call(
+                    func=ast.Name(id="range", ctx=ast.Load()),
+                    args=[ast.Constant(value=1)],
+                    keywords=[],
+                ),
+                body=[original],
+                orelse=[],
+            )
+            return
 
 
 @dataclass(frozen=True)

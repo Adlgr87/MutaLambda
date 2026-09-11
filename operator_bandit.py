@@ -98,6 +98,54 @@ def compute_cost_aware_reward(
     return max(-1.0, min(1.0, reward))
 
 
+# A3 (Fase 3): reward in *real* dollars (ledger pricing).  Scale 0.01 means
+# "1.0 unit of Δfitness bought for $0.10 scores a reward of 1.0".
+USD_AWARE_SCALE = 0.01
+
+
+def tokens_to_usd(tokens: int) -> float:
+    """Estimated $ cost of *tokens* using the LLM backend pricing table.
+
+    Returns 0.0 when pricing is unavailable (the USD reward then falls back
+    to the neutral improved/reward — same behaviour as the token variant).
+    """
+    try:
+        from llm_backend import MODEL_PRICING
+    except Exception:
+        return 0.0
+    if not MODEL_PRICING:
+        return 0.0
+    price = next(iter(MODEL_PRICING.values()))
+    blended = (float(price.get("prompt", 0.0)) + float(price.get("completion", 0.0))) / 2.0
+    return max(0, int(tokens)) * blended / 1_000_000.0
+
+
+def compute_usd_aware_reward(
+    *,
+    syntax_or_security_failure: bool = False,
+    correct: bool = False,
+    improved: bool = False,
+    delta_fitness: float = 0.0,
+    cost_usd: float = 0.0,
+) -> float:
+    """Fase 3 A3: reward = Δfitness / real $ (clamped to [-1, 1]).
+
+    Same failure semantics as the legacy/cost-aware variants; on success the
+    reward scales with improvement per dollar, so UCB selection prefers
+    operators that buy fitness at the lowest *actual* cost.
+    """
+    if syntax_or_security_failure:
+        return -0.5
+    if not correct:
+        return -1.0
+    if not improved:
+        return 0.2
+    if cost_usd <= 0:
+        return 1.0
+    reward = (float(delta_fitness) / float(cost_usd)) * USD_AWARE_SCALE
+    return max(-1.0, min(1.0, reward))
+
+
 class OperatorBandit:
     """Epsilon-greedy / UCB1 hybrid bandit over named operators."""
 

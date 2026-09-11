@@ -149,7 +149,17 @@ optimization:
     api_policy:       strict
     uast2_enabled:    false
     ray_profile:      { enabled: false }
-  # Fase 3: economic_gate, bandit_reward_usd, pareto_archive (desactivadas)
+  economic_gate:                          # FASE 3 (O5)
+    enabled:            false
+    delta_h_threshold:  0.005              # ΔH normalizado mínimo por generación
+    stall_generations:  5                  # generaciones consecutivas → early stop
+    gpu_seconds_per_generation: 0.0        # >0 activa el criterio de costo $GPU
+    production_cpu_savings_hour_usd: 0.0   # $CPU/h que ahorra el candidato
+  bandit_reward_usd:  { enabled: false }   # FASE 3 (A3): reward en $ reales (ledger)
+  pareto_archive:                           # FASE 3 (A5)
+    enabled: false
+    dir: "pareto_archive"
+    warm_start: true           # --no-warm-start lo desactiva en CLI
 ```
 
 - **Ledger de costo** (`cost_ledger.py`): interceptado centralmente en el
@@ -173,6 +183,26 @@ optimization:
     cobertura (`trace`), in-process si es puro, subprocess endurecido si I/O.
   * O6 N3: solo el top ~20% de sobrevivientes de N2 paga el sandbox completo
     (Docker si hay engine, fail-closed a subprocess) + Ray opcional.
+- **Medición de la Fase 3** (`run_evolution` real + búsqueda con evaluación
+  subprocess real): O5 detuvo la corrida en **6 de 40 generaciones**
+  (estancamiento de ΔH) con **−0.0% de pérdida de hipervolumen** (gate ≤2%);
+  A5 warm-start (arreglo indexado por hash de firma de API) redujo las
+  generaciones para converger **50%** en función similar (gate ≥30%); costo
+  total acumulado de las palancas F1+F2+F3: **−97.2%** vs baseline (gate
+  ≥60%; modelo compuesto de mediciones por palanca, documentado en el bench).
+  Ver `bench_headroom_fase3.py` y `reports/fase3_before_after.json`.
+  * O5 `EconomicHeadroomGate` (`economic_gate.py`): hipervolumen 3D exacto
+    (barrido) normalizado a [0,1]; parada por estancamiento (ΔH < umbral × N
+    generaciones) o por costo (GPU restante > ahorro CPU en producción);
+    cada parada se loguea en el cost ledger.
+  * A5 `ParetoArchive` (`pareto_archive.py`): mejor individuo por hash de
+    firma de API (`api_fingerprint`); warm-start inyecta el archivo como semilla
+    (siempre re-evaluado, nunca confiado a ciegas); `--no-warm-start`.
+  * A3 reward en $ reales (`operator_bandit.compute_usd_aware_reward`) con
+    precios del ledger, flag `bandit_reward_usd.enabled`; `--mutation-strategy
+    auto` resuelve llm|ast según backend disponible.
+  * `roi_report.json` por corrida: costo total (ledger), palancas activas,
+    stop reason, hipervolumen final, warm-start y caché.
 
 ## Arquitectura
 

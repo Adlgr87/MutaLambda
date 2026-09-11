@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import sys
 import time
@@ -64,8 +65,11 @@ class EvolveConfig:
     seed: int = 42
     output_dir: Path = field(default_factory=lambda: Path(".mutalambda"))
     fitness_metric: str = "latency_p50"  # lower-is-better
-    mutation_strategy: str = "ast"  # ast | llm
+    mutation_strategy: str = "ast"  # ast | llm | auto (FASE 3: bandit resuelve)
     allow_untested: bool = True
+    # FASE 3 (A5): warm-start from the pareto archive (same API signature).
+    # Disable per run with --no-warm-start.
+    warm_start: bool = True
     timeout_sec: float = 5.0
     # Fase 0 (A5): path to a prior checkpoint JSON to resume from.  When set,
     # evolution continues from that checkpoint's generation with its
@@ -83,6 +87,11 @@ class EvolveConfig:
             raise ValueError("population must be positive")
         if self.islands < 1:
             raise ValueError("islands must be >= 1")
+        if self.mutation_strategy not in ("ast", "llm", "auto"):
+            raise ValueError(
+                f"Unsupported mutation_strategy '{self.mutation_strategy}'. "
+                "Choose from ast | llm | auto."
+            )
 
     @property
     def tier_config(self) -> HFCTierConfig:
@@ -429,6 +438,54 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
     except Exception:
         pass  # the ladder must never take the pipeline down
 
+    # ── FASE 3 (O5/A5): economic gate + pareto archive, flag-gated ─────────
+    gate = None
+    archive = None
+    warm_start_info: Dict[str, Any] = {"used": False}
+    stop_reason = "completed"
+    stop_generation: Optional[int] = None
+    strategy_note = config.mutation_strategy
+    final_hv = 0.0
+    try:
+        from optimization_flags import get_optimization_flags
+
+        _f3 = get_optimization_flags()
+        if _f3.enabled("economic_gate.enabled"):
+            from cost_ledger import get_cost_ledger
+            from economic_gate import EconomicHeadroomGate
+
+            gate = EconomicHeadroomGate(
+                delta_h_threshold=float(_f3.get("economic_gate.delta_h_threshold", 0.005)),
+                stall_generations=int(_f3.get("economic_gate.stall_generations", 5)),
+                gpu_hour_usd=float(_f3.get("economic_gate.gpu_hour_usd", 0.5)),
+                production_cpu_savings_hour_usd=float(
+                    _f3.get("economic_gate.production_cpu_savings_hour_usd", 0.0)
+                ),
+                gpu_seconds_per_generation=float(
+                    _f3.get("economic_gate.gpu_seconds_per_generation", 0.0)
+                ),
+                total_planned_generations=int(config.generations),
+                ledger=get_cost_ledger(),
+            )
+        if _f3.enabled("pareto_archive.enabled") and config.warm_start:
+            from pareto_archive import ParetoArchive
+
+            archive = ParetoArchive(_f3.get("pareto_archive.dir", "pareto_archive"))
+    except Exception:
+        pass  # levers must never take the pipeline down
+
+    # FASE 3 A3: "auto" resolves to llm when a backend is reachable
+    # (an API key is configured), else ast.  The bandit (island flow)
+    # applies the real-$ reward when bandit_reward_usd.enabled.
+    if config.mutation_strategy == "auto":
+        resolved = "ast"
+        try:
+            if os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY"):
+                resolved = "llm"
+        except Exception:
+            resolved = "ast"
+        strategy_note = f"auto→{resolved}"
+
     if not config.resume_from:
         # Build a seed population of mutated variants of the original source.
         seed_codes = [source]
@@ -441,6 +498,27 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
                 seed_codes.append(mutant)
             if len(seed_codes) >= config.population:
                 break
+
+        # FASE 3 (A5): warm-start — a prior best for the SAME public API
+        # replaces one random mutant in the seed population.  The archive
+        # code is evaluated like any other individual (it is never trusted
+        # blindly).
+        if archive is not None:
+            try:
+                entry = archive.lookup(source)
+                if entry and isinstance(entry.get("code"), str) and entry["code"].strip():
+                    archived_code = entry["code"]
+                    if archived_code not in seed_codes:
+                        seed_codes[-1] = archived_code
+                    warm_start_info = {
+                        "used": True,
+                        "signature_hit": True,
+                        "archived_generation": entry.get("generation"),
+                        "archived_score": entry.get("score"),
+                        "profile": entry.get("profile", ""),
+                    }
+            except Exception:
+                warm_start_info = {"used": False, "error": "archive_lookup_failed"}
 
     fitness_report: List[GenerationResult] = []
 
@@ -506,6 +584,17 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
                 )
             )
 
+            # FASE 3 (O5): economic gate over the population hypervolume.
+            if gate is not None:
+                from economic_gate import hypervolume as _hv_fn
+
+                final_hv = _hv_fn([ev.fitness for ev in evals])
+                _decision = gate.observe(gen, final_hv)
+                if _decision.stop:
+                    stop_reason = _decision.reason
+                    stop_generation = gen
+                    break
+
             # Mutation + elitism: keep top 25%, mutate the rest.
             keep = max(1, len(scored) // 4)
             elite = [code for code, _ in scored[:keep]]
@@ -528,6 +617,28 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
                 )
 
         optimized_code = best_code
+
+        # FASE 3 (A5/O5): final population hypervolume (always — the
+        # roi_report reports it; one extra cached evaluation at the end).
+        try:
+            from economic_gate import hypervolume as _hv_fn
+
+            final_hv = _hv_fn([ev.fitness for ev in evaluator.evaluate_batch(population)])
+        except Exception:
+            final_hv = float(getattr(gate, "final_hypervolume", None) or 0.0) if gate else 0.0
+        if archive is not None:
+            try:
+                archive.store(
+                    source,
+                    optimized_code,
+                    fitness={"best_score": best_score},
+                    score=best_score,
+                    hypervolume=final_hv,
+                    generation=len(fitness_report) - 1,
+                    profile=config.profile,
+                )
+            except Exception:
+                warm_start_info["store_error"] = "archive_store_failed"
 
         # Restore a stats dict shape compatible with the HFC branch.
         engine_stats = {
@@ -552,6 +663,21 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
         engine_stats,
     )
 
+    # FASE 3 (A5): roi_report.json — total cost, levers, stop reason, HV.
+    roi_path = _write_roi_report(
+        checkpoint_dir,
+        config,
+        generations_run=len(fitness_report),
+        best_score=best_score,
+        final_hv=final_hv,
+        stop_reason=stop_reason,
+        stop_generation=stop_generation,
+        gate_summary=gate.summary() if gate is not None else None,
+        warm_start=warm_start_info,
+        strategy_note=strategy_note,
+        cache_stats=cache_stats_snapshot,
+    )
+
     return EvolveResult(
         optimized_code=optimized_code,
         best_score=best_score,
@@ -566,9 +692,93 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
             "resumed_from_generation": resumed_from,
             "resumed_at_generation": start_gen if resumed_from is not None else None,
             "resume_source": config.resume_from,
+            "stop_reason": stop_reason,
+            "stop_generation": stop_generation,
+            "final_hypervolume": final_hv,
+            "warm_start": warm_start_info,
+            "roi_report": str(roi_path) if roi_path else None,
         },
         fitness_cache_stats=cache_stats_snapshot,
     )
+
+
+def _write_roi_report(
+    dir_path: Path,
+    config: "EvolveConfig",
+    *,
+    generations_run: int,
+    best_score: float,
+    final_hv: float,
+    stop_reason: str,
+    stop_generation: Optional[int],
+    gate_summary: Optional[Dict[str, Any]],
+    warm_start: Dict[str, Any],
+    strategy_note: str,
+    cache_stats: Optional[Dict[str, Any]],
+) -> Optional[Path]:
+    """FASE 3 (A5): write roi_report.json for the run.  Never raises."""
+    try:
+        from cost_ledger import get_cost_ledger
+
+        cost = get_cost_ledger().totals()
+    except Exception:
+        cost = {"total_cost_usd": 0.0}
+    levers: Dict[str, Any] = {}
+    try:
+        from optimization_flags import get_optimization_flags
+
+        flags = get_optimization_flags()
+        levers = {
+            "fase0": {
+                "cost_ledger": flags.enabled("cost_ledger.enabled"),
+                "fitness_cache": flags.enabled("fitness_cache.enabled"),
+                "deterministic_prompt": flags.enabled("deterministic_prompt.enabled"),
+                "checkpoint_every": flags.get("checkpoint.every", 5),
+            },
+            "fase1_headroom": {
+                sub: flags.enabled(f"headroom.{sub}.enabled")
+                for sub in (
+                    "smart_crusher",
+                    "ast_stubs",
+                    "json_schema_output",
+                    "batching",
+                    "bandit",
+                )
+            },
+            "fase2_profiling_filter": flags.enabled("profiling_filter.enabled"),
+            "fase3": {
+                "economic_gate": flags.enabled("economic_gate.enabled"),
+                "bandit_reward_usd": flags.enabled("bandit_reward_usd.enabled"),
+                "pareto_archive": flags.enabled("pareto_archive.enabled") and config.warm_start,
+            },
+        }
+    except Exception:
+        levers = {}
+    report = {
+        "profile": config.profile,
+        "mutation_strategy": config.mutation_strategy,
+        "strategy_resolved": strategy_note,
+        "generations_planned": config.generations,
+        "generations_run": generations_run,
+        "stop_reason": stop_reason,
+        "stop_generation": stop_generation,
+        "best_score": best_score,
+        "final_hypervolume": final_hv,
+        "cost": cost,
+        "levers": levers,
+        "economic_gate": gate_summary,
+        "warm_start": warm_start,
+        "fitness_cache": cache_stats,
+    }
+    try:
+        path = dir_path / "roi_report.json"
+        path.write_text(
+            json.dumps(report, indent=2, ensure_ascii=False, default=str),
+            encoding="utf-8",
+        )
+        return path
+    except Exception:
+        return None
 
 
 def _write_checkpoint(
@@ -708,6 +918,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=Path(".mutalambda"),
         help="Output root directory (default: .mutalambda).",
     )
+    parser.add_argument(
+        "--mutation-strategy",
+        choices=["ast", "llm", "auto"],
+        default="ast",
+        help=(
+            "Mutation strategy (default: ast). 'auto' (FASE 3) resolves to "
+            "llm when an API key is configured and lets the operator bandit "
+            "use real-$ rewards from the cost ledger "
+            "(bandit_reward_usd.enabled)."
+        ),
+    )
+    parser.add_argument(
+        "--no-warm-start",
+        action="store_false",
+        dest="warm_start",
+        help="FASE 3 (A5): disable warm-start from the pareto archive.",
+    )
     return parser
 
 
@@ -734,6 +961,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             seed=args.seed,
             output_dir=args.output_dir,
             resume_from=args.resume_from,
+            mutation_strategy=args.mutation_strategy,
+            warm_start=args.warm_start,
         )
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
