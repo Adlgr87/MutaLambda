@@ -7,7 +7,7 @@ name = "mutalambda"
 version = "5.0.0"
 description = "Evolutionary multi-island code optimization framework"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Adlgr87" }]
 dependencies = [
@@ -57,6 +57,9 @@ scientific = [
 ]
 dev = [
   "pytest>=7,<10",
+  # Required by the coverage CI job (`pytest tests/ --cov=...`); without it
+  # pytest exits with "unrecognized arguments: --cov=...".
+  "pytest-cov>=6,<8",
   # The suite uses ``@pytest.mark.flaky(reruns=...)`` for the timing-sensitive
   # deep-evolution tests; without this plugin the marker is a no-op and those
   # tests fail under load.

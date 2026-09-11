@@ -61,3 +61,7 @@ MutaLambda_Commercial/
 
 # AionUi local skills (debug artifacts) — never commit
 .aionrs/
+
+# pytest-cov artefactos (generado en CI)
+coverage.xml
+.coverage
