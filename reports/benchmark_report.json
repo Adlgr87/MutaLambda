@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "generated_at": "2026-09-12T09:51:47.604671+00:00",
+=======
+  "generated_at": "2026-09-12T09:53:23.641416+00:00",
+>>>>>>> release/mutalambda-phase3-fixes
   "config": {
     "num_repeats": 1,
     "num_generations": 2,
@@ -13,13 +17,21 @@
     {
       "benchmark_name": "quadratic_sphere",
       "method": "cpu",
+<<<<<<< HEAD
       "duration_sec": 2.7236004825681448e-05,
+=======
+      "duration_sec": 3.208799898857251e-05,
+>>>>>>> release/mutalambda-phase3-fixes
       "score": 6.4540123716710625,
       "throughput": 400.0,
       "memory_mb": 0.0,
       "success": true,
       "error": null,
+<<<<<<< HEAD
       "timestamp": "2026-09-12T09:51:47.604352+00:00",
+=======
+      "timestamp": "2026-09-12T09:53:23.641072+00:00",
+>>>>>>> release/mutalambda-phase3-fixes
       "details": {
         "generations": 2,
         "population_size": 4
@@ -28,13 +40,21 @@
     {
       "benchmark_name": "quadratic_sphere",
       "method": "cpu",
+<<<<<<< HEAD
       "duration_sec": 1.0257004760205746e-05,
+=======
+      "duration_sec": 1.1409996659494936e-05,
+>>>>>>> release/mutalambda-phase3-fixes
       "score": 6.4540123716710625,
       "throughput": 400.0,
       "memory_mb": 0.0,
       "success": true,
       "error": null,
+<<<<<<< HEAD
       "timestamp": "2026-09-12T09:51:47.604370+00:00",
+=======
+      "timestamp": "2026-09-12T09:53:23.641092+00:00",
+>>>>>>> release/mutalambda-phase3-fixes
       "details": {
         "generations": 2,
         "population_size": 4
@@ -43,13 +63,21 @@
     {
       "benchmark_name": "quadratic_sphere",
       "method": "gpu",
+<<<<<<< HEAD
       "duration_sec": 0.0002775790053419769,
+=======
+      "duration_sec": 0.00029901500238338485,
+>>>>>>> release/mutalambda-phase3-fixes
       "score": 6.4540123716710625,
       "throughput": 0,
       "memory_mb": 0,
       "success": true,
       "error": null,
+<<<<<<< HEAD
       "timestamp": "2026-09-12T09:51:47.604653+00:00",
+=======
+      "timestamp": "2026-09-12T09:53:23.641396+00:00",
+>>>>>>> release/mutalambda-phase3-fixes
       "details": {
         "generations": 2,
         "population_size": 4
@@ -63,12 +91,20 @@
     "by_method": {
       "cpu": {
         "count": 2,
+<<<<<<< HEAD
         "duration_mean": 1.8746504792943597e-05,
+=======
+        "duration_mean": 2.1748997824033722e-05,
+>>>>>>> release/mutalambda-phase3-fixes
         "score_mean": 6.4540123716710625
       },
       "gpu": {
         "count": 1,
+<<<<<<< HEAD
         "duration_mean": 0.0002775790053419769,
+=======
+        "duration_mean": 0.00029901500238338485,
+>>>>>>> release/mutalambda-phase3-fixes
         "score_mean": 6.4540123716710625
       }
     }
