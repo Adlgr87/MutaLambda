@@ -11,6 +11,7 @@ Advanced metrics (P99, Throughput, Parsimony) moved to diagnostics.py
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
@@ -91,6 +92,14 @@ class FitnessVector:
         are tracked on the FitnessVector but **excluded** from dominance
         comparison. Latency and memory are negated so "greater is better" holds.
         """
+        # FIX (F18): NaN-proof dominance comparison. If either vector has a
+        # NaN in a dominance objective, treat it as worst-case (does not
+        # dominate anything) to prevent NaN poisoning the Pareto front.
+        for val in (self.correctness, self.latency_p50, self.memory_peak_mb,
+                     other.correctness, other.latency_p50, other.memory_peak_mb):
+            if math.isnan(val) or math.isinf(val):
+                return False
+
         self_vals = (self.correctness, -self.latency_p50, -self.memory_peak_mb)
         other_vals = (other.correctness, -other.latency_p50, -other.memory_peak_mb)
 
@@ -113,8 +122,16 @@ class FitnessVector:
         # (milliseconds / MiB) previously dominated correctness units and sank
         # fully-correct candidates below the -1.0 floor reserved for broken
         # ones, inverting selection pressure (evolution preferred crashing code).
-        latency_norm = max(0.0, self.latency_p50) / REF_LATENCY_MS
-        memory_norm = max(0.0, self.memory_peak_mb) / REF_MEMORY_MB
+        # FIX (F18): Guard against NaN/Inf poisoning the scalar score.
+        lat = self.latency_p50
+        mem = self.memory_peak_mb
+        if math.isnan(lat) or math.isinf(lat):
+            lat = float("inf")
+        if math.isnan(mem) or math.isinf(mem):
+            mem = float("inf")
+
+        latency_norm = max(0.0, lat) / REF_LATENCY_MS
+        memory_norm = max(0.0, mem) / REF_MEMORY_MB
         penalty = min(
             MAX_RESOURCE_PENALTY,
             RESOURCE_PENALTY_WEIGHT * (latency_norm + memory_norm),

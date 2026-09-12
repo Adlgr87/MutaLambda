@@ -189,7 +189,7 @@ class MutaLambdaAgent:
                     top_down_distillation=config.hfc_top_down_distillation,
                     top_down_interval=config.hfc_top_down_interval,
                 ),
-                rng=random.Random(),
+                rng=self.rng_session.stream("hfc"),
             )
             if config.seed_codes:
                 self._hfc.seed(config.seed_codes)
@@ -246,7 +246,7 @@ class MutaLambdaAgent:
                     min_donor_score=config.thc_min_donor_score,
                     validate_in_sandbox=config.thc_validate_in_sandbox,
                 ),
-                rng=random.Random(),
+                rng=self.rng_session.stream("thc"),
             )
             self.migration_bus.thc_engine = self._thc_engine
 
@@ -405,9 +405,20 @@ class MutaLambdaAgent:
         self._pending_hints = []
 
     def _random(self) -> random.Random:
-        """Session RNG (falls back to module random if not initialized)."""
+        """Session RNG (falls back to a seeded stream if not initialized).
+
+        FIX (F9): Never return the global ``random`` module — that would
+        contaminate other callers. Fall back to a deterministic, seeded
+        Random instance instead.
+        """
         rng = getattr(self, "_rng", None)
-        return rng if rng is not None else random
+        if rng is not None:
+            return rng
+        # Deterministic fallback (no global state mutation).
+        import random as _random
+        fallback = _random.Random(0xC0FFEE)
+        self._rng = fallback
+        return fallback
 
     def inject_hint(self, code: str) -> None:
         pending = getattr(self, "_pending_hints", [])

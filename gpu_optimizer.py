@@ -234,12 +234,16 @@ class GPUOptimizer:
         population_size: int = 50,
         mutation_rate: float = 0.1,
         crossover_rate: float = 0.9,
+        seed: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Run NSGA-II optimization with GPU acceleration.
 
         Returns dict with results and GPU stats.
         """
+        # FIX (F10): Use a seeded numpy Generator instead of the global
+        # np.random state for deterministic GPU operations.
+        self._rng = np.random.default_rng(seed)
         result = {
             "best_individual": None,
             "best_score": float("inf"),
@@ -346,20 +350,20 @@ class GPUOptimizer:
 
         for i in range(n):
             # Tournament selection
-            idx1, idx2 = np.random.choice(n, 2, replace=False)
+            idx1, idx2 = self._rng.choice(n, 2, replace=False)
             parent = population[idx1] if scores[idx1] < scores[idx2] else population[idx2]
 
             # Crossover
-            if np.random.random() < crossover_rate:
-                idx3 = np.random.choice(n)
-                mask = np.random.random(dim) < 0.5
+            if self._rng.random() < crossover_rate:
+                idx3 = self._rng.choice(n)
+                mask = self._rng.random(dim) < 0.5
                 child = np.where(mask, parent, population[idx3])
             else:
                 child = parent.copy()
 
             # Mutation
-            if np.random.random() < mutation_rate:
-                child += np.random.randn(dim) * 0.1
+            if self._rng.random() < mutation_rate:
+                child += self._rng.standard_normal(dim) * 0.1
 
             offspring[i] = child
 

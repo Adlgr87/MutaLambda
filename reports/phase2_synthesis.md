@@ -1,80 +1,103 @@
-# Phase 2 — Estructuración del Debate & Síntesis de Hallazgos
+# Phase 2 — Síntesis del Debate Estructurado (MutaLambda v2)
 
-## Equipo de Agentes
+## Equipo de Agentes (4 paralelos)
 
 | Rol | Agente | Provider/Model | Output |
 |-----|--------|----------------|--------|
-| Coordinador | (Sistema) | — | Votación ponderada, priorización |
-| Arquitecto | Arquitecto | Ollama/gemma4:31b-cloud | 5 CRÍTICOS arquitectónicos |
-| Devil's Advocate | Devil's Advocate | Ollama/gemma4:31b-cloud | 30 findings (F1–F30) |
-| Investigador | Investigador | Ollama/gemma4:31b-cloud | Tech landscape 2025-2026 |
-| Científico | Científico | Ollama/gemma4:31b-cloud | Matriz de madurez científica |
+| Arquitecto | `gemma4:31b-cloud` | Ollama | 5 CRÍTICOS arquitectónicos + orchestrator audit |
+| Devil's Advocate | `gemma4:31b-cloud` | Ollama | 25 findings (F1-F25) deep audit |
+| Investigador | `gemma4:31b-cloud` | Ollama | Tech landscape 2025-2026 |
+| Científico | `gemma4:31b-cloud` | Ollama | 7 engine maturity matrix + P0-P2 |
 
-## Hallazgos Consolidados
+## Consolidación de Findings
 
-### 5 CRÍTICOS del Arquitecto
+### 🔴 CRÍTICOS de Seguridad (Devil's Advocate)
+| # | Finding | Evidence | Fix |
+|---|---------|----------|-----|
+| F1 | Subprocess injection risk | `muta_ext/uast/emitters/*.py` dynamic cmd | Sanitizar comandos |
+| F2 | Insecure sandbox boundary | `runners.py:554` "not real sandbox" | Container mode default |
+| F3 | Pickle deserialization RCE | `ray_scheduler.py` pickle.loads | Validar buffers |
+| F4 | Tainted command execution | `workflow/optimization_pipeline.py` dynamic cmd | Sanitizar |
+| F5 | LSP server exposure | `lsp/server.py` daemon thread | Review file access |
+
+### 🔄 Reproducibility (Devil's Advocate v2)
+| # | Finding | Evidence | Fix |
+|---|---------|----------|-----|
+| F6 | Global RNG contamination | `rng_session.py:38` random.seed() global | Local Random instances |
+| F7 | Non-deterministic mutations | `random.choice/shuffle` global calls | RNGSession stream wiring |
+| F8 | FP non-associativity | NSGA-II fitness aggregations | Sorted key summation |
+| F9 | Set/dict iteration | `uast2/passes.py` set logic | Sort scope_ids |
+| F10 | GPU non-determinism | `gpu_optimizer.py:349` np.random.choice | Seeded Generator |
+
+### 💀 Kill-Switches & DoS (Devil's Advocate v2)
+| # | Finding | Evidence | Fix |
+|---|---------|----------|-----|
+| F11 | Infinite loop risk | `while True` in nsga2, event_bus | Add timeout/heartbeat |
+| F12 | Unbounded memory/worker | ProcessPoolExecutor OOM | Memory limit per worker |
+| F13 | Cache race conditions | Cross-process cache write | fcntl lock |
+| F14 | ThreadPool saturation | No semaphore in island_evolution | Add semaphore |
+| F15 | Blocking EventBus | Lock during dispatch | Async dispatch |
+
+### 🛠 Correctness (Devil's Advocate)
+| # | Finding | Evidence | Fix |
+|---|---------|----------|-----|
+| F18 | NaN propagation | `fitness_vector.py` no NaN checks | Guard in comparison |
+| F19 | id() reuse issue | `uast2/serialize.py` id(node) keys | Stable hashes |
+| F29 | Unsafe float cast | `runners.py:320` `float(got)` | try/except wrap |
+
+### 5 CRÍTICOS del Arquitecto (v2 deep analysis)
 | ID | Título | Evidence | Impact |
 |----|--------|----------|--------|
-| CRIT-1 | Fragile packaging (`py-modules` manual sync) | `pyproject.toml:67-116` | High |
-| CRIT-2 | No unified production API/service layer | `app.py:1-12`, CLI-only | Medium |
-| CRIT-3 | Obs. gaps (no Prometheus/OTel, no health endpoints) | `PRODUCTION_CHECKLIST.md:141` | Medium |
-| CRIT-4 | Sandbox defaults to subprocess (security) | `PRODUCTION_CHECKLIST.md:130` | High |
-| CRIT-5 | CLI doc inconsistency (`explain` vs `explain-run`) | `AGENTS.md:61` vs `mutalambda_cli.py:687` | Low/Medium |
+| CRIT-1 | Orchestrator Degeneration | `llm_orchestrator.py:_dispatch()` — multilayer/massive → run_scalar_simulation | 🔴 High |
+| CRIT-2 | Micro-Massive stub | `micro_massive` directs to /ui/ Streamlit (eliminado) | 🔴 High |
+| CRIT-3 | UAST Fragmentation | `uast/` + `uast2/` coexistence, import orphans | 🟠 Medium |
+| CRIT-4 | Rust underutilization | `rust_core/` has 3 helpers, no full engine | 🟡 Low |
+| CRIT-5 | CLI doc inconsistency | `explain` vs `explain-run` | ✅ Already fixed |
 
-### Top Kill-Switches (Devil's Advocate)
-| Finding | Severity | Category |
-|---------|----------|----------|
-| F1: RCE via `exec()` | 🔴 Critical | Security |
-| F5: `eval()` in evaluation wrappers | 🔴 Critical | Security |
-| F7: RCE via `exec(open(path).read())` | 🔴 Critical | Security |
-| F8: Unseeded `random.Random()` | 🟠 High | Reproducibility |
-| F9: Global `random` functions | 🟠 High | Reproducibility |
-| F13: Silent `except: pass` in EventBus | 🟠 High | Correctness |
-| F19: `time.sleep` blocking in CommandQueue | 🟠 High | Performance |
-| F22: Sync network I/O (`requests`) | 🟠 High | Performance |
-| F23: O(N²) in project_optimizer | 🟡 Medium | Performance |
+## Científico Recommendations
+- **P0**: ProcessPool picklability + RNGSession full integration
+- **P1**: AST deep-copy optimization (surgical node replacement)
+- **P2**: Dynamic tiering + semantic distance in IslandPool
 
-## Ponderación de Intervenciones
+## Investigador Strategic Recommendations
+1. **GPU-fitness layer**: JAX-vectorized evaluation (N>10K populations)
+2. **Reasoning-based mutation**: CoT trajectories via DeepSeek-V3
+3. **Semantic guardrails**: ast-grep + Tree-sitter validation
+4. **MicroVMs for safety**: Firecracker for candidate execution (F1-F3 security)
 
-Voto ponderado: Arquitecto 30% / Devil's Advocate 30% / QA 15% / Científico 15% / Investigador 10%
+## Priorización Ponderada
 
-### Prioridad 1 (CRÍTICOs — implementar ahora)
-1. **F5** — Replace `eval()` in `runners.py:378` with `ast.literal_eval` (30 min, safety)
-2. **F1/F7** — Harden `exec` in `runners.py:336` and `hotspot_profiler.py:76` (5 min each — add try/except + logging)
-3. **F13** — Replace `except: pass` in `event_bus.py:77` with `logger.exception` (5 min, debuggability)
-4. **F19** — Replace `time.sleep` with `threading.Event.wait()` in `event_bus.py:156` (10 min, perf)
+**Votación**: Arquitecto 25% / Devil's Advocate 35% / Científico 15% / Investigador 15% / QA 10%
 
-### Prioridad 2 (High — implementar en esta sesión)
-5. **F8/F9** — Wire `rng_session.py` RNGSession into evolution_engine.py + muta_ext (30 min, reproducibility — Científico P0)
-6. **CRIT-5** — Fix CLI doc inconsistency `explain` → `explain-run` in AGENTS.md (2 min, docs)
+### Priority 1 (implementar esta sesión — ~2 horas)
 
-### Prioridad 3 (Medium — backlog)
-- F22: Migrate `requests` → `httpx` async (needs async refactor)
-- F23: Index-based lookup in `project_optimizer.py:112`
-- F24-26: Dockerfile healthcheck + tmpfs fix + HOME dir
-- CRIT-1: Migrate to src/ layout (major refactor)
-- CRIT-2/CRIT-3: FastAPI service layer + Prometheus metrics (Phase 2 roadmap)
+| # | Fix | Category | Severity | Risk |
+|---|-----|----------|----------|------|
+| 1 | Replace global `random.seed()` with local `random.Random` instances | Repro | 🟠 High | Bajo |
+| 2 | Wire RNGSession into ALL stochastic modules (evolution_engine, gpu_optimizer, etc.) | Repro | 🟠 High | Bajo |
+| 3 | Add NaN guard in NSGA-II fitness comparison | Correctness | 🟡 Medium | Bajo |
+| 4 | Add timeout/heartbeat to `while True` loops in event_bus | DoS | 🟡 Medium | Bajo |
+| 5 | Add `logger.exception` for silent except in event_bus (F13 from v1 — already done, verify) | Debug | 🟠 High | Bajo |
+| 6 | Replace `id(node)` with stable code hash in uast2/serialize.py | Correctness | 🟡 Medium | Medio |
+| 7 | Wrap `float(got)` with try/except in runners.py | Correctness | 🟡 Medium | Bajo |
+| 8 | CRIT-5: CLI doc fix (already done) | Docs | 🔵 Low | Bajo |
 
-### Prioridad 4 (Low — deferred)
-- F3/F4/F6/F10-F12/F14-F16/F18/F20/F21/F27-F30: Various low/medium severity issues
-
-## Gap de Cobertura de Tests
-
-El Científico reporta que:
-- NSGA-II: High coverage ✅ (50 tests)
-- CheckpointManager: Medium coverage — format overhead noted
-- HFC Tiers: Medium coverage — memoization risk (F8/F9 findings validan esto)
-
-## Recomendaciones Estratégicas (Investigador)
-
-1. **Semantic Guardrails**: Integrate `ast-grep` + Tree-sitter for mutation validation
-2. **GPU-Fitness Layer**: JAX-vectorized evaluation for parallel candidate scoring
-3. **Project-Aware Context**: 1M+ token windows via DeepSeek-V3/OpenRouter
-
----
+### Priority 2 (deferred — needs infra refactor)
+- F1-F4: Sandbox hardening (container mode default, cmd sanitization)
+- F8/F9: FP non-associativity, set sorting
+- F11: Worker memory limits
+- CRIT-1: Orchestrator degneration (needs MassiveSimEngine dispatch wiring)
+- CRIT-2: Micro-massive stub (needs integration refactor)
+- CRIT-3: UAST fragmentation cleanup
+- CRIT-4: Rust full-engine migration
 
 ## Decisión del Coordinador
 
-**Implementar Priority 1 + Priority 2 (6 fixes) hoy**, dejando Priority 3+ en backlog. Esto cierra los 3 kill-switches críticos de seguridad (F1/F5/F7 — 2 de ellos son RCE), el colapso de reproducibilidad (F8/F9), y el problema de debuggabilidad (F13). El rendimiento de thread-bloqueo (F19) también es rápido.
+**Foco Priority 1 — 8 fixes rápidos** que cierran:
+- 🔴 2 reproducibility kill-switches (F6, F7 — global RNG)
+- 🟡 1 NaN poisoning vulnerability (F18)
+- 🟡 1 infinite loop DoS (F11)
+- 🟡 2 correctness issues (F19, F29)
+- 🔵 1 doc inconsistency (CRIT-5, already done)
 
-Estos 6 fixes representan **~1.5 horas de trabajo** con impacto crítico de seguridad y reproducibilidad.
+**Estimado: ~2-3 horas, alto impacto/costo.**

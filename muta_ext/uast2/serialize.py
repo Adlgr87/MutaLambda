@@ -76,6 +76,9 @@ def _msgpack():
 def payload(uast: CoreUAST, include_location: bool = True) -> Dict[str, Any]:
     """Build the flat-slab payload for *uast* (no I/O)."""
     nodes: List[UASTNode] = list(uast.walk())
+    # FIX (F19): Build an id→index map for parent lookups. Since `nodes` holds
+    # all references, no node will be garbage-collected during this pass, so
+    # id() values are stable. The map is used purely for parent/slot resolution.
     ids: Dict[int, int] = {id(node): index for index, node in enumerate(nodes)}
     encoded: List[Dict[str, Any]] = []
     for index, node in enumerate(nodes):

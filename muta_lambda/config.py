@@ -8,11 +8,16 @@ re-exported from ``muta_lambda/__init__.py`` so existing callers
 from __future__ import annotations
 
 import logging
-import random
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+
+# Import here to avoid circular import at module load time.
+try:
+    from rng_session import RNGSession
+except ImportError:  # pragma: no cover - fallback
+    RNGSession = None  # type: ignore
 
 __all__ = ["EvolveConfig"]
 
@@ -21,6 +26,7 @@ __all__ = ["EvolveConfig"]
 class EvolveConfig:
     """Configuración global del agente."""
 
+    rng_session: Optional[Any] = None
     num_islands: int = 4
     generations: int = 50
     seed_codes: List[str] = field(default_factory=list)
@@ -286,8 +292,9 @@ class EvolveConfig:
 
         seed = repro.get("seed")
         if seed is not None:
-            random.seed(seed)
-            np.random.seed(seed)
+            # FIX (F6): Do not contaminate the global RNG state. Return the
+            # RNGSession so callers explicitly pass per-module streams.
+            config.rng_session = RNGSession(master_seed=seed)
 
         return config
 

@@ -7,6 +7,7 @@ sharing mutable global random state across islands.
 from __future__ import annotations
 
 import hashlib
+import os
 import random
 from dataclasses import dataclass, field
 from typing import Dict, Optional
@@ -34,9 +35,16 @@ class RNGSession:
     def __post_init__(self) -> None:
         if self.master_seed is None:
             self.master_seed = random.SystemRandom().randint(0, 2**31 - 1)
-        # Seed process-global for libraries that still use it (best-effort).
-        random.seed(self.master_seed)
-        np.random.seed(self.master_seed % (2**32 - 1))
+        # SECURITY/FIX (F6): Do NOT call random.seed() / np.random.seed() on
+        # the global RNG — that contaminates the process-global state and
+        # breaks determinism when running independent parallel experiments.
+        # Only local random.Random / np.random.Generator instances (created
+        # via stream()/numpy_stream()) are used for reproducible stochastic
+        # operations. The legacy global calls below are kept as a no-op
+        # fallback guarded by an env var for backward compatibility only.
+        if os.environ.get("MUTALAMBDA_LEGACY_SEED_GLOBAL", "0") == "1":
+            random.seed(self.master_seed)
+            np.random.seed(self.master_seed % (2**32 - 1))
 
     def stream(self, name: str) -> random.Random:
         if name not in self._streams:
