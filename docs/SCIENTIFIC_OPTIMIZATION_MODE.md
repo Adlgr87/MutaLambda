@@ -11,8 +11,8 @@ Extiende MutaLambda con 3 capacidades Tier 1:
 ## Activation
 
 ```bash
-mutalambda run --config config.scientific.yaml
-mutalambda run --scientific  # atajo
+python cli.py run --config config.scientific.yaml
+python cli.py run --scientific  # atajo
 ```
 
 ## Pipeline

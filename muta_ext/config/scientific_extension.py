@@ -35,7 +35,9 @@ class EvolutionaryExtensionConfig:
     enable_adaptive_solver: bool = False
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any] | None) -> "EvolutionaryExtensionConfig":
+    def from_dict(
+        cls, d: Dict[str, Any] | None
+    ) -> "EvolutionaryExtensionConfig":
         """Build config from a dict (e.g. loaded from YAML).
 
         Unknown keys are ignored. If the dict is absent, returns all flags OFF.
@@ -48,9 +50,13 @@ class EvolutionaryExtensionConfig:
             return cls()
 
         # Backward/forward compatibility aliases
-        enable_adaptive_mutation = bool(d.get("enable_adaptive_mutation", False))
+        enable_adaptive_mutation = bool(
+            d.get("enable_adaptive_mutation", False)
+        )
 
-        enable_adaptive_solver = bool(d.get("enable_adaptive_solver", enable_adaptive_mutation))
+        enable_adaptive_solver = bool(
+            d.get("enable_adaptive_solver", enable_adaptive_mutation)
+        )
 
         return cls(
             enable_numerical_health=bool(d.get("enable_numerical_health", False)),

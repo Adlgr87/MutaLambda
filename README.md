@@ -1,12 +1,12 @@
 # MutaLambda — Optimized Multi-Agent Evolutionary System
 
-> **MutaLambda v5.0.0**: Sistema de optimización evolutiva multi-agente con integración GPU, pipeline CI/CD completo, benchmarking científico, motor **UAST v2** (mutación in-situ con verificación por nanopass), capa **Headroom** de optimización de costo (F0–F3), **SVL** (validación científica con invariantes, gate opt-in) y 1038 funciones de test bajo CI verde.
+> **MutaLambda v5.0.0**: Sistema de optimización evolutiva multi-agente con integración GPU, pipeline CI/CD completo, benchmarking científico, motor **UAST v2** (mutación in-situ con verificación por nanopass), capa **Headroom** de optimización de costo (F0–F3), **SVL** (validación científica con invariantes, gate opt-in) y 1,038 funciones de test ([`docs/ARTIFACTS/test_count.txt`](docs/ARTIFACTS/test_count.txt)) bajo CI verde.
 > Un framework de alta performance para optimización de código asistida por IA con aceleración hardware.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://github.com/Adlgr87/MutaLambda/actions/workflows/mutualambda-optimization-pipeline.yml/badge.svg)](https://github.com/Adlgr87/MutaLambda/actions)
 [![Docker](https://github.com/Adlgr87/MutaLambda/actions/workflows/docker-image.yml/badge.svg)](https://github.com/Adlgr87/MutaLambda/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: BSL-1.1](https://img.shields.io/badge/License-BSL--1.1-orange.svg)](LICENSE)
 [![Coverage](https://img.shields.io/badge/coverage-61%25-orange)](https://github.com/Adlgr87/MutaLambda/actions)
 [![GPU Ready](https://img.shields.io/badge/GPU-ready-orange)]()
 [![Tag](https://img.shields.io/badge/tag-v5.0.0--phase7--8-blue)]()
@@ -17,7 +17,7 @@
 
 | Métrica | Valor | Estado | Última verificación |
 |---------|-------|--------|---------------------|
-| Tests | **CI verde** (Lint & Tests & Smoke + builds, 3.10/3.11/3.12) | ✅ 1038 funciones | 2026-09-11 |
+| Tests | **CI verde** (Lint & Tests & Smoke + builds, 3.10/3.11/3.12) | ✅ 1,038 funciones ([`test_count.txt`](docs/ARTIFACTS/test_count.txt)) | 2026-09-11 |
 | SVL | scientific_validation gate (opt-in) | ✅ 84 funciones SVL (74 unitarios + 4 integración + 6 extensión) | 2026-09-11 |
 | Cobertura | **61%** | ✅ FASE 8 completada | 2026-09-02 |
 | Versión git | **v5.0.0-phase7-8** | ✅ Tag oficial | 2026-08-23 |
@@ -246,7 +246,7 @@ optimization:
 │                                 con verificación, msgpack, shadow     │
 ├─────────────────────────────────────────────────────────────────────┤
 │  Infraestructura                                                     │
-│  ├── tests/                 — ~1038 funciones (unit/integration)     │
+│  ├── tests/                 — ~1,038 funciones (unit/integration)     │
 │  ├── scripts/               — deploy, install, monitoring            │
 │  ├── benchmarks/            — EffiBench, market-comparison, etc.     │
 │  ├── presets/               — quick / production / scientific / numpy│
@@ -320,7 +320,7 @@ MUTALAMBDA_E2E_SERIAL=1 python tests/e2e_tests.py --fast
 ```
 
 **Resultados**: CI verde en Python 3.10/3.11/3.12 (Lint & Tests & Smoke + builds);
-1038 funciones de test coleccionadas localmente (incl. 84 SVL). La CI ejecuta la
+1,038 funciones de test coleccionadas localmente (ver `docs/ARTIFACTS/test_count.txt`, incl. 84 SVL). La CI ejecuta la
 suite completa en cada push/PR.
 
 ## 📊 Benchmarking Científico
@@ -425,7 +425,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+BSL-1.1 License - see [LICENSE](LICENSE) for details.
 
 ## Citation
 

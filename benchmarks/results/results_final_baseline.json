@@ -1,0 +1,63 @@
+{
+ "benchmark": "EffiBench",
+ "mode": "baseline",
+ "config": {
+  "parquet": "/tmp/effibench_train.parquet",
+  "tasks": 3,
+  "skip": 0,
+  "smoke": false,
+  "baseline_only": true,
+  "llm": false,
+  "backend": "ollama",
+  "model": "qwen2.5-coder:7b",
+  "samples": 7,
+  "warmups": 2,
+  "timeout": 10.0,
+  "memory_mb": 512,
+  "min_improvement": 0.05,
+  "out": "benchmarks/results_final_baseline.json"
+ },
+ "summary": {
+  "n_tasks": 2,
+  "n_valid_comparisons": 0,
+  "n_baseline_fail": 0,
+  "median_ratio_to_canonical": null,
+  "mean_ratio_to_canonical": null,
+  "max_ratio_to_canonical": null,
+  "opt_pct": null,
+  "mean_speedup_when_improved": null,
+  "max_speedup": null,
+  "llm_correctness_rate": null,
+  "note": "opt threshold: ratio < 0.95"
+ },
+ "results": [
+  {
+   "problem_idx": 1,
+   "task_name": "Two Sum",
+   "n_tests": 3,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 27.3125,
+    "memory_peak_mb": 30.46,
+    "tests_passed": 3,
+    "tests_total": 3
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 3
+  },
+  {
+   "problem_idx": 2,
+   "task_name": "Contains Duplicate",
+   "n_tests": 3,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 27.6458,
+    "memory_peak_mb": 30.48,
+    "tests_passed": 3,
+    "tests_total": 3
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 3
+  }
+ ]
+}

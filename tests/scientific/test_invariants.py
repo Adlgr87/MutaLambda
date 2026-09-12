@@ -1,5 +1,4 @@
 """Tests para ScientificInvariant checks (HP-01 a HP-07)."""
-
 import math
 from muta_ext.scientific.invariants import (
     check_energy_non_negative,
@@ -91,10 +90,10 @@ class TestNumericalStability:
         assert check_numerical_stability({"value": 42.0}, {})
 
     def test_nan(self):
-        assert not check_numerical_stability({"value": float("nan")}, {})
+        assert not check_numerical_stability({"value": float('nan')}, {})
 
     def test_inf(self):
-        assert not check_numerical_stability({"value": float("inf")}, {})
+        assert not check_numerical_stability({"value": float('inf')}, {})
 
     def test_overflow(self):
         assert not check_numerical_stability({"value": 1e100}, {})

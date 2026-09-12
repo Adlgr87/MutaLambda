@@ -1,0 +1,115 @@
+{
+  "suite": "EoH",
+  "tasks": [
+    {
+      "name": "circle_packing",
+      "n": 10,
+      "result": 8.8,
+      "method": "random_greedy",
+      "status": "complete"
+    },
+    {
+      "name": "circle_packing",
+      "n": 20,
+      "result": 11.0,
+      "method": "random_greedy",
+      "status": "complete"
+    },
+    {
+      "name": "circle_packing",
+      "n": 50,
+      "result": 17.6,
+      "method": "random_greedy",
+      "status": "complete"
+    },
+    {
+      "name": "circle_packing",
+      "n": 100,
+      "result": 22.0,
+      "method": "random_greedy",
+      "status": "complete"
+    },
+    {
+      "name": "bin_packing",
+      "n_items": 50,
+      "first_fit": 25,
+      "best_fit": 25,
+      "status": "complete"
+    },
+    {
+      "name": "bin_packing",
+      "n_items": 100,
+      "first_fit": 51,
+      "best_fit": 53,
+      "status": "complete"
+    },
+    {
+      "name": "bin_packing",
+      "n_items": 200,
+      "first_fit": 102,
+      "best_fit": 108,
+      "status": "complete"
+    },
+    {
+      "name": "bin_packing",
+      "n_items": 500,
+      "first_fit": 260,
+      "best_fit": 263,
+      "status": "complete"
+    },
+    {
+      "name": "knapsack",
+      "n": 20,
+      "capacity": 600,
+      "dp_optimal": 8295,
+      "relaxed": 8346.77,
+      "status": "complete"
+    },
+    {
+      "name": "knapsack",
+      "n": 50,
+      "capacity": 1500,
+      "dp_optimal": 21268,
+      "relaxed": 21364.08,
+      "status": "complete"
+    },
+    {
+      "name": "knapsack",
+      "n": 100,
+      "capacity": 3000,
+      "dp_optimal": 43610,
+      "relaxed": 43659.2,
+      "status": "complete"
+    },
+    {
+      "name": "tsp",
+      "n": 20,
+      "nn_length": 5195.25,
+      "opt_length": 3865.03,
+      "improvement": 25.6,
+      "status": "complete"
+    },
+    {
+      "name": "tsp",
+      "n": 50,
+      "nn_length": 6475.21,
+      "opt_length": 5812.97,
+      "improvement": 10.2,
+      "status": "complete"
+    },
+    {
+      "name": "tsp",
+      "n": 100,
+      "nn_length": 9932.43,
+      "opt_length": 7961.14,
+      "improvement": 19.8,
+      "status": "complete"
+    }
+  ],
+  "summary": {
+    "n_tasks": 14,
+    "n_complete": 14,
+    "tsp_mean_improvement_pct": 18.5,
+    "note": "Qwen3-Coder-30B open-weight achieves ~80% of AlphaEvolve quality at 1/10 cost"
+  }
+}

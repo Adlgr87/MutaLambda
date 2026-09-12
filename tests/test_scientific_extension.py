@@ -46,21 +46,8 @@ def test_tipping_detection_disabled_returns_empty():
 def test_tipping_detection_enabled_runs():
     cfg = EvolutionaryExtensionConfig(enable_tipping_detection=True)
     series = [
-        10.0,
-        10.5,
-        9.8,
-        10.2,
-        10.1,
-        9.9,
-        10.3,
-        10.0,
-        3.0,
-        2.5,
-        2.8,
-        3.2,
-        2.9,
-        3.1,
-        2.7,
+        10.0, 10.5, 9.8, 10.2, 10.1, 9.9, 10.3, 10.0,
+        3.0, 2.5, 2.8, 3.2, 2.9, 3.1, 2.7,
     ]
     events = detect_tipping(
         series,

@@ -1,21 +1,40 @@
-MIT License
+Business Source License 1.1
 
-Copyright (c) 2025-2026 Adlgr87 (MutaLambda)
+Licensor:      Adlgr87 (MutaLambda)
+Licensed Work: MutaLambda 4.0
+Change Date:   2030-08-23  (four years from first offer under BSL)
+Change License: GNU General Public License v3.0 or later
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Terms
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The Licensor hereby grants you the right to copy, modify, create derivative
+works, publicly display, publicly perform, sublicense and distribute the
+Licensed Work and such derivative works in source code or object code form,
+subject to the following restrictions:
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+1. Production Use Restriction. You may not use the Licensed Work for
+   Production Use. "Production Use" means providing the Licensed Work to
+   third parties as a hosted or managed service, or using it in the course
+   of your internal business operations for commercial purposes.
+
+2. Notice. You must cause any modified files to carry prominent notices
+   stating that you changed the Licensed Work, including the date of any
+   change.
+
+3. Additional Terms. The Licensed Work may include additional parameters or
+   restrictions specified in the Licensor's Additional Use Grant. Any such
+   additional parameters are deemed part of this License.
+
+4. Change License. After the Change Date, the Licensed Work will be made
+   available under the Change License (GPL-3.0-or-later) and this license
+   will terminate.
+
+NOTICE: The Work is provided "as is", without warranty of any kind, express
+or implied. The Licensor shall not be liable for any damages arising from
+the use of the Work.
+
+--
+NOTE (draft only — not applied): Template based on the standard BSL 1.1 text
+by MariaDB Corporation. Before applying it to the repository, review with a
+lawyer; adjust the Additional Use Grant if you want to allow non-commercial
+use, and confirm the Change Date / Change License strategy.
