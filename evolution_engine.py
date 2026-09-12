@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from mutation_filters import _filter_mutant, ProfileMode
 from component_evolution import ComponentGraph, ComponentMutator, ModuleExtractor
 from code_hash import cached_parse
+from rng_session import RNGSession
 
 
 class ASTMutator:
@@ -29,9 +30,15 @@ class ASTMutator:
     }
     _COMMUTATIVE_PAIRS = {ast.Add, ast.Mult, ast.BitAnd, ast.BitOr, ast.BitXor}
 
+    # Reproducibility fix (F8/F9): use a dedicated RNGSession stream instead
+    # of the global ``random`` module so mutations are deterministic when a
+    # seed is provided and isolated from other modules that may also call
+    # ``random.choice`` etc.
+    _rng = RNGSession().stream("evolution_engine")
+
     _CONST_ALTERNATIVES = {
-        int: lambda v: random.choice([0, 1, -1, 2, v + 1, v - 1, v * 2]),
-        float: lambda v: round(v * random.uniform(0.5, 2.0), 6),
+        int: lambda v: ASTMutator._rng.choice([0, 1, -1, 2, v + 1, v - 1, v * 2]),
+        float: lambda v: round(v * ASTMutator._rng.uniform(0.5, 2.0), 6),
         str: lambda v: v[::-1] if v else v,
         bool: lambda v: not v,
     }
@@ -57,7 +64,7 @@ class ASTMutator:
             cls._add_trivial_loop,
         ]
 
-        random.shuffle(mutations)
+        ASTMutator._rng.shuffle(mutations)
         for mut_fn in mutations[:5]:
             try:
                 new_tree = copy.deepcopy(tree)
@@ -80,7 +87,7 @@ class ASTMutator:
             if isinstance(node, ast.BinOp) and type(node.op) in cls._COMMUTATIVE_PAIRS
         ]
         if swaps:
-            node = random.choice(swaps)
+            node = ASTMutator._rng.choice(swaps)
             node.left, node.right = node.right, node.left
 
     @classmethod
@@ -91,7 +98,7 @@ class ASTMutator:
             if isinstance(node, ast.Constant) and type(node.value) in cls._CONST_ALTERNATIVES
         ]
         if constants:
-            node = random.choice(constants)
+            node = ASTMutator._rng.choice(constants)
             gen = cls._CONST_ALTERNATIVES[type(node.value)]
             node.value = gen(node.value)
 
@@ -102,7 +109,7 @@ class ASTMutator:
             # fields that are expressions, not statement lists.
             body = getattr(node, "body", None)
             if isinstance(body, list) and body:
-                idx = random.randrange(len(body))
+                idx = ASTMutator._rng.randrange(len(body))
                 original = body[idx]
                 body[idx] = ast.If(
                     test=ast.Constant(value=True),
@@ -115,7 +122,7 @@ class ASTMutator:
     def _negate_condition(tree: ast.Module) -> None:
         conditionals = [node for node in ast.walk(tree) if isinstance(node, (ast.If, ast.While))]
         if conditionals:
-            node = random.choice(conditionals)
+            node = ASTMutator._rng.choice(conditionals)
             node.test = ast.UnaryOp(op=ast.Not(), operand=node.test)
 
     @staticmethod
@@ -130,7 +137,7 @@ class ASTMutator:
         }
         comps = [node for node in ast.walk(tree) if isinstance(node, ast.Compare)]
         if comps:
-            node = random.choice(comps)
+            node = ASTMutator._rng.choice(comps)
             if len(node.ops) != 1 or len(node.comparators) != 1:
                 return
             new_ops = []
@@ -168,8 +175,8 @@ class ASTMutator:
         if not candidates:
             return
 
-        target = random.choice(candidates)
-        suffix = random.choice("abcdefgh")
+        target = ASTMutator._rng.choice(candidates)
+        suffix = ASTMutator._rng.choice("abcdefgh")
         original_id = target.id
         for node in ast.walk(tree):
             if isinstance(node, ast.Name) and node.id == original_id:
@@ -181,7 +188,7 @@ class ASTMutator:
             body = getattr(node, "body", None)
             # statement bodies only (IfExp.body is an expression)
             if isinstance(body, list) and body and len(body) < 50:
-                idx = random.randrange(len(body))
+                idx = ASTMutator._rng.randrange(len(body))
                 body.insert(idx, copy.deepcopy(body[idx]))
                 return
 
@@ -189,7 +196,7 @@ class ASTMutator:
     def _swap_if_else(tree: ast.Module) -> None:
         ifs = [node for node in ast.walk(tree) if isinstance(node, ast.If) and node.orelse]
         if ifs:
-            node = random.choice(ifs)
+            node = ASTMutator._rng.choice(ifs)
             node.body, node.orelse = node.orelse, node.body
             node.test = ast.UnaryOp(op=ast.Not(), operand=node.test)
 
@@ -208,7 +215,7 @@ class ASTMutator:
         if not replacements:
             return
 
-        parent, idx, aug = random.choice(replacements)
+        parent, idx, aug = ASTMutator._rng.choice(replacements)
         new_assign = ast.Assign(
             targets=[copy.deepcopy(aug.target)],
             value=ast.BinOp(
@@ -228,7 +235,7 @@ class ASTMutator:
             body = getattr(node, "body", None)
             if not isinstance(body, list) or not body:
                 continue
-            idx = random.randrange(len(body))
+            idx = ASTMutator._rng.randrange(len(body))
             original = body[idx]
             body[idx] = ast.For(
                 target=ast.Name(id="_", ctx=ast.Store()),
@@ -624,8 +631,9 @@ RULES:
         return text[content_start + 1 : end]
 
 
-def ast_crossover(parent_a: str, parent_b: str, rng: random.Random = random) -> str:
+def ast_crossover(parent_a: str, parent_b: str, rng: Optional[random.Random] = None) -> str:
     """Recombina funciones compartidas entre dos fragmentos de código AST."""
+    _rng = rng if rng is not None else ASTMutator._rng
     try:
         tree_a = ast.parse(parent_a)
         tree_b = ast.parse(parent_b)
@@ -636,7 +644,7 @@ def ast_crossover(parent_a: str, parent_b: str, rng: random.Random = random) -> 
             return parent_a
         for node in ast.walk(tree_a):
             if isinstance(node, ast.FunctionDef) and node.name in common:
-                if rng.random() < 0.5:
+                if _rng.random() < 0.5:
                     replacement = copy.deepcopy(funcs_b[node.name])
                     node.body = replacement.body
                     node.args = replacement.args
@@ -667,7 +675,7 @@ def component_evolve(
 
         # Pick a random component to mutate
         names = list(graph.components.keys())
-        name = rng.choice(names) if rng else random.choice(names)
+        name = rng.choice(names) if rng else ASTMutator._rng.choice(names)
         comp = graph.components[name]
 
         op = (rng or random).choice(["split", "merge", "evolve"])

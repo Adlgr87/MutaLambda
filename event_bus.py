@@ -6,11 +6,14 @@ island populations directly during a live run.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable, Deque, Dict, List, Optional
+
+log = logging.getLogger("mutalambda.event_bus")
 
 # Canonical event names (workflow §12)
 GENERATION_STARTED = "GenerationStarted"
@@ -78,8 +81,9 @@ class EventBus:
             try:
                 handler(event)
             except Exception:
-                # Never let a consumer crash the evolution loop.
-                pass
+                # Never let a consumer crash the evolution loop — but log it
+                # so failures in telemetry/UI updates are debuggable.
+                log.exception("EventBus handler raised on event %s", event.name)
 
     def emit(
         self,
@@ -128,6 +132,7 @@ class CommandQueue:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._commands: Deque[Dict[str, Any]] = deque()
+        self._pause_event = threading.Event()
         self.paused: bool = False
         self.stop_requested: bool = False
 
@@ -136,10 +141,13 @@ class CommandQueue:
             cmd = {"command": command, **payload}
             if command == "pause":
                 self.paused = True
+                self._pause_event.clear()  # wait_if_paused will block
             elif command == "resume":
                 self.paused = False
+                self._pause_event.set()  # release any blocked wait
             elif command == "stop":
                 self.stop_requested = True
+                self._pause_event.set()  # release any blocked wait
             self._commands.append(cmd)
 
     def drain(self) -> List[Dict[str, Any]]:
@@ -149,8 +157,19 @@ class CommandQueue:
             return items
 
     def wait_if_paused(self, poll_sec: float = 0.05) -> None:
+        """Block efficiently while a pause is requested.
+
+        Uses threading.Event.wait() instead of time.sleep() so the pause is
+        interruptible and does not block the thread's event loop.
+        """
         while True:
             with self._lock:
                 if not self.paused or self.stop_requested:
                     return
-            time.sleep(poll_sec)
+                paused = True
+            if paused:
+                self._pause_event.wait(timeout=poll_sec)
+                # If stop was requested during the wait, exit immediately.
+                with self._lock:
+                    if self.stop_requested:
+                        return

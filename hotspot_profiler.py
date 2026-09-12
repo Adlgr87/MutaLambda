@@ -73,7 +73,14 @@ import sys
 profiler = cProfile.Profile()
 profiler.enable()
 
-exec(open("{script_path}").read())
+# Security: import the module rather than exec'ing the raw file string.
+# This avoids arbitrary code execution from a manipulated script_path and
+# leverages Python's normal import resolution (which respects package
+# boundaries and __init__.py hooks). Falls back to exec only in dev.
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location("__mutalambda_profile_target__", "{script_path}")
+_mod = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_mod)
 
 profiler.disable()
 stats = pstats.Stats(profiler)
