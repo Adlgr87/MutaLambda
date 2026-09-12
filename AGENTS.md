@@ -75,7 +75,7 @@ mutalambda doctor --fix    # Diagnose & auto-fix configuration issues
 mutalambda production file.py          # Run with production preset
 mutalambda scientific file.py          # Run with scientific preset (SVL, invariants)
 mutalambda dashboard [--text]          # Launch post-run visual dashboard
-mutalambda explain checkpoints/run_xxx # Explain evolution decisions from a run
+mutalambda explain-run checkpoints/run_xxx # Explain evolution decisions from a run
 ```
 
 ### Presets
