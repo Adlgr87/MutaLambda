@@ -92,9 +92,6 @@ def test_scientific_validation_disabled_passthrough(monkeypatch):
     monkeypatch.setattr(island, "_mutate_with_context", lambda c, s, e="": "def candidate():\n    return 1\n")
     monkeypatch.setattr(island_module.random, "random", lambda: 0.5)
     monkeypatch.setattr(island_module.ASTMutator, "apply_random_mutation", lambda c: "def candidate():\n    return 1\n")
-    # Remote's Phase 6.5 short-circuits AST-only mutations to a reduced workflow
-    # that skips the SVL gate; force the full workflow so the gate is exercised.
-    monkeypatch.setattr(island, "_is_ast_only_mutation", lambda parent_code, mutated_code, strategy: False)
     
     island._evolve_local()
     
@@ -120,9 +117,6 @@ def test_scientific_validation_rejects_conservation_violation(monkeypatch):
     monkeypatch.setattr(island, "_mutate_with_context", lambda c, s, e="": "def candidate():\n    return 1\n")
     monkeypatch.setattr(island_module.random, "random", lambda: 0.5)
     monkeypatch.setattr(island_module.ASTMutator, "apply_random_mutation", lambda c: "def candidate():\n    return 1\n")
-    # Remote's Phase 6.5 short-circuits AST-only mutations to a reduced workflow
-    # that skips the SVL gate; force the full workflow so the gate is exercised.
-    monkeypatch.setattr(island, "_is_ast_only_mutation", lambda parent_code, mutated_code, strategy: False)
     
     island._evolve_local()
     
@@ -146,9 +140,6 @@ def test_scientific_validation_passthrough_when_enabled_clean(monkeypatch):
     monkeypatch.setattr(island, "_mutate_with_context", lambda c, s, e="": "def candidate():\n    return 1\n")
     monkeypatch.setattr(island_module.random, "random", lambda: 0.5)
     monkeypatch.setattr(island_module.ASTMutator, "apply_random_mutation", lambda c: "def candidate():\n    return 1\n")
-    # Remote's Phase 6.5 short-circuits AST-only mutations to a reduced workflow
-    # that skips the SVL gate; force the full workflow so the gate is exercised.
-    monkeypatch.setattr(island, "_is_ast_only_mutation", lambda parent_code, mutated_code, strategy: False)
     
     island._evolve_local()
     

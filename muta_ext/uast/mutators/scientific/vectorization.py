@@ -2,23 +2,12 @@
 
 import random
 from typing import Optional
-from muta_ext.uast.core_uast import (
-    CoreUAST,
-    Node,
-    BinaryOp,
-    Function,
-    For,
-    Identifier,
-    Assign,
-    Call,
-    LiteralNode,
-)
+from muta_ext.uast.core_uast import CoreUAST, Node, BinaryOp, Function, For, Identifier, Assign, Call, LiteralNode
 from muta_ext.uast.mutators.scientific.base_mutator import BaseScientificMutator, MutationResult
 
 
 class SafeVectorizationMutator(BaseScientificMutator):
     """Mutador que vectoriza bucles simples a operaciones numpy."""
-
     name = "safe_vectorization"
     strength = 0.2
 
@@ -38,15 +27,14 @@ class SafeVectorizationMutator(BaseScientificMutator):
 
         if not changed:
             return MutationResult(
-                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)), applied=False
+                CoreUAST(list(uast.body), uast.language, dict(uast.metadata)),
+                applied=False
             )
 
         return MutationResult(
             CoreUAST(new_body, uast.language, dict(uast.metadata)),
-            applied=True,
-            description="; ".join(descs),
-            score_impact=0.3,
-            confidence=0.5,
+            applied=True, description="; ".join(descs),
+            score_impact=0.3, confidence=0.5
         )
 
     def _try_vectorize(self, func: Function, rng: random.Random, descs: list) -> Function:
@@ -60,12 +48,8 @@ class SafeVectorizationMutator(BaseScientificMutator):
                     descs.append(f"Vectorized in {func.name.name}")
         if changed:
             return Function(
-                func.name,
-                list(func.params),
-                new_body,
-                list(func.decorators),
-                func.return_type,
-                func.tag,
+                func.name, list(func.params), new_body,
+                list(func.decorators), func.return_type, func.tag
             )
         return func
 
@@ -99,5 +83,6 @@ class SafeVectorizationMutator(BaseScientificMutator):
             return None
 
         return Assign(
-            stmt.target, Call(Identifier("np.sum"), [Identifier(stmt.value.right.func.name)])
+            stmt.target,
+            Call(Identifier("np.sum"), [Identifier(stmt.value.right.func.name)])
         )

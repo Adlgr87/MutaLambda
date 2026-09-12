@@ -1,0 +1,315 @@
+{
+ "benchmark": "EffiBench",
+ "mode": "baseline",
+ "config": {
+  "parquet": "/tmp/effibench_train.parquet",
+  "tasks": 20,
+  "skip": 0,
+  "smoke": false,
+  "baseline_only": true,
+  "llm": false,
+  "backend": "ollama",
+  "model": "qwen2.5-coder:7b",
+  "samples": 7,
+  "warmups": 2,
+  "timeout": 10.0,
+  "memory_mb": 512,
+  "min_improvement": 0.05,
+  "out": "benchmarks/results_effibench.json"
+ },
+ "summary": {
+  "n_tasks": 20,
+  "n_valid_comparisons": 0,
+  "n_baseline_fail": 0,
+  "median_ratio_to_canonical": null,
+  "mean_ratio_to_canonical": null,
+  "max_ratio_to_canonical": null,
+  "opt_pct": null,
+  "mean_speedup_when_improved": null,
+  "max_speedup": null,
+  "llm_correctness_rate": null,
+  "note": "opt threshold: ratio < 0.95"
+ },
+ "results": [
+  {
+   "problem_idx": 3,
+   "task_name": "Longest Substring Without Repeating Characters",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 67.8005,
+    "memory_peak_mb": 30.59,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 4,
+   "task_name": "Median of Two Sorted Arrays",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 70.1299,
+    "memory_peak_mb": 30.64,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 10,
+   "task_name": "Regular Expression Matching",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 68.3404,
+    "memory_peak_mb": 30.68,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 11,
+   "task_name": "Container With Most Water",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 68.2931,
+    "memory_peak_mb": 30.72,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 22,
+   "task_name": "Generate Parentheses",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 131.5026,
+    "memory_peak_mb": 31.66,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 26,
+   "task_name": "Remove Duplicates from Sorted Array",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 69.3153,
+    "memory_peak_mb": 31.66,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 28,
+   "task_name": "Find the Index of the First Occurrence in a String",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 67.7781,
+    "memory_peak_mb": 31.66,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 29,
+   "task_name": "Divide Two Integers",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 67.214,
+    "memory_peak_mb": 31.66,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 32,
+   "task_name": "Longest Valid Parentheses",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 70.878,
+    "memory_peak_mb": 31.66,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 35,
+   "task_name": "Search Insert Position",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 1119.5717,
+    "memory_peak_mb": 36.73,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 40,
+   "task_name": "Combination Sum II",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 68.9662,
+    "memory_peak_mb": 36.73,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 44,
+   "task_name": "Wildcard Matching",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 67.9448,
+    "memory_peak_mb": 36.73,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 46,
+   "task_name": "Permutations",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 225.2287,
+    "memory_peak_mb": 36.73,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 49,
+   "task_name": "Group Anagrams",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 71.3297,
+    "memory_peak_mb": 36.73,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 51,
+   "task_name": "N",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 291.9734,
+    "memory_peak_mb": 36.73,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 52,
+   "task_name": "N",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 150.8163,
+    "memory_peak_mb": 36.73,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 55,
+   "task_name": "Jump Game",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 1045.0108,
+    "memory_peak_mb": 40.23,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 56,
+   "task_name": "Merge Intervals",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 72.1222,
+    "memory_peak_mb": 40.23,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 62,
+   "task_name": "Unique Paths",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 67.3828,
+    "memory_peak_mb": 40.23,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  },
+  {
+   "problem_idx": 63,
+   "task_name": "Unique Paths II",
+   "n_tests": 100,
+   "baseline": {
+    "correctness": 1.0,
+    "p50_ms": 74.9295,
+    "memory_peak_mb": 40.23,
+    "tests_passed": 100,
+    "tests_total": 100
+   },
+   "status": "baseline",
+   "n_baseline_tests_ok": 100
+  }
+ ]
+}

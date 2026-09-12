@@ -40,24 +40,18 @@ def energy_step(particles, dt):
     update_positions(particles, dt)
     energy = compute_total_energy(particles)
     mass = sum(p["mass"] for p in particles)
-    return {"total_energy": energy, "mass_delta": 0.0, "temperature": energy / max(mass, 1e-10)}
+    return {"total_energy": energy, "mass_delta": 0.0,
+            "temperature": energy / max(mass, 1e-10)}
 
 
 def run_simulation(num_particles=1000, steps=100, dt=0.01):
     """Ejecuta simulación completa."""
     import random
-
     rng = random.Random(42)
-    particles = [
-        {
-            "x": rng.uniform(0, 100),
-            "y": rng.uniform(0, 100),
-            "vx": rng.uniform(-10, 10),
-            "vy": rng.uniform(-10, 10),
-            "mass": rng.uniform(0.1, 10.0),
-        }
-        for _ in range(num_particles)
-    ]
+    particles = [{"x": rng.uniform(0, 100), "y": rng.uniform(0, 100),
+                  "vx": rng.uniform(-10, 10), "vy": rng.uniform(-10, 10),
+                  "mass": rng.uniform(0.1, 10.0)}
+                 for _ in range(num_particles)]
     trajectory = []
     for _ in range(steps):
         trajectory.append(energy_step(particles, dt))

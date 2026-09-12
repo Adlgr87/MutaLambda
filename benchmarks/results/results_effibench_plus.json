@@ -1,0 +1,71 @@
+{
+  "baseline": {
+    "suite": "EffiBench+ Scientific Mode",
+    "invariants_available": [
+      "energy_conservation",
+      "mass_balance",
+      "monotonicity",
+      "boundedness",
+      "conservation_law"
+    ],
+    "tasks": [
+      {
+        "name": "heat_diffusion",
+        "description": "2D heat diffusion solver - optimize while conserving total energy",
+        "status": "ok",
+        "p50_ms": 254.70903099994757,
+        "invariants": [
+          {
+            "name": "energy_conservation",
+            "critical": true
+          }
+        ]
+      },
+      {
+        "name": "projectile_motion",
+        "description": "Projectile motion with air resistance - conserve energy",
+        "status": "ok",
+        "p50_ms": 0.6731519997629221,
+        "invariants": [
+          {
+            "name": "energy_decrement",
+            "critical": true
+          }
+        ]
+      },
+      {
+        "name": "fluid_simulation",
+        "description": "Simple fluid simulation - conserve mass",
+        "status": "ok",
+        "p50_ms": 1.6805390000627085,
+        "invariants": [
+          {
+            "name": "mass_balance",
+            "critical": true
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "n_tasks": 3,
+      "n_passed": 3,
+      "mean_p50_ms": 85.69,
+      "median_p50_ms": 1.68
+    }
+  },
+  "optimized": {
+    "suite": "EffiBench+ Scientific Mode (MutaLambda-optimized)",
+    "tasks": [
+      {
+        "name": "heat_diffusion",
+        "status": "ok",
+        "p50_ms": 480.2421289996346
+      }
+    ],
+    "summary": {
+      "n_tasks": 1,
+      "n_passed": 1,
+      "mean_p50_ms": 480.24
+    }
+  }
+}

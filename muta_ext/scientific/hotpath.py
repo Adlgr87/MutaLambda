@@ -55,11 +55,8 @@ def profile_code(
         stats.print_stats()
 
         return _parse_cprofile_output(
-            stream.getvalue(),
-            entry_point,
-            min_cumulative_pct,
-            max_hot_functions,
-            _get_total_time(stats),
+            stream.getvalue(), entry_point, min_cumulative_pct,
+            max_hot_functions, _get_total_time(stats),
         )
 
     except RuntimeError:
@@ -90,26 +87,27 @@ def profile_workload(
 
     try:
         hot_paths = profile_code(
-            entry_point=entry_point,
-            workload=workload,
+            entry_point=entry_point, workload=workload,
             profiler=config.profiler,
             min_cumulative_pct=config.min_cumulative_pct,
             max_hot_functions=config.max_hot_functions,
         )
         total = sum(hp.cumulative_time for hp in hot_paths) if hot_paths else 0.0
         return HotPathResult(
-            hot_paths=hot_paths, total_time=total, profiler=config.profiler, entry_point=entry_point
+            hot_paths=hot_paths, total_time=total,
+            profiler=config.profiler, entry_point=entry_point
         )
     except RuntimeError as exc:
-        return HotPathResult(profiler=config.profiler, entry_point=entry_point, error=str(exc))
+        return HotPathResult(
+            profiler=config.profiler, entry_point=entry_point, error=str(exc)
+        )
 
 
 # ── Internal helpers ──────────────────────────────────────────
 
-
 def _get_total_time(stats: pstats.Stats) -> float:
     """Extrae el tiempo total de ejecución de las estadísticas."""
-    return getattr(stats, "total_tt", 0.0)
+    return getattr(stats, 'total_tt', 0.0)
 
 
 def _parse_cprofile_output(
@@ -156,8 +154,8 @@ def _parse_cprofile_output(
             continue
 
         if "(" in location and location.endswith(")"):
-            func_part = location[location.rindex("(") + 1 : location.rindex(")")]
-            file_part = location[: location.rindex("(") - 1]
+            func_part = location[location.rindex("(") + 1:location.rindex(")")]
+            file_part = location[:location.rindex("(") - 1]
         else:
             func_part, file_part = location, ""
 
@@ -184,17 +182,12 @@ def _parse_cprofile_output(
         if func_part.startswith("<"):
             continue
 
-        hot_paths.append(
-            HotPath(
-                function_name=func_part,
-                file_path=file_part,
-                cumulative_time=cumtime,
-                cumulative_pct=round(pct, 2),
-                call_count=call_count,
-                is_entry=(func_part == entry_point),
-                line_number=line_number,
-            )
-        )
+        hot_paths.append(HotPath(
+            function_name=func_part, file_path=file_part,
+            cumulative_time=cumtime, cumulative_pct=round(pct, 2),
+            call_count=call_count, is_entry=(func_part == entry_point),
+            line_number=line_number,
+        ))
 
     hot_paths = [hp for hp in hot_paths if hp.cumulative_pct >= min_pct]
     hot_paths.sort(key=lambda hp: hp.cumulative_time, reverse=True)

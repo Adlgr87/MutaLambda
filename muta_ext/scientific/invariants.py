@@ -19,7 +19,6 @@ class ScientificInvariant:
         check: Función que recibe (result_dict, context) y retorna bool
         severity: "hard" (falla rechaza candidato) o "soft" (penaliza pero permite continuar)
     """
-
     name: str
     description: str
     check: Callable[[Dict[str, Any], Dict[str, Any]], bool]
@@ -27,7 +26,6 @@ class ScientificInvariant:
 
 
 # ── Checks base ──────────────────────────────────────────────
-
 
 def check_energy_non_negative(result: Dict[str, Any], context: Dict[str, Any]) -> bool:
     """Verifica que la energía total no sea negativa."""
@@ -102,17 +100,16 @@ def check_numerical_stability(result: Dict[str, Any], context: Dict[str, Any]) -
 # ── Registro de invariantes base ─────────────────────────────
 
 BASE_INVARIANTS: List[ScientificInvariant] = [
-    ScientificInvariant(
-        "energy_non_negative", "Total energy >= -1e-9", check_energy_non_negative, "hard"
-    ),
-    ScientificInvariant("mass_conservation", "Mass change < 1e-8", check_mass_conservation, "hard"),
-    ScientificInvariant(
-        "physical_bounds", "Quantities in [1e-15, 1e15]", check_bounds_physical, "soft"
-    ),
-    ScientificInvariant("monotonicity_trend", "Entropy non-decreasing", check_monotonicity, "soft"),
-    ScientificInvariant(
-        "numerical_stability", "No NaN/Inf/overflow", check_numerical_stability, "hard"
-    ),
+    ScientificInvariant("energy_non_negative", "Total energy >= -1e-9",
+                        check_energy_non_negative, "hard"),
+    ScientificInvariant("mass_conservation", "Mass change < 1e-8",
+                        check_mass_conservation, "hard"),
+    ScientificInvariant("physical_bounds", "Quantities in [1e-15, 1e15]",
+                        check_bounds_physical, "soft"),
+    ScientificInvariant("monotonicity_trend", "Entropy non-decreasing",
+                        check_monotonicity, "soft"),
+    ScientificInvariant("numerical_stability", "No NaN/Inf/overflow",
+                        check_numerical_stability, "hard"),
 ]
 
 
