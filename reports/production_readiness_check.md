@@ -15,7 +15,7 @@
 | CI/CD workflows | ✅ | `.github/workflows/` |
 | API key fail-closed | ✅ | `muta_config.py:redact_secrets` |
 | Timeout limits on sandbox | ✅ | `muta_config.py:timeout_sec: 10.0` |
-| Test suite | ✅ | 567 passed, 20 skipped |
+| Test suite | ✅ | 828 passed (Phase 3 v2), 8 pre-existing failures (Py3.14 ast.Num, microvm bwrap) |
 | Health/readiness endpoints | ⚠️ N/A | CLI tool, no resident API server |
 | Structured logging | ✅ | `logging_setup.py` |
 | Rate limiting | ⚠️ N/A | Not applicable for CLI tool |
