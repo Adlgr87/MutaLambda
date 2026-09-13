@@ -115,6 +115,9 @@ class FitnessVector:
 
     def to_scalar(self) -> float:
         """Convert to scalar score. Correctness is a hard gate."""
+        # FIX (F18): Guard against NaN/Inf correctness — treat as worst case.
+        if math.isnan(self.correctness) or math.isinf(self.correctness):
+            return float("-inf")
         if self.correctness < 1.0:
             return self.correctness - 1.0  # All imperfect solutions rank below perfect
 

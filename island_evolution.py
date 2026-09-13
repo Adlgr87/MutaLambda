@@ -111,11 +111,16 @@ class IslandPool:
         max_workers: Optional[int] = None,
         backend: str = "thread",
         failure_policy: str = "continue_with_warning",
+        max_concurrent_islands: Optional[int] = None,
     ):
         self._max_workers = max_workers
         self.backend = backend
         self.failure_policy = failure_policy
         self._lock = threading.Lock()
+        # FIX (F14): Global semaphore to bound concurrent island evaluations,
+        # preventing thread-pool / file-descriptor exhaustion on burst mutations.
+        _concurrency = max_concurrent_islands or min(32, (max_workers or 32))
+        self._concurrency_sem = threading.Semaphore(_concurrency)
         self._generation_snapshots: List[List[IslandSnapshot]] = []
         self._failures: List[IslandFailure] = []
 
@@ -151,8 +156,17 @@ class IslandPool:
 
         # ── Phase A/B: local evolution only ─────────────────────────────
         with ExecutorClass(max_workers=max_workers) as executor:
+            # FIX (F14): Acquire semaphore via wrapper to bound concurrency
+            # and prevent thread-pool / file-descriptor exhaustion on bursts.
+            def _bounded_step(island):
+                self._concurrency_sem.acquire()
+                try:
+                    return self._step_island_local(island)
+                finally:
+                    self._concurrency_sem.release()
+
             futures = {
-                executor.submit(self._step_island_local, island): island.id for island in islands
+                executor.submit(_bounded_step, island): island.id for island in islands
             }
 
             for future in as_completed(futures):
