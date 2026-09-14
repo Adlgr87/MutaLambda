@@ -30,7 +30,10 @@ class MigrationBus:
         self._islands_version: int = 0
         self._topology_version: int = 0
         self._cache_topology_version: int = -1
-        self._mesh_cols: int = 0
+        # FIX #23: _mesh_cols is unused - mesh and spatial_grid topologies overlap
+        # Attribute naming: spatial_topology is the runtime object,
+        # spatial_grid is the config string (topology enum value)
+        self._mesh_cols: int = 0  # Deprecated - kept for backward compat
         self.lineage_graph = None
         self.rng = random.Random()  # overridden by agent RNGSession when present
 
