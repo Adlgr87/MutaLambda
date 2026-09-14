@@ -50,16 +50,13 @@ __all__ = ["EvolveConfig", "EvolveResult", "run_evolution"]
 SUPPORTED_PROFILES = ("enterprise", "scientific", "gpu")
 SUPPORTED_LANGUAGES = ("python", "rust", "cpp")
 
-
-@dataclass
-
 # FIX #44: Protocol for optional migration_bus components (prevents getattr typos)
 class MigrationBusProtocol(Protocol):
-    """Protocol for optional migration bus components."""
+    """Protocol for optional migration_bus components."""
     def register_island(self, island_id: int, island: Any) -> None: ...
     def migrate(self, island_id: int, migrants: List[Any]) -> None: ...
 
-
+@dataclass
 class EvolveConfig:
     """Runtime configuration for the evolve orchestrator.
 
