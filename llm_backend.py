@@ -281,6 +281,9 @@ class LLMBackend:
         self.read_timeout_sec = float(
             read_timeout_sec if read_timeout_sec is not None else self.timeout_sec
         )
+        # Safety: ensure read_timeout_sec is always set
+        if not hasattr(self, 'read_timeout_sec'):
+            self.read_timeout_sec = self.timeout_sec
         # A1 (Fase 1): capped output for the JSON-schema contract.  When not
         # explicit, the cap comes from headroom.json_schema_output.max_tokens
         # (only while the schema mode flag is on — legacy runs stay uncapped).
@@ -308,7 +311,7 @@ class LLMBackend:
         self._total_calls = 0
         self._gen_calls = 0
         self._consecutive_failures = 0
-        self._circuit_opened_at: float = 0.0
+        self._circuit_opened_at: Optional[float] = None  # None = circuit closed
         self._request_errors: List[str] = []
 
         # Cost tracking state.

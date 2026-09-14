@@ -1,6 +1,9 @@
-"""
-Config loader — YAML declarative configuration for MutaLambda.
+"""🔴 DEPRECATED: config_loader.py (uses dict-based config).
+FIX #17: This is a legacy config loader. The canonical system is muta_config.py (Pydantic).
+Migration path: Use `from muta_config import MutaConfig, from_yaml` instead.
+This file will be deprecated and removed in Phase 4.
 
+Config loader — YAML declarative configuration for MutaLambda.
 Provides validation and conversion to EvolveConfig dataclass.
 """
 

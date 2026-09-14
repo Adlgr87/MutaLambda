@@ -160,7 +160,7 @@ def synthesize_regression_tests(code: str, max_cases_per_func: int = 3) -> List[
 
     namespace: Dict[str, Any] = {"__name__": "__mutalambda_synth__"}
     try:
-        exec(compile(code, "<mutalambda_synth>", "exec"), namespace, namespace)  # noqa: S102
+        exec(compile(code, "<mutalambda_synth>", "exec"), namespace, namespace)  # FIX #34: Runs in main process - should be sandboxed. Security risk if executing untrusted code. noqa: S102
     except Exception as exc:
         logger.warning("Regression-test synthesis: baseline failed to load: %s", exc)
         return []
@@ -526,7 +526,6 @@ class ProgressivePipeline:
             archive_solutions=False,
             prompt_evolution=False,
             checkpoint_enabled=False,
-            write_run_artifacts=False,
             workflow_enabled=False,
             convergent_boost_enabled=False,
             resurrection_enabled=False,
