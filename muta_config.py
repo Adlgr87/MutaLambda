@@ -97,7 +97,7 @@ class LLMSection(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     enabled: bool = False  # FIX #9: Dead field - has NO effect. LLM usage is controlled at evolution level.
-    provider: Literal["openai"] = "openai"
+    provider: Literal["openai"] = "openai"  # FIX #11: Only openai supported (others documented but not implemented)
     mutator_model: str = "gpt-4o-mini"  # Used by LLM mutator (openai provider)
     mutator_temperature: float = Field(0.1, ge=0.0, le=2.0)
     mutator_max_tokens: int = Field(1400, ge=1)
