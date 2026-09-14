@@ -4,8 +4,10 @@ import numpy as np
 
 try:
     from mutalambda_engines.archive import SolutionArchive
+    # Check for actual dependencies, not just import
+    import faiss  # noqa: F401
     HAS_FAISS = True
-except ImportError:
+except (ImportError, AttributeError):
     HAS_FAISS = False
 
 @pytest.mark.skipif(not HAS_FAISS, reason="faiss-cpu not installed")
