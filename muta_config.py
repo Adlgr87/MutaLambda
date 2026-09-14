@@ -96,14 +96,14 @@ class PrivacySection(BaseModel):
 class LLMSection(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    enabled: bool = False
+    enabled: bool = False  # FIX #9: Dead field - has NO effect. LLM usage is controlled at evolution level.
     provider: Literal["openai"] = "openai"
-    mutator_model: str = "gpt-4o-mini"
+    mutator_model: str = "gpt-4o-mini"  # Used by LLM mutator (openai provider)
     mutator_temperature: float = Field(0.1, ge=0.0, le=2.0)
     mutator_max_tokens: int = Field(1400, ge=1)
     mutator_timeout_sec: float = Field(60.0, gt=0)
     backend: Literal["ollama", "openai", "anthropic", "openrouter", "mistral"] = "ollama"
-    model: str = "llama3.2:3b"
+    model: str = "llama3.2:3b"  # Default LLM (overridden by mutator_model)
     timeout_sec: float = Field(60.0, gt=0)
     temperature: float = Field(0.2, ge=0.0, le=2.0)
     max_retries: int = Field(3, ge=0)
@@ -142,9 +142,9 @@ class BenchmarkSection(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     warmups: int = Field(0, ge=0)
-    samples: int = Field(1, ge=1)
+    samples: int = Field(1, ge=1)  # Number of independent samples (mean over these)
     operations_per_case: int = Field(1, ge=1)
-    repetitions: int = Field(1, ge=1)
+    repetitions: int = Field(1, ge=1)  # Re-runs per sample (for variance)
 
 
 class WorkflowSection(BaseModel):
@@ -177,7 +177,8 @@ class UASTSection(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     use_uast: bool = False
-    supported_languages: List[str] = Field(default_factory=lambda: ["python", "rust"])
+    # FIX #16: Updated to match MULTILANGUAGE_REPORT.md and docs/config-reference.md
+    supported_languages: List[str] = Field(default_factory=lambda: ["python", "rust", "cpp", "go"])
     uast_endpoint: str = ""
     uast_timeout_sec: float = Field(30.0, gt=0)
     cache_enabled: bool = True
