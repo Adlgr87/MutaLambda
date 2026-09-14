@@ -8,6 +8,10 @@ Migration path:
 - Use `from muta_config import MutaConfig, from_yaml` instead
 - This file will be deprecated and removed in Phase 4
 """
+"""🔴 DEPRECATED: Use `muta_config.py` instead.
+This file is maintained for backward compatibility only (FIX #18).
+"""
+
 """
 Config loader — YAML declarative configuration for MutaLambda.
 

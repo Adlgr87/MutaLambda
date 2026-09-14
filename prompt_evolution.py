@@ -1,8 +1,6 @@
-"""
-🔴 DEPRECATED: Use `prompt_evolver.py` instead. This file is maintained for backward compatibility only.
-See FIX #18 - module consolidation.
-"""
-"""
+"""🔴 DEPRECATED: Use `prompt_evolver.py` instead.
+This file is maintained for backward compatibility only (FIX #18).
+
 RichPromptEvolver — Meta-evolution of PromptGenome populations.
 
 Enhances the basic PromptEvolver with:
@@ -10,6 +8,9 @@ Enhances the basic PromptEvolver with:
   • Crossover between two parent prompt genomes
   • Archive-aware few-shot example evolution (draws from SolutionArchive)
   • Diversity tracking to avoid prompt population convergence
+  • Multi-objective prompt fitness: code quality + code diversity + consistency
+"""
+
   • Multi-objective prompt fitness: code quality + code diversity + consistency
 """
 

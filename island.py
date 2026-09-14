@@ -1,8 +1,8 @@
+"""🔴 DEPRECATED: Use `island_evolution.py` instead. This file is
+maintained for backward compatibility only (FIX #18 – module consolidation).
+
+Island evolution unit.
 """
-🔴 DEPRECATED: Use `island_evolution.py` instead. This file is maintained for backward compatibility only.
-See FIX #18 - module consolidation.
-"""
-"""Island evolution unit."""
 
 from __future__ import annotations
 
