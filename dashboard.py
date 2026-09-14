@@ -1,4 +1,8 @@
 """
+🔴 DEPRECATED: Use `dashboard_run.py` instead. This file is maintained for backward compatibility only.
+See FIX #18 - module consolidation.
+"""
+"""
 MutaLambda HITL Dashboard — Streamlit interface for Human-in-the-Loop.
 
 Features:

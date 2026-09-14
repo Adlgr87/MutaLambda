@@ -53,7 +53,11 @@ SUPPORTED_LANGUAGES = ("python", "rust", "cpp")
 
 @dataclass
 class EvolveConfig:
-    """Runtime configuration for the evolve orchestrator."""
+    """Runtime configuration for the evolve orchestrator.
+
+    FIX #24: should_stop and combined_best_score are runtime state, not config.
+    They are kept here for backward compat but should be moved to the engine instance.
+    """
 
     uast_path: Path
     profile: str = "enterprise"

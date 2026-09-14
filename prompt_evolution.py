@@ -1,4 +1,8 @@
 """
+🔴 DEPRECATED: Use `prompt_evolver.py` instead. This file is maintained for backward compatibility only.
+See FIX #18 - module consolidation.
+"""
+"""
 RichPromptEvolver — Meta-evolution of PromptGenome populations.
 
 Enhances the basic PromptEvolver with:
