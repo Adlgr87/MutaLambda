@@ -796,7 +796,16 @@ def _run_with_preset(ctx, preset_name, file_arg):
     import yaml
 
     cm = ConfigManager()
-    preset_path = Path("presets") / f"{preset_name}.yaml"
+    # Use importlib.resources for package-relative path (works when installed via pip)
+    import importlib.resources as pkg_resources
+    try:
+        # When installed as package
+        import cli as _cli_pkg
+        with pkg_resources.path(_cli_pkg, "presets") as _presets_dir:
+            preset_path = _presets_dir / f"{preset_name}.yaml"
+    except (ImportError, FileNotFoundError):
+        # Fallback to local path for development
+        preset_path = Path("presets") / f"{preset_name}.yaml"
     if not preset_path.exists():
         console.print(f"[red]✗ Preset no encontrado: {preset_path}[/red]")
         sys.exit(1)
@@ -878,7 +887,15 @@ def recommend(ctx, file, apply, output):
     console.print(f"  Razón: {reason}")
 
     # read actual preset file for accurate key values
-    preset_path = Path("presets") / f"{preset}.yaml"
+    # Use importlib.resources for package-relative path
+    import importlib.resources as pkg_resources
+    try:
+        import cli as _cli_pkg
+        with pkg_resources.path(_cli_pkg, "presets") as _presets_dir:
+            preset_path = _presets_dir / f"{preset}.yaml"
+    except (ImportError, FileNotFoundError):
+        preset_path = Path("presets") / f"{preset}.yaml"
+    
     if preset_path.exists():
         pdata = yaml.safe_load(preset_path.read_text())
     else:

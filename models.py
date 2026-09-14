@@ -39,7 +39,7 @@ class Individual:
     """
 
     code: str
-    score: float = float("-inf")
+    score: float = -1.0  # -1.0 = not yet evaluated (consistent with EvalResult.score)
     fitness: Optional[FitnessVector] = None
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     parent_ids: Optional[List[str]] = None
@@ -318,7 +318,7 @@ class LineageGraph:
                 id=ndata["id"],
                 generation=ndata["generation"],
                 score=ndata["score"],
-                code_hash=ndata.get("code_hash", 0),
+                code_hash=ndata.get("code_hash", ""),
                 code=ndata.get("code", ""),
                 fitness=ndata.get("fitness", {}),
                 island_id=ndata.get("island_id", 0),

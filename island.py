@@ -49,8 +49,15 @@ class Island:
         self.llm_fn = llm_fn
         self.evaluator = evaluator
         self.migration_bus = migration_bus
-        # Per-island RNG (wired from RNGSession when available; FIX 2.1)
-        self.rng = random.Random()
+        # Per-island RNG (wired from RNGSession when available; FIX 8)
+        # ReproducibilitySection.seed feeds through RNGSession.master_seed,
+        # and RNGSession.island(island_id) derives a per-island seed from it.
+        # Fall back to unseeded Random() only when no RNGSession is provided.
+        rng_session = getattr(config, "rng_session", None)
+        if rng_session is not None:
+            self.rng = rng_session.island(island_id)
+        else:
+            self.rng = random.Random()
         self.core_engine = CoreEvolutionEngine()
 
         self.population: List[Individual] = []

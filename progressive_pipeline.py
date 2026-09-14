@@ -526,7 +526,6 @@ class ProgressivePipeline:
             archive_solutions=False,
             prompt_evolution=False,
             checkpoint_enabled=False,
-            write_run_artifacts=False,
             workflow_enabled=False,
             convergent_boost_enabled=False,
             resurrection_enabled=False,
