@@ -11,9 +11,6 @@ Enhances the basic PromptEvolver with:
   • Multi-objective prompt fitness: code quality + code diversity + consistency
 """
 
-  • Multi-objective prompt fitness: code quality + code diversity + consistency
-"""
-
 from __future__ import annotations
 
 import copy
