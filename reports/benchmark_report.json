@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T13:54:38.329790+00:00",
+  "generated_at": "2026-09-14T13:59:37.164983+00:00",
   "config": {
     "num_repeats": 1,
     "num_generations": 2,
@@ -13,13 +13,13 @@
     {
       "benchmark_name": "quadratic_sphere",
       "method": "cpu",
-      "duration_sec": 6.396000026143156e-05,
+      "duration_sec": 5.860800047230441e-05,
       "score": 6.4540123716710625,
       "throughput": 400.0,
       "memory_mb": 0.0,
       "success": true,
       "error": null,
-      "timestamp": "2026-09-14T13:54:36.669705+00:00",
+      "timestamp": "2026-09-14T13:59:35.178946+00:00",
       "details": {
         "generations": 2,
         "population_size": 4
@@ -28,13 +28,13 @@
     {
       "benchmark_name": "quadratic_sphere",
       "method": "cpu",
-      "duration_sec": 2.1466999896802008e-05,
+      "duration_sec": 2.0970999685232528e-05,
       "score": 6.4540123716710625,
       "throughput": 400.0,
       "memory_mb": 0.0,
       "success": true,
       "error": null,
-      "timestamp": "2026-09-14T13:54:36.669742+00:00",
+      "timestamp": "2026-09-14T13:59:35.178983+00:00",
       "details": {
         "generations": 2,
         "population_size": 4
@@ -43,13 +43,13 @@
     {
       "benchmark_name": "quadratic_sphere",
       "method": "gpu",
-      "duration_sec": 1.6597098270012793,
-      "score": 5.184492079062549,
-      "throughput": 135620.804020698,
+      "duration_sec": 1.9856836199996906,
+      "score": 6.4540123716710625,
+      "throughput": 192502.0462910439,
       "memory_mb": 0,
       "success": true,
       "error": null,
-      "timestamp": "2026-09-14T13:54:38.329529+00:00",
+      "timestamp": "2026-09-14T13:59:37.164747+00:00",
       "details": {
         "generations": 2,
         "population_size": 4
@@ -63,13 +63,13 @@
     "by_method": {
       "cpu": {
         "count": 2,
-        "duration_mean": 4.2713500079116784e-05,
+        "duration_mean": 3.978950007876847e-05,
         "score_mean": 6.4540123716710625
       },
       "gpu": {
         "count": 1,
-        "duration_mean": 1.6597098270012793,
-        "score_mean": 5.184492079062549
+        "duration_mean": 1.9856836199996906,
+        "score_mean": 6.4540123716710625
       }
     }
   }

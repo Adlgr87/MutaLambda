@@ -38,7 +38,7 @@ import sys
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Protocol
 
 from hfc_tiers import (
     HFCLeagueEngine,
@@ -52,6 +52,14 @@ SUPPORTED_LANGUAGES = ("python", "rust", "cpp")
 
 
 @dataclass
+
+# FIX #44: Protocol for optional migration_bus components (prevents getattr typos)
+class MigrationBusProtocol(Protocol):
+    """Protocol for optional migration bus components."""
+    def register_island(self, island_id: int, island: Any) -> None: ...
+    def migrate(self, island_id: int, migrants: List[Any]) -> None: ...
+
+
 class EvolveConfig:
     """Runtime configuration for the evolve orchestrator.
 

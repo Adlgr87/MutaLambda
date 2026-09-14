@@ -37,6 +37,18 @@ except Exception:  # pragma: no cover - graceful degradation
 logger = logging.getLogger("MutaLambda")
 
 
+
+
+# FIX #44: Protocol for optional migration_bus components (prevents getattr typos)
+from typing import Protocol
+
+class MigrationBusProtocol(Protocol):
+    """Protocol for optional migration bus components."""
+    def register_island(self, island_id: int, island: Any) -> None: ...
+    def migrate(self, island_id: int, migrants: List[Any]) -> None: ...
+    def operator_bandit(self) -> Any: ...
+    def metrics(self) -> Any: ...
+
 class Island:
     """Unidad de evolución independiente."""
 
