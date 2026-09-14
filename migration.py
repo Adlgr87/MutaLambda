@@ -8,12 +8,12 @@ import random
 import threading
 from typing import Dict, List, Optional, TYPE_CHECKING
 
-from island import Island
+from mutalambda_core.island import Island
 
 if TYPE_CHECKING:
     from metrics_exporter import MetricsRegistry  # noqa: F401
     from muta_lambda import SolutionArchive
-from models import Individual
+from mutalambda_core.models import Individual
 
 logger = logging.getLogger("MutaLambda")
 

@@ -26,10 +26,10 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
-from code_hash import stable_code_hash
+from mutalambda_core.code_hash import stable_code_hash
 from comparison import COMPARATORS, compare_values, register_predicate
-from fitness_vector import FitnessVector
-from models import EvalResult
+from mutalambda_engines.fitness_vector import FitnessVector
+from mutalambda_core.models import EvalResult
 
 logger = logging.getLogger("MutaLambda")
 

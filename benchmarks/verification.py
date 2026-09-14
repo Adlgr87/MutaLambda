@@ -15,7 +15,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from differential import differential_test, DifferentialResult
+from mutalambda_core.differential import differential_test, DifferentialResult
 from comparison import compare_values
 
 try:

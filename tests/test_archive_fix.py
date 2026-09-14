@@ -2,13 +2,21 @@
 import pytest
 import numpy as np
 
+# Check dependencies BEFORE importing archive module
+# (archive.py requires both faiss and sentence-transformers)
 try:
-    from archive import SolutionArchive
-    HAS_FAISS = True
+    import faiss  # noqa: F401
+    import sentence_transformers  # noqa: F401
+    HAS_DEPS = True
 except ImportError:
-    HAS_FAISS = False
+    HAS_DEPS = False
 
-@pytest.mark.skipif(not HAS_FAISS, reason="faiss-cpu not installed")
+if HAS_DEPS:
+    from mutalambda_engines.archive import SolutionArchive
+else:
+    SolutionArchive = None
+
+@pytest.mark.skipif(not HAS_DEPS, reason="faiss-cpu and sentence-transformers not installed")
 def test_archive_faiss_sync_after_dedupe():
     """Issue #1: FAISS index must sync after dedupe merge."""
     archive = SolutionArchive(max_size=3, embedder_model="all-MiniLM-L6-v2")
@@ -19,7 +27,7 @@ def test_archive_faiss_sync_after_dedupe():
     assert len(results) > 0
     assert results[0].metrics["score"] == 0.8
 
-@pytest.mark.skipif(not HAS_FAISS, reason="faiss-cpu not installed")
+@pytest.mark.skipif(not HAS_DEPS, reason="faiss-cpu and sentence-transformers not installed")
 def test_archive_api_consistency():
     """Issue #7: Consistent sentence-transformers API."""
     archive = SolutionArchive(max_size=2, embedder_model="all-MiniLM-L6-v2")

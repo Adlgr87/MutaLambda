@@ -24,7 +24,7 @@ import sys
 import typing as T
 from typing import Any, Dict, List, Optional
 
-from code_hash import stable_code_hash
+from mutalambda_core.code_hash import stable_code_hash
 
 from muta_ext.uast2 import core as v2
 from muta_ext.uast2.convert import legacy_to_v2
@@ -177,7 +177,7 @@ class PythonAdapterV2(BaseAdapterV2):
             self.extended = bool(extended)
         try:
             if use_cache:
-                from code_hash import cached_parse
+                from mutalambda_core.code_hash import cached_parse
 
                 tree = cached_parse(source)
             else:

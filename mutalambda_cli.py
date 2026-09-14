@@ -550,7 +550,7 @@ def checkpoints(ctx, list_mode, clean, max_age):
 @click.pass_context
 def migrate_checkpoints(ctx, paths, format_mode, overwrite):
     """🔄 Migrar checkpoints JSON a msgpack (o viceversa)."""
-    from checkpoint_manager import load_checkpoint, _serialise_checkpoint
+    from mutalambda_config.checkpoint_manager import load_checkpoint, _serialise_checkpoint
     import zlib
     import msgpack
 

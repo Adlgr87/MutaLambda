@@ -180,7 +180,7 @@ def run_before(codes: list[str]) -> dict:
 
 def run_after(codes: list[str]) -> dict:
     """Tiered ladder: N1 → N2 (subset, in-process) → N3 (top 20 % sandbox)."""
-    from tiered_evaluator import TieredEvaluator
+    from mutalambda_engines.tiered_evaluator import TieredEvaluator
 
     te = TieredEvaluator(
         TARGET, TESTS,

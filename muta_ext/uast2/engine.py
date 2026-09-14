@@ -124,7 +124,7 @@ def resolve_engine_config(
 
     if config is not None:
         if isinstance(config, (str, Path)):
-            from config_loader import load_yaml
+            from mutalambda_config.config_loader import load_yaml
 
             section = _from_mapping(load_yaml(config))
         elif isinstance(config, dict):

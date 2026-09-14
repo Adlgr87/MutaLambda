@@ -5,7 +5,7 @@ import ast
 import random
 from typing import Optional, List, Dict, Any
 
-from mutation_filters import _filter_mutant, ProfileMode
+from mutalambda_core.mutation_filters import _filter_mutant, ProfileMode
 
 
 def detect_parallel_for_candidates(
