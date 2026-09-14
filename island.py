@@ -444,7 +444,8 @@ class Island:
             return candidate_code
         return engine.refine(base_code, candidate_code, self.llm_fn)
 
-    def _pattern_signature(self, code: str) -> str:
+    def _pattern_signature(self, code: str, _cache: Dict[str, str] = None) -> str:
+        """FIX #31: Cache results by code_hash to avoid re-traversal."""
         """Compact AST shape signature for PatternMemory."""
         try:
             tree = cached_parse(code)

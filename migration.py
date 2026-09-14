@@ -59,6 +59,7 @@ class MigrationBus:
             logger.debug("Island %d registered in MigrationBus.", island_id)
 
     def _get_neighbors(self, island_id: int) -> List[int]:
+        """FIX #30: Build id->pos dict once for O(1) lookup instead of O(N) ids.index()."""
         """Calcula vecinos según topología. Debe llamarse con self._lock adquirido."""
         if (
             self._cache_version == self._islands_version
