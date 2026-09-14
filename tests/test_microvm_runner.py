@@ -174,7 +174,7 @@ def test_evaluation_service_last_mode_microvm_serial():
     """EvaluationService.last_mode reflects the active runner/serial mode."""
     if not shutil.which("bwrap"):
         pytest.skip("bwrap not installed (microvm runner now fails closed without it)")
-    from evaluation_service import EvaluationService
+    from mutalambda_core.evaluation_service import EvaluationService
 
     svc = EvaluationService(
         test_cases=[{"function": "add", "args": [1, 1], "expected": 2}],
@@ -190,7 +190,7 @@ def test_evaluation_service_last_mode_microvm_serial():
 
 def test_evaluation_service_last_mode_cache_only():
     """when all results are cached, last_mode='cache-only'."""
-    from evaluation_service import EvaluationService
+    from mutalambda_core.evaluation_service import EvaluationService
 
     svc = EvaluationService(
         test_cases=[{"function": "add", "args": [1, 1], "expected": 2}],
@@ -207,7 +207,7 @@ def test_evaluation_service_last_mode_cache_only():
 
 def test_evaluation_service_last_mode_pool_parallel():
     """subprocess mode with multiple workers sets parallel mode tag."""
-    from evaluation_service import EvaluationService
+    from mutalambda_core.evaluation_service import EvaluationService
 
     svc = EvaluationService(
         test_cases=[{"function": "add", "args": [1, 1], "expected": 2}],

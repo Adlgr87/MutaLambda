@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from island import Island
-from island_evolution import IslandFailure, IslandPool
+from mutalambda_core.island import Island
+from mutalambda_core.island_evolution import IslandFailure, IslandPool
 from migration import MigrationBus
-from models import Individual, IslandConfig
-from api_fingerprint import compare_api, extract_api_fingerprint
+from mutalambda_core.models import Individual, IslandConfig
+from mutalambda_security.api_fingerprint import compare_api, extract_api_fingerprint
 from benchmarking import BenchmarkConfig, BenchmarkResult, run_callable_benchmark
-from differential import differential_test
+from mutalambda_core.differential import differential_test
 
 
 class DummyEvaluator:
@@ -18,8 +18,8 @@ class DummyEvaluator:
         ]
 
     def evaluate_batch(self, codes):
-        from fitness_vector import FitnessVector
-        from models import EvalResult
+        from mutalambda_engines.fitness_vector import FitnessVector
+        from mutalambda_core.models import EvalResult
 
         out = []
         for _ in codes:

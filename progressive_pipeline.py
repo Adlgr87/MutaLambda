@@ -33,7 +33,7 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Callable, Any
 
-from fitness_vector import FitnessVector
+from mutalambda_engines.fitness_vector import FitnessVector
 from workflow_protocol import ComplexityGate
 
 logger = logging.getLogger("MutaLambda")

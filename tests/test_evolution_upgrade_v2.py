@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from checkpoint_manager import CheckpointData, _serialise_checkpoint
-from fitness_vector import FitnessVector
-from models import Individual, LineageGraph
+from mutalambda_config.checkpoint_manager import CheckpointData, _serialise_checkpoint
+from mutalambda_engines.fitness_vector import FitnessVector
+from mutalambda_core.models import Individual, LineageGraph
 from muta_ext.advanced_selection import AdvancedSelectionConfig, AdvancedSelectionEngine
 from muta_ext.dialectic_engine import DialecticConfig, DialecticEngine
 from muta_ext.pattern_memory import PatternMemory

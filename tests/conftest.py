@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from fitness_vector import FitnessVector
+from mutalambda_engines.fitness_vector import FitnessVector
 from tests.helpers import make_individual
 
 
@@ -24,7 +24,7 @@ def _reset_global_state():
     - Metric registry counters in metrics_exporter
     """
     try:
-        from evaluation_service import shutdown_all_pools
+        from mutalambda_core.evaluation_service import shutdown_all_pools
 
         shutdown_all_pools()
     except Exception:
@@ -43,7 +43,7 @@ def _reset_global_state():
         pass
     yield
     try:
-        from evaluation_service import shutdown_all_pools
+        from mutalambda_core.evaluation_service import shutdown_all_pools
 
         shutdown_all_pools()
     except Exception:

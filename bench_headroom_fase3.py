@@ -177,7 +177,7 @@ def _search(source: str, opt: str, archive=None, population: int = 12,
     operator (modelled LLM move) is offered with probability p per new
     candidate.  Returns the best-score trajectory.
     """
-    from evolution_engine import ASTMutator
+    from mutalambda_core.evolution_engine import ASTMutator
     from runners import SubprocessRunner
 
     tests = tests or TESTS

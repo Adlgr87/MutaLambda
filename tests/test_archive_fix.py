@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 
 try:
-    from archive import SolutionArchive
+    from mutalambda_engines.archive import SolutionArchive
     HAS_FAISS = True
 except ImportError:
     HAS_FAISS = False

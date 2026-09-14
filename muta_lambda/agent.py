@@ -27,7 +27,7 @@ from uuid import uuid4
 import numpy as np
 
 if TYPE_CHECKING:
-    from island_evolution import IslandSnapshot  # noqa: F401
+    from mutalambda_core.island_evolution import IslandSnapshot  # noqa: F401
 
 # Package-internal dependencies. These are defined in the package ``__init__``
 # *before* it imports this module, which avoids a circular-import problem:
@@ -324,7 +324,7 @@ class MutaLambdaAgent:
                 rng=self.rng_session.stream("bandit"),
             )
         # Register optional engines under EvolutionExtension contract (WF#20)
-        from extensions import wrap_engine
+        from mutalambda_core.extensions import wrap_engine
 
         for eng, name in (
             (self._hfc, "hfc"),
@@ -769,7 +769,7 @@ class MutaLambdaAgent:
 
         if gen % 5 == 0:
             try:
-                from nsga2 import get_nsga2_stats
+                from mutalambda_engines.nsga2 import get_nsga2_stats
 
                 all_inds = [ind for isl in self.islands for ind in isl.population]
                 nsga_stats = get_nsga2_stats(all_inds)
@@ -990,7 +990,7 @@ class MutaLambdaAgent:
 
     def _save_checkpoint(self, generation: int) -> Optional[str]:
         try:
-            from checkpoint_manager import save_full_checkpoint
+            from mutalambda_config.checkpoint_manager import save_full_checkpoint
 
             raw_config = getattr(self, "_raw_config", None)
             return save_full_checkpoint(

@@ -30,16 +30,16 @@ from muta_lambda import EvolveConfig, MutaLambdaAgent
 # symbol at runtime so the end-to-end benchmark can run with multi-island
 # populations, isolating ONLY the Phase 6 changes.
 import muta_lambda as _ml
-from mutation_filters import _filter_mutant
+from mutalambda_core.mutation_filters import _filter_mutant
 
 if not hasattr(_ml, "_filter_mutant"):
     _ml._filter_mutant = _filter_mutant
 
 
-from checkpoint_manager import CheckpointData, save_full_checkpoint, load_checkpoint
+from mutalambda_config.checkpoint_manager import CheckpointData, save_full_checkpoint, load_checkpoint
 
 try:
-    from checkpoint_manager import MSGPACK_THRESHOLD  # Phase 6 addition
+    from mutalambda_config.checkpoint_manager import MSGPACK_THRESHOLD  # Phase 6 addition
 except ImportError:
     MSGPACK_THRESHOLD = None  # before phase 6 had no msgpack threshold
 
@@ -64,7 +64,7 @@ SEED = (
 
 def mock_llm_fn(prompt: str) -> str:
     """Fast in-process 'LLM' that applies an AST mutation; avoids network/ollama."""
-    from evolution_engine import ASTMutator
+    from mutalambda_core.evolution_engine import ASTMutator
 
     lines = prompt.split("\n")
     code_lines = [
@@ -242,10 +242,10 @@ def bench_checkpoint_serialization(reps=3):
     report msgpack as N/A. In the 'after' state both are measured.
     """
     cp, total = make_checkpoint_data(n_islands=6, pop_per=80)
-    from checkpoint_manager import _serialise_checkpoint
+    from mutalambda_config.checkpoint_manager import _serialise_checkpoint
 
     try:
-        from checkpoint_manager import MSGPACK_THRESHOLD
+        from mutalambda_config.checkpoint_manager import MSGPACK_THRESHOLD
     except ImportError:
         MSGPACK_THRESHOLD = None
     serialised = _serialise_checkpoint(cp)

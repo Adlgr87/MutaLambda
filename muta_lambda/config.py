@@ -144,7 +144,7 @@ class EvolveConfig:
         Preferred path: unified Pydantic ``MutaLambdaConfig`` (CLI + core).
         """
         try:
-            from muta_config import MutaLambdaConfig
+            from mutalambda_config.muta_config import MutaLambdaConfig
 
             return MutaLambdaConfig.from_yaml(path).to_evolve_config()
         except Exception as _mlc_exc:
@@ -154,7 +154,7 @@ class EvolveConfig:
             _logging.getLogger("MutaLambda").debug(
                 "MutaLambdaConfig path failed (%s); using legacy from_yaml", _mlc_exc
             )
-        from config_loader import load_yaml
+        from mutalambda_config.config_loader import load_yaml
 
         cfg = load_yaml(path)
 
@@ -300,8 +300,8 @@ class EvolveConfig:
 
 
 # ── Tipos relacionados (Phase 2A extrae EarlyStopMonitor + GenerationResult) ──
-from models import Individual  # noqa: E402
-from island_evolution import IslandSnapshot  # noqa: E402
+from mutalambda_core.models import Individual  # noqa: E402
+from mutalambda_core.island_evolution import IslandSnapshot  # noqa: E402
 
 __all__ = ["EvolveConfig", "EarlyStopMonitor", "GenerationResult"]
 

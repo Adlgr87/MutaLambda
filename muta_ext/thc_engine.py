@@ -8,7 +8,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from models import Individual
+from mutalambda_core.models import Individual
 
 
 @dataclass
