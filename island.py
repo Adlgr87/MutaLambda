@@ -388,6 +388,8 @@ class Island:
                 pass
 
     def _mutate(self, code: str) -> str:
+        """FIX #21: Legacy mutation (generic prompt). Use _mutate_with_context for LLM-guided mutation."""
+        """Mutación híbrida: AST o LLM."""
         """Mutación híbrida: AST o LLM."""
         if self.rng.random() < 0.4:
             return ASTMutator.apply_random_mutation(code)
