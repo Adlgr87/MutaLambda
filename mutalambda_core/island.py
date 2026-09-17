@@ -357,14 +357,27 @@ class Island:
         return "mutation"
 
     def _update_operator_bandit(self, results: List[Any]) -> None:
-        """Credit operators from evaluated individuals (WF#17 rewards)."""
+        """Credit operators from evaluated individuals (WF#17 rewards).
+
+        D15 / A3 (Fase 1): when MUTALAMBDA_OPT_HEADROOM__BANDIT__ENABLED is on,
+        the cost-aware reward (Δfitness / tokens) is used and per-arm LLM tokens
+        are credited via bandit.update_cost_aware.
+        """
         bandit = getattr(self.migration_bus, "operator_bandit", None)
         if bandit is None:
             return
         try:
-            from operator_bandit import compute_operator_reward
+            from operator_bandit import compute_cost_aware_reward, compute_operator_reward
         except Exception:
             return
+        # A3 (Fase 1): when HEADROOM__BANDIT__ENABLED is on, switch to the
+        # cost-aware reward (Δfitness / tokens) and credit per-arm LLM tokens.
+        cost_aware = False
+        try:
+            from optimization_flags import get_optimization_flags
+            cost_aware = bool(get_optimization_flags().enabled("headroom.bandit.enabled"))
+        except Exception:
+            cost_aware = False
         for ind, res in zip(self.population, results):
             op = getattr(ind, "operator", None) or getattr(ind, "creation_reason", None)
             if not op or op in {"seed", "laboratory"}:
@@ -382,20 +395,39 @@ class Island:
                 improved = gain > 0
             elif correct and ind.score > float("-inf"):
                 improved = True
-            reward = compute_operator_reward(
-                syntax_or_security_failure=syntax_fail and not correct,
-                correct=correct,
-                improved=improved,
-                gain=max(0.0, gain) if improved else 0.0,
-            )
+            valid = correct and not syntax_fail
+            delta_gain = max(0.0, gain) if improved else 0.0
             try:
-                bandit.update(
-                    op,
-                    reward,
-                    valid=correct and not syntax_fail,
-                    improved=improved,
-                    gain=gain,
-                )
+                if cost_aware:
+                    tokens = int(getattr(ind, "llm_tokens", 0) or 0)
+                    reward = compute_cost_aware_reward(
+                        syntax_or_security_failure=syntax_fail and not correct,
+                        correct=correct,
+                        improved=improved,
+                        delta_fitness=delta_gain,
+                        tokens=tokens,
+                    )
+                    bandit.update_cost_aware(
+                        op,
+                        reward,
+                        valid=valid,
+                        improved=improved,
+                        tokens=tokens,
+                    )
+                else:
+                    reward = compute_operator_reward(
+                        syntax_or_security_failure=syntax_fail and not correct,
+                        correct=correct,
+                        improved=improved,
+                        gain=delta_gain,
+                    )
+                    bandit.update(
+                        op,
+                        reward,
+                        valid=valid,
+                        improved=improved,
+                        gain=gain,
+                    )
             except Exception:
                 pass
 
