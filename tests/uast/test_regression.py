@@ -18,14 +18,14 @@ class TestUASTRegression:
 
     def test_uast_config_default_false(self):
         """UAST should be disabled by default for safe adoption."""
-        from muta_config import MutaLambdaConfig
+        from mutalambda_config.muta_config import MutaLambdaConfig
 
         config = MutaLambdaConfig()
         assert config.uast.use_uast is False
 
     def test_uast_supported_languages_default(self):
         """Default supported languages should be python and rust."""
-        from muta_config import MutaLambdaConfig
+        from mutalambda_config.muta_config import MutaLambdaConfig
 
         config = MutaLambdaConfig()
         assert "python" in config.uast.supported_languages

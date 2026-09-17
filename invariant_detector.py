@@ -258,7 +258,7 @@ def _collect_scalars(uast: Dict[str, Any]) -> List[Tuple[str, str]]:
 
 def detect_invariants(uast: Dict[str, Any], source: str = "") -> InvariantsLock:
     """Analyze a CoreUAST dict (and optional source) for preserved invariants."""
-    from code_hash import stable_code_hash
+    from mutalambda_core.code_hash import stable_code_hash
 
     source_hash = (
         stable_code_hash(source) if source else uast.get("metadata", {}).get("source_hash", "")

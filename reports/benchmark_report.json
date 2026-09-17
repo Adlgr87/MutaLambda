@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T00:53:35.292587+00:00",
+  "generated_at": "2026-10-05T01:25:46.522889+00:00",
   "config": {
     "num_repeats": 1,
     "num_generations": 2,
@@ -13,13 +13,13 @@
     {
       "benchmark_name": "quadratic_sphere",
       "method": "cpu",
-      "duration_sec": 3.084399941144511e-05,
+      "duration_sec": 0.0002032430002145702,
       "score": 6.4540123716710625,
       "throughput": 400.0,
       "memory_mb": 0.0,
       "success": true,
       "error": null,
-      "timestamp": "2026-09-13T00:53:35.292183+00:00",
+      "timestamp": "2026-10-05T01:25:46.520477+00:00",
       "details": {
         "generations": 2,
         "population_size": 4
@@ -28,13 +28,13 @@
     {
       "benchmark_name": "quadratic_sphere",
       "method": "cpu",
-      "duration_sec": 1.0706004104577005e-05,
+      "duration_sec": 7.593400005134754e-05,
       "score": 6.4540123716710625,
       "throughput": 400.0,
       "memory_mb": 0.0,
       "success": true,
       "error": null,
-      "timestamp": "2026-09-13T00:53:35.292202+00:00",
+      "timestamp": "2026-10-05T01:25:46.520614+00:00",
       "details": {
         "generations": 2,
         "population_size": 4
@@ -43,13 +43,13 @@
     {
       "benchmark_name": "quadratic_sphere",
       "method": "gpu",
-      "duration_sec": 0.0003598180046537891,
+      "duration_sec": 0.0020427499998731946,
       "score": 6.4540123716710625,
       "throughput": 0,
       "memory_mb": 0,
       "success": true,
       "error": null,
-      "timestamp": "2026-09-13T00:53:35.292567+00:00",
+      "timestamp": "2026-10-05T01:25:46.522695+00:00",
       "details": {
         "generations": 2,
         "population_size": 4
@@ -63,12 +63,12 @@
     "by_method": {
       "cpu": {
         "count": 2,
-        "duration_mean": 2.0775001758011058e-05,
+        "duration_mean": 0.00013958850013295887,
         "score_mean": 6.4540123716710625
       },
       "gpu": {
         "count": 1,
-        "duration_mean": 0.0003598180046537891,
+        "duration_mean": 0.0020427499998731946,
         "score_mean": 6.4540123716710625
       }
     }

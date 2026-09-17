@@ -18,9 +18,9 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models import EvalResult  # noqa: E402
+from mutalambda_core.models import EvalResult  # noqa: E402
 from optimization_flags import reset_optimization_flags  # noqa: E402
-from tiered_evaluator import (  # noqa: E402
+from mutalambda_engines.tiered_evaluator import (  # noqa: E402
     TestSubsetSelector,
     TieredEvaluator,
     TieredOfflineEvaluator,

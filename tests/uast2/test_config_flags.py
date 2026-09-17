@@ -4,7 +4,7 @@
 import pytest
 import yaml
 
-from config_loader import apply_defaults, load_yaml, validate_config
+from mutalambda_config.config_loader import apply_defaults, load_yaml, validate_config
 from muta_ext.uast2.engine import EngineConfig, resolve_engine_config
 from muta_lambda.config import EvolveConfig
 
@@ -42,19 +42,19 @@ class TestConfigLoaderSurface:
 
 class TestMutaLambdaConfigSurface:
     def test_pydantic_defaults(self):
-        from muta_config import UASTSection
+        from mutalambda_config.muta_config import UASTSection
 
         section = UASTSection()
         assert section.engine == "legacy" and section.shadow is False
 
     def test_invalid_engine_rejected_by_pydantic(self):
-        from muta_config import UASTSection
+        from mutalambda_config.muta_config import UASTSection
 
         with pytest.raises(Exception):
             UASTSection(engine="v3")
 
     def test_flags_flow_into_evolve_config(self, tmp_path):
-        from muta_config import MutaLambdaConfig
+        from mutalambda_config.muta_config import MutaLambdaConfig
 
         config = MutaLambdaConfig()
         assert config.uast.engine == "legacy"

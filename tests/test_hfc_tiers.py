@@ -1,15 +1,15 @@
 import ast
 
-from fitness_vector import FitnessVector
+from mutalambda_engines.fitness_vector import FitnessVector
 import pytest
-from hfc_tiers import (
+from mutalambda_engines.hfc_tiers import (
     HFCLeagueEngine,
     HFCTierConfig,
     TIER_ELITE,
     TIER_FACTORY,
     TIER_LABORATORY,
 )
-from models import EvalResult, Individual, LineageGraph
+from mutalambda_core.models import EvalResult, Individual, LineageGraph
 
 
 class _MockEvaluator:

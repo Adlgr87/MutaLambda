@@ -29,9 +29,9 @@ from uuid import uuid4
 
 import numpy as np
 
-from fitness_vector import FitnessVector
-from hfc_tiers import HFCTierConfig, HFCLeagueEngine
-from island_evolution import IslandPool, IslandDiversity, IslandSnapshot
+from mutalambda_engines.fitness_vector import FitnessVector
+from mutalambda_engines.hfc_tiers import HFCTierConfig, HFCLeagueEngine
+from mutalambda_core.island_evolution import IslandPool, IslandDiversity, IslandSnapshot
 
 # Phase 6.5: keep heavy / optional deps out of the module-import path so that
 # importing `muta_lambda` (e.g. under pytest) does not double-spawn the worker
@@ -53,12 +53,12 @@ PROJECT_NAME = "MutaLambda"
 
 # ─── Re-exported modules/classes for backward-compatible imports ─────────────
 from muta_lambda.archive import SolutionArchive
-from evolution_engine import ASTMutator, CodeRegion, CoreEvolutionEngine
-from mutation_filters import run_all_filters, _filter_mutant, ProfileMode
-from island import Island
+from mutalambda_core.evolution_engine import ASTMutator, CodeRegion, CoreEvolutionEngine
+from mutalambda_core.mutation_filters import run_all_filters, _filter_mutant, ProfileMode
+from mutalambda_core.island import Island
 from llm_backend import LLMBackend, _resolve_llm_backend
 from migration import MigrationBus
-from models import (
+from mutalambda_core.models import (
     ArchivedSolution,
     EvalResult,
     Individual,
@@ -69,9 +69,9 @@ from models import (
 )
 from prompt_evolver import PromptEvolver
 from sandbox import SandboxEvaluator
-from extensions import ExtensionRegistry, ExtensionContext
+from mutalambda_core.extensions import ExtensionRegistry, ExtensionContext
 from rng_session import RNGSession
-from event_bus import (
+from mutalambda_core.event_bus import (
     EventBus,
     CommandQueue,
     GENERATION_STARTED,

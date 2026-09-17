@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
-from island import Island
-from models import FitnessVector, Individual, IslandConfig
+from mutalambda_core.island import Island
+from mutalambda_core.models import FitnessVector, Individual, IslandConfig
 from muta_lambda import EvolveConfig, MutaLambdaAgent
 
 
@@ -18,7 +18,7 @@ class DummyMigrationBus:
 
 class DummyEvaluator:
     def evaluate_batch(self, codes):
-        from models import EvalResult
+        from mutalambda_core.models import EvalResult
 
         results = []
         for _code in codes:

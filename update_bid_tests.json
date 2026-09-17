@@ -1,0 +1,1 @@
+[{"function": "update_bid_evolution_target", "args": [{}, 0, 500000000, 1000000, 12345], "expected": true, "comparison": "equal"}, {"function": "update_bid_evolution_target", "args": [{}, 1, 499999999, 500000, 67890], "expected": true, "comparison": "equal"}]

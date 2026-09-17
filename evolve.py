@@ -38,9 +38,9 @@ import sys
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Protocol
 
-from hfc_tiers import (
+from mutalambda_engines.hfc_tiers import (
     HFCLeagueEngine,
     HFCTierConfig,
 )
@@ -50,10 +50,19 @@ __all__ = ["EvolveConfig", "EvolveResult", "run_evolution"]
 SUPPORTED_PROFILES = ("enterprise", "scientific", "gpu")
 SUPPORTED_LANGUAGES = ("python", "rust", "cpp")
 
+# FIX #44: Protocol for optional migration_bus components (prevents getattr typos)
+class MigrationBusProtocol(Protocol):
+    """Protocol for optional migration_bus components."""
+    def register_island(self, island_id: int, island: Any) -> None: ...
+    def migrate(self, island_id: int, migrants: List[Any]) -> None: ...
 
 @dataclass
 class EvolveConfig:
-    """Runtime configuration for the evolve orchestrator."""
+    """Runtime configuration for the evolve orchestrator.
+
+    FIX #24: should_stop and combined_best_score are runtime state, not config.
+    They are kept here for backward compat but should be moved to the engine instance.
+    """
 
     uast_path: Path
     profile: str = "enterprise"
@@ -182,7 +191,7 @@ def _make_offline_evaluator(profile: str, seed: int) -> Callable[..., Any]:
     """
     import ast as _ast
 
-    from fitness_vector import FitnessVector
+    from mutalambda_engines.fitness_vector import FitnessVector
 
     rng = random.Random(seed)
 
@@ -218,7 +227,7 @@ def _make_offline_evaluator(profile: str, seed: int) -> Callable[..., Any]:
             self._cache: Dict[int, Any] = {}
 
         def evaluate_batch(self, codes: List[str]) -> List[Any]:
-            from models import EvalResult
+            from mutalambda_core.models import EvalResult
 
             results: List[EvalResult] = []
             for code in codes:
@@ -260,8 +269,8 @@ def _serialize_eval_result(result: Any) -> Dict[str, Any]:
 
 def _restore_eval_result(data: Dict[str, Any]) -> Any:
     """Rebuild an ``EvalResult`` from its JSON-safe dict form."""
-    from fitness_vector import FitnessVector
-    from models import EvalResult
+    from mutalambda_engines.fitness_vector import FitnessVector
+    from mutalambda_core.models import EvalResult
 
     payload = dict(data)
     fitness = payload.pop("fitness", None)
@@ -283,7 +292,7 @@ class CachedBatchEvaluator:
         self.namespace = namespace
 
     def evaluate_batch(self, codes: List[str]) -> List[Any]:
-        from fitness_cache import fitness_cache_key
+        from mutalambda_engines.fitness_cache import fitness_cache_key
 
         if not codes:
             return []
@@ -326,7 +335,7 @@ def _make_fitness_cache(config: EvolveConfig) -> Optional[Any]:
     flags = get_optimization_flags()
     if not flags.enabled("fitness_cache.enabled", True):
         return None
-    from fitness_cache import FitnessCache
+    from mutalambda_engines.fitness_cache import FitnessCache
 
     path = Path(str(flags.get("fitness_cache.path", ".mutalambda/fitness_cache.db")))
     if not path.is_absolute():
@@ -347,7 +356,7 @@ def _top_up_population(
     Bounded: never loops forever when the target source yields duplicate
     mutants (the evolution loop itself re-pads each generation).
     """
-    from evolution_engine import ASTMutator
+    from mutalambda_core.evolution_engine import ASTMutator
 
     out: List[str] = []
     seen: set = set()
@@ -384,7 +393,7 @@ def _load_resume_checkpoint(path: str | Path) -> Optional[Dict[str, Any]]:
 
 def run_evolution(config: EvolveConfig) -> EvolveResult:
     """Run the unified evolution orchestrator and return a result + artefacts."""
-    from evolution_engine import ASTMutator
+    from mutalambda_core.evolution_engine import ASTMutator
 
     source = _load_uast_source(config.uast_path)
     rng = random.Random(config.seed)
@@ -432,7 +441,7 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
     # (<1 ms) → N2 minimal test subset → N3 top-20 % sandbox.  Zero
     # behaviour change when the flag is off.
     try:
-        from tiered_evaluator import TieredOfflineEvaluator, tiering_active
+        from mutalambda_engines.tiered_evaluator import TieredOfflineEvaluator, tiering_active
         if tiering_active():
             evaluator = TieredOfflineEvaluator(source, evaluator)
     except Exception:

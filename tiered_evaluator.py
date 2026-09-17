@@ -33,6 +33,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import math
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
@@ -586,6 +587,26 @@ class TieredEvaluator:
         self.n3_runner = n3_runner
         self.n3_use_ray = n3_use_ray
         self.seed = seed
+        # ML-002: fail-closed isolation. TieredEvaluator resolves its N3 tier to the
+        # non-isolating 'subprocess' runner by default (SubprocessRunner fallback in
+        # _resolve_n3_runner when no container/runner is supplied). Mirror the
+        # SandboxEvaluator guard so MUTALAMBDA_REQUIRE_ISOLATION=1 cannot be bypassed
+        # through this constructor.
+        if hasattr(n3_runner, "runner_mode"):
+            runner_mode = n3_runner.runner_mode
+        elif hasattr(n3_runner, "_resolve_engine"):
+            runner_mode = "container"
+        else:
+            runner_mode = "subprocess"
+        if os.getenv("MUTALAMBDA_REQUIRE_ISOLATION", "0") == "1" and runner_mode in (
+            "subprocess",
+            "local",
+            "dev",
+        ):
+            raise RuntimeError(
+                "MUTALAMBDA_REQUIRE_ISOLATION=1 forbids runner_mode='subprocess' "
+                "(no isolation). Use runner_mode='container' or 'microvm'."
+            )
         self.selector = TestSubsetSelector(
             baseline_source, test_cases,
             coverage_guided=subset_coverage_guided, max_tests=subset_max_tests, seed=seed,

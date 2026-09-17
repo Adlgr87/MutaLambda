@@ -1,0 +1,34 @@
+{
+  "mutalambda_core": [
+    "code_hash.py",
+    "component_evolution.py",
+    "constants.py",
+    "differential.py",
+    "evaluation_service.py",
+    "event_bus.py",
+    "evolution_engine.py",
+    "extensions.py",
+    "island_evolution.py",
+    "mutation_filters.py",
+    "island.py",
+    "models.py"
+  ],
+  "mutalambda_engines": [
+    "fitness_cache.py",
+    "fitness_normalize.py",
+    "hfc_tiers.py",
+    "nsga2.py",
+    "tiered_evaluator.py",
+    "archive.py",
+    "fitness_vector.py"
+  ],
+  "mutalambda_config": [
+    "checkpoint_manager.py",
+    "config_loader.py",
+    "muta_config.py"
+  ],
+  "mutalambda_security": [
+    "api_fingerprint.py",
+    "diagnostics.py"
+  ]
+}

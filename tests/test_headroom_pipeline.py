@@ -62,7 +62,7 @@ def _clean(monkeypatch):
 
 
 def _engine():
-    from evolution_engine import CoreEvolutionEngine
+    from mutalambda_core.evolution_engine import CoreEvolutionEngine
 
     return CoreEvolutionEngine()
 
@@ -347,14 +347,14 @@ class TestCostAwareBandit:
         monkeypatch.setenv("MUTALAMBDA_OPT_HEADROOM__BANDIT__ENABLED", "1")
         from types import SimpleNamespace
 
-        from island import Island
+        from mutalambda_core.island import Island
 
         bandit = OperatorBandit(operators=["llm", "ast"])
         island = Island.__new__(Island)
         island.migration_bus = SimpleNamespace(operator_bandit=bandit)
 
-        from models import Individual
-        from fitness_vector import FitnessVector
+        from mutalambda_core.models import Individual
+        from mutalambda_engines.fitness_vector import FitnessVector
 
         ind = Individual(code="def f():\n    return 1\n", llm_tokens=10000)
         ind.operator = "llm"
@@ -377,14 +377,14 @@ class TestCostAwareBandit:
     def test_island_uses_legacy_when_flag_off(self, monkeypatch):
         from types import SimpleNamespace
 
-        from island import Island
+        from mutalambda_core.island import Island
 
         bandit = OperatorBandit(operators=["llm"])
         island = Island.__new__(Island)
         island.migration_bus = SimpleNamespace(operator_bandit=bandit)
 
-        from models import Individual
-        from fitness_vector import FitnessVector
+        from mutalambda_core.models import Individual
+        from mutalambda_engines.fitness_vector import FitnessVector
 
         ind = Individual(code="def f():\n    return 1\n", llm_tokens=10000)
         ind.operator = "llm"
@@ -400,6 +400,7 @@ class TestCostAwareBandit:
         assert bandit.stats["llm"].tokens == 0
 
 
+@pytest.mark.skipif(not headroom_available(), reason="headroom-ai package not installed")
 def test_headroom_package_available():
     """Fase 1 setup gate: headroom-ai installed & importable."""
     assert headroom_available() is True

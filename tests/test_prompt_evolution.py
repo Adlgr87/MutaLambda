@@ -14,8 +14,8 @@ from prompt_evolution import RichPromptEvolver
 
 class DummyEvaluator:
     def evaluate_batch(self, codes):
-        from fitness_vector import FitnessVector
-        from models import EvalResult
+        from mutalambda_engines.fitness_vector import FitnessVector
+        from mutalambda_core.models import EvalResult
 
         return [
             EvalResult(

@@ -38,7 +38,7 @@ from benchmarks.effibench_harness import (
     PROMPT_TMPL,
     summarize,
 )
-from evaluation_service import EvaluationService
+from mutalambda_core.evaluation_service import EvaluationService
 from llm_backend import LLMBackend
 
 # ---------------------------------------------------------------------------

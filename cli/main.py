@@ -161,7 +161,7 @@ class MutaLambdaCLI:
     def _create_evolve_config(self, config: dict, generations: int) -> Optional[EvolveConfig]:
         """Create EvolveConfig from CLI config via unified MutaLambdaConfig (ML-C02)."""
         try:
-            from muta_config import MutaLambdaConfig
+            from mutalambda_config.muta_config import MutaLambdaConfig
 
             # Legacy CLI templates may use migration.* instead of population.*
             raw = dict(config or {})
@@ -615,7 +615,7 @@ class MutaLambdaCLI:
     ) -> bool:
         """Full restore via checkpoint_manager.resume_agent."""
         try:
-            from checkpoint_manager import load_checkpoint, resume_agent
+            from mutalambda_config.checkpoint_manager import load_checkpoint, resume_agent
             from muta_lambda import EvolveConfig
         except Exception as e:
             console.print(f"[red]Core resume unavailable: {e}[/red]")
@@ -734,7 +734,7 @@ class MutaLambdaCLI:
             # Minimal real operation: apply AST mutation to a source file if present.
             if path.exists() and path.suffix == ".py":
                 try:
-                    from evolution_engine import ASTMutator
+                    from mutalambda_core.evolution_engine import ASTMutator
 
                     original = path.read_text(encoding="utf-8")
                     mutated = ASTMutator.apply_random_mutation(original)
@@ -768,7 +768,7 @@ class MutaLambdaCLI:
         return False
 
     def _resolve_llm_mutator_settings(self) -> Dict[str, Any]:
-        from config_loader import apply_defaults
+        from mutalambda_config.config_loader import apply_defaults
 
         raw = dict(self.current_config or {})
         cfg = apply_defaults(raw)

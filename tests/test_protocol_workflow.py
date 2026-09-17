@@ -1,9 +1,9 @@
 from types import SimpleNamespace
 
 import island as island_module
-from fitness_vector import FitnessVector
-from island import Island
-from models import EvalResult, Individual, IslandConfig
+from mutalambda_engines.fitness_vector import FitnessVector
+from mutalambda_core.island import Island
+from mutalambda_core.models import EvalResult, Individual, IslandConfig
 from workflow_protocol import (
     PASS,
     RETRYABLE_FAIL,

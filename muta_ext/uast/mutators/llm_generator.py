@@ -273,7 +273,7 @@ def generate_mutator(
 
     # Fase 3B: security gate — reject generated mutators that contain
     # critical patterns (exec/eval, dangerous imports, etc.) before writing.
-    from mutation_filters import run_all_filters
+    from mutalambda_core.mutation_filters import run_all_filters
 
     filter_report = run_all_filters(code, profile="strict", enforce_syntax=True)
     if filter_report.blocked:

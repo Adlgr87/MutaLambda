@@ -23,8 +23,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from code_hash import stable_code_hash
-from api_fingerprint import extract_api_fingerprint
+from mutalambda_core.code_hash import stable_code_hash
+from mutalambda_security.api_fingerprint import extract_api_fingerprint
 import evolve
 import benchmarking
 import comparison

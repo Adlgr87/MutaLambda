@@ -32,7 +32,7 @@ __all__ = ["ParetoArchive", "signature_hash"]
 def _canonical_api(source: str) -> str:
     """Canonical JSON of the target's public API (name-ordered)."""
     try:
-        from api_fingerprint import extract_api_fingerprint
+        from mutalambda_security.api_fingerprint import extract_api_fingerprint
 
         fp = extract_api_fingerprint(source)
     except Exception:

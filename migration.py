@@ -8,15 +8,27 @@ import random
 import threading
 from typing import Dict, List, Optional, TYPE_CHECKING
 
-from island import Island
+from mutalambda_core.island import Island
 
 if TYPE_CHECKING:
     from metrics_exporter import MetricsRegistry  # noqa: F401
     from muta_lambda import SolutionArchive
-from models import Individual
+from mutalambda_core.models import Individual
 
 logger = logging.getLogger("MutaLambda")
 
+
+
+
+# FIX #44: Protocol for optional migration_bus components (prevents getattr typos)
+from typing import Protocol
+
+class MigrationBusProtocol(Protocol):
+    """Protocol for optional migration bus components."""
+    def register_island(self, island_id: int, island: Any) -> None: ...
+    def migrate(self, island_id: int, migrants: List[Any]) -> None: ...
+    def operator_bandit(self) -> Any: ...
+    def metrics(self) -> Any: ...
 
 class MigrationBus:
     """Coordinador de migración entre islas."""
@@ -30,7 +42,10 @@ class MigrationBus:
         self._islands_version: int = 0
         self._topology_version: int = 0
         self._cache_topology_version: int = -1
-        self._mesh_cols: int = 0
+        # FIX #23: _mesh_cols is unused - mesh and spatial_grid topologies overlap
+        # Attribute naming: spatial_topology is the runtime object,
+        # spatial_grid is the config string (topology enum value)
+        self._mesh_cols: int = 0  # Deprecated - kept for backward compat
         self.lineage_graph = None
         self.rng = random.Random()  # overridden by agent RNGSession when present
 
@@ -56,6 +71,7 @@ class MigrationBus:
             logger.debug("Island %d registered in MigrationBus.", island_id)
 
     def _get_neighbors(self, island_id: int) -> List[int]:
+        """FIX #30: Build id->pos dict once for O(1) lookup instead of O(N) ids.index()."""
         """Calcula vecinos según topología. Debe llamarse con self._lock adquirido."""
         if (
             self._cache_version == self._islands_version

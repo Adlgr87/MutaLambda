@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import Mock, MagicMock
 
-from models import Individual
+from mutalambda_core.models import Individual
 from muta_ext.thc_engine import HorizontalTransferEngine, FragmentRecord, THCConfig
 
 

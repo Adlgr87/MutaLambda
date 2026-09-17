@@ -1,13 +1,14 @@
 # MutaLambda Commercial Licensing
 
-> **Status:** MutaLambda is evaluating a transition to a **dual-license (open-core) model**.
-> The current release remains fully usable under the MIT License (see [LICENSE](LICENSE)).
+> **Status:** MutaLambda is currently licensed under Business Source License 1.1 (see [LICENSE](LICENSE)).
+> After the Change Date (2030-08-23), the project will transition to GPL-3.0-or-later.
+> A dual-license model is planned for the future Commercial Edition.
 
 ## Planned model
 
 | Edition | License | Audience |
 |---|---|---|
-| **Community Edition (CE)** | MIT | Individual developers, researchers, open-source projects |
+| **Community Edition (CE)** | BSL-1.1 (transitioning to GPL-3.0-or-later) | Individual developers, researchers |
 | **Commercial Edition (EE)** | Proprietary EULA | Companies needing premium capabilities, support and legal assurances |
 
 ## What may become part of the Commercial Edition
@@ -19,9 +20,9 @@
 
 ## For existing users
 
-Code published under the MIT License up to the final MIT-tagged release
-(`v4.0.0-mit-final`) remains MIT-licensed forever. You may keep using, modifying
-and redistributing those versions under MIT terms, including commercially.
+Code published under MIT License is available in the git history tag `v4.0.0-mit-final`.
+Versions after that tag are licensed under BSL-1.1 (see [LICENSE](LICENSE)).
+The Community Edition (BSL-1.1) is free for non-production use.
 
 ## Contact
 

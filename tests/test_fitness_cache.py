@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from fitness_cache import FitnessCache, canonical_code_hash, fitness_cache_key
+from mutalambda_engines.fitness_cache import FitnessCache, canonical_code_hash, fitness_cache_key
 
 
 # ── Canonical code hash ──────────────────────────────────────────────────────

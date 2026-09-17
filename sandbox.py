@@ -30,8 +30,8 @@ from typing import Dict, List, Optional
 
 import resource
 
-from evaluation_service import EvaluationService
-from models import EvalResult
+from mutalambda_core.evaluation_service import EvaluationService
+from mutalambda_core.models import EvalResult
 from runners import (
     CandidateRunner,
     ContainerRunner,

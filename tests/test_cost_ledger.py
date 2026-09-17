@@ -226,7 +226,7 @@ def test_regression_gate_feeds_ledger():
 
 
 def test_evaluation_service_feeds_ledger(tmp_path: Path):
-    from evaluation_service import EvaluationService
+    from mutalambda_core.evaluation_service import EvaluationService
 
     reset_cost_ledger()
     service = EvaluationService(
