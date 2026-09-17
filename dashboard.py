@@ -1,4 +1,6 @@
-"""
+"""🔴 DEPRECATED: Use `dashboard_run.py` instead.
+This file is maintained for backward compatibility only (FIX #18).
+
 MutaLambda HITL Dashboard — Streamlit interface for Human-in-the-Loop.
 
 Features:
@@ -317,7 +319,7 @@ def integrate_hitl(
     # Subscribe to core events when EventBus is present.
     bus = getattr(agent, "event_bus", None)
     if bus is not None:
-        from event_bus import GENERATION_COMPLETED, RUN_COMPLETED
+        from mutalambda_core.event_bus import GENERATION_COMPLETED, RUN_COMPLETED
 
         def _on_event(event) -> None:
             if event.name == GENERATION_COMPLETED:

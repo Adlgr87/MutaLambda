@@ -1,3 +1,6 @@
+<!-- FIX #26: This is the CANONICAL agent instruction file for MutaLambda.
+The .agents/ directory contains specialized subagent role definitions.
+CLAUDE.md is legacy for Claude Code compatibility only. -->
 ## MutaLambda — evolutionary code optimization system
 
 ### Phase 6 optimization (completed — 2026-08-18)

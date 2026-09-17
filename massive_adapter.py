@@ -23,9 +23,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
-from api_fingerprint import compare_api, extract_api_fingerprint
+from mutalambda_security.api_fingerprint import compare_api, extract_api_fingerprint
 from benchmarking import BenchmarkConfig, BenchmarkResult, run_callable_benchmark
-from differential import DifferentialResult, differential_test
+from mutalambda_core.differential import DifferentialResult, differential_test
 from runners import SubprocessRunner
 from secure_exec import load_function
 

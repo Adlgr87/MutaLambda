@@ -15,7 +15,7 @@ from progressive_pipeline import (
     ProgressivePipeline,
     synthesize_regression_tests,
 )
-from fitness_vector import FitnessVector
+from mutalambda_engines.fitness_vector import FitnessVector
 
 
 def _closed_form_llm(prompt: str) -> str:

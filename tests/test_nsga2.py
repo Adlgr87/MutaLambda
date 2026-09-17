@@ -3,9 +3,9 @@ Tests for NSGA-II multi-objective selection.
 """
 
 import pytest
-from fitness_vector import FitnessVector
+from mutalambda_engines.fitness_vector import FitnessVector
 from muta_lambda import Individual
-from nsga2 import (
+from mutalambda_engines.nsga2 import (
     non_dominated_sort,
     nsga2_select,
     nsga2_tournament_select,
@@ -77,7 +77,7 @@ class TestNonDominatedSort:
         """Fase 4A regression guard: numpy fast path must match the pure-Python
         path exactly, including multi-level front assignment. The rewritten
         `processed`-mask loop previously regressed front-rank ordering."""
-        from nsga2 import _non_dominated_sort_numpy, _NUMPY_FASTPATH_THRESHOLD
+        from mutalambda_engines.nsga2 import _non_dominated_sort_numpy, _NUMPY_FASTPATH_THRESHOLD
         import nsga2 as _n
 
         # Build a population large enough to exercise the numpy path, with a
@@ -183,7 +183,7 @@ class TestNSGA2Stats:
         """No-regresión Fase 2: dominance compara exactamente 3 objetivos
         (correctness, latency, throughput) y no deja objetivos adicionales
         filtrar en el sort ni en crowding."""
-        from nsga2 import _DOMINANCE_OBJECTIVES
+        from mutalambda_engines.nsga2 import _DOMINANCE_OBJECTIVES
 
         # The dominance objective count must be exactly 3 (not 6).
         assert _DOMINANCE_OBJECTIVES == 3

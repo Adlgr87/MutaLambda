@@ -26,7 +26,7 @@ import math
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from fitness_vector import REF_LATENCY_MS, REF_MEMORY_MB
+from mutalambda_engines.fitness_vector import REF_LATENCY_MS, REF_MEMORY_MB
 
 __all__ = [
     "GateDecision",

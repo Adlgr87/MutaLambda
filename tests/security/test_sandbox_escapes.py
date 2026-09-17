@@ -20,7 +20,7 @@ from runners import (
     scan_code_security,
     scan_findings,
 )
-from mutation_filters import check_no_critical_patterns
+from mutalambda_core.mutation_filters import check_no_critical_patterns
 
 # ── The six documented evasion vectors ────────────────────────────────────────
 
