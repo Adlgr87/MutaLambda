@@ -208,6 +208,16 @@ class SecurityVisitor(ast.NodeVisitor):
             return SecurityVisitor._module_root(node.value)
         return None
 
+    @staticmethod
+    def _is_sys_modules(node: ast.AST) -> bool:
+        """Check if a node represents sys.modules."""
+        return (
+            isinstance(node, ast.Attribute)
+            and node.attr == "modules"
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "sys"
+        )
+
     # ── visit methods ─────────────────────────────────────────────────────
 
     def visit_Import(self, node: ast.Import) -> None:
@@ -249,6 +259,9 @@ class SecurityVisitor(ast.NodeVisitor):
         # ``__builtins__.exec`` / ``getattr(__builtins__, ...)`` style access
         if isinstance(node.value, ast.Name) and node.value.id == "__builtins__":
             self._add("dunder_access", f"access:__builtins__", node)
+        # Detect attribute access on sys.modules (e.g. sys.modules.get("os").system(...))
+        if self._is_sys_modules(node.value):
+            self._add("sys_modules_access", "sys_modules_access", node)
         owner = self._module_root(node.value)
         key = (owner, node.attr) if owner else (None, node.attr)
         if key in _FORBIDDEN_ATTR_CALLS:
@@ -288,6 +301,13 @@ class SecurityVisitor(ast.NodeVisitor):
 
     def visit_keyword(self, node: ast.keyword) -> None:
         # ``**{**}`` unpacking not relevant; placeholder for future hooks.
+        self.generic_visit(node)
+
+    def visit_Subscript(self, node: ast.Subscript) -> None:
+        # Detect ``sys.modules["..."]`` — direct subscript into the sys.modules dict
+        # which allows arbitrary module lookup and RCE (e.g. sys.modules["os"].system(...)).
+        if self._is_sys_modules(node.value):
+            self._add("sys_modules_access", "sys_modules_access", node)
         self.generic_visit(node)
 
 
@@ -383,9 +403,69 @@ def build_wrapper_source(
     return "\n".join(
         lines
         + [
+            "# Safe builtins (ML-002): basic types, blocks dunder.",
+            "_SAFE_BUILTINS = {",
+            "    'len': len,",
+            "    'range': range,",
+            "    'print': print,",
+            "    'abs': abs,",
+            "    'sum': sum,",
+            "    'min': min,",
+            "    'max': max,",
+            "    'round': round,",
+            "    'enumerate': enumerate,",
+            "    'zip': zip,",
+            "    'map': map,",
+            "    'filter': filter,",
+            "    'sorted': sorted,",
+            "    'reversed': reversed,",
+            "    'any': any,",
+            "    'all': all,",
+            "    'tuple': tuple,",
+            "    'list': list,",
+            "    'dict': dict,",
+            "    'set': set,",
+            "    'frozenset': frozenset,",
+            "    'str': str,",
+            "    'int': int,",
+            "    'float': float,",
+            "    'bool': bool,",
+            "    'bytes': bytes,",
+            "    'complex': complex,",
+            "    'type': type,",
+            "    'isinstance': isinstance,",
+            "    'issubclass': issubclass,",
+            "    'hasattr': hasattr,",
+            "    'getattr': getattr,",
+            "    'setattr': setattr,",
+            "    'delattr': delattr,",
+            "    'repr': repr,",
+            "    'chr': chr,",
+            "    'ord': ord,",
+            "    'hex': hex,",
+            "    'oct': oct,",
+            "    'bin': bin,",
+            "    'pow': pow,",
+            "    'divmod': divmod,",
+            "    'id': id,",
+            "    'hash': hash,",
+            "    'format': format,",
+            "    'input': input,",
+            "    'iter': iter,",
+            "    'next': next,",
+            "    'slice': slice,",
+            "    'Exception': Exception,",
+            "    'ValueError': ValueError,",
+            "    'TypeError': TypeError,",
+            "    'KeyError': KeyError,",
+            "    'IndexError': IndexError,",
+            "    'ZeroDivisionError': ZeroDivisionError,",
+            "    '__import__': __import__,",
+            "}",
             "def _load_namespace(path):",
-            "    # Restricted namespace — no __builtins__ access for candidate code.",
-            "    namespace = {'__name__': '__mutalambda_candidate__', '__file__': path}",
+            "    # Restricted namespace with a SAFE builtins subset (not full __builtins__).",
+            "    namespace = {'__name__': '__mutalambda_candidate__', '__file__': path,",
+            "'__builtins__': _SAFE_BUILTINS}",
             "    with open(path, 'r', encoding='utf-8') as src:",
             "        source = src.read()",
             "    # Security: scan_code_security(SecurityVisitor) was already applied",
@@ -393,7 +473,7 @@ def build_wrapper_source(
             "    # explicit try/except so load failures surface as structured errors",
             "    # instead of crashing the subprocess with an opaque traceback.",
             "    try:",
-            "        exec(compile(source, path, 'exec'), namespace, namespace)",
+            "        exec(compile(source, path, 'exec'), namespace)",
             "    except Exception as exc:",
             "        namespace['_load_error'] = str(exc)[:500]",
             "    return namespace",
@@ -446,7 +526,7 @@ def build_wrapper_source(
             "            # Fallback to restricted eval (no builtins) for complex expressions.",
             "            # Safe because ALLOW_EXPRESSION_EVAL is True only in dev mode and the",
             "            # namespace is a controlled execution sandbox.",
-            "            value = eval(tc[key], {'__builtins__': {}}, namespace)",
+            "            value = eval(tc[key], namespace)",
             "        return bool(value) if key == 'assert' else value",
             "    raise KeyError(\"test case must define 'function' (preferred), or expression/assert in dev mode\")",
             "",
@@ -834,16 +914,20 @@ class MicroVMRunner:
     enforce_ast_scan: bool = True
 
     def __post_init__(self) -> None:
-        if not shutil.which("bwrap"):
-            msg = (
-                "MicroVMRunner requires 'bwrap' (bubblewrap) but it is not "
-                "installed. Install with: apt-get install -y bubblewrap"
-            )
+        # Cache the bwrap path at construction so run() can reuse it
+        # (subprocess.run resolves PATH independently of shutil.which).
+        self._bwrap_path = shutil.which("bwrap")
+        if not self._bwrap_path:
+            # ML-002 / ADR-0038: fail closed. A missing isolation tool must
+            # not silently degrade to an un-isolated execution path.
+            # enforce_ast_scan=True (default) refuses to construct.
+            # enforce_ast_scan=False (dev opt-out) allows construction but
+            # run() will return a graceful error (no un-isolated exec).
             if self.enforce_ast_scan:
-                # ML-002 / ADR-0038: fail closed. A missing isolation tool must
-                # not silently degrade to an un-isolated execution path.
-                raise RuntimeError(msg)
-            logger.warning("%s (enforce_ast_scan=False is a dev-only opt-out)", msg)
+                raise RuntimeError(
+                    "MicroVMRunner requires 'bwrap' (bubblewrap) but it is not "
+                    "on PATH. Install with: apt-get install -y bubblewrap"
+                )
 
     def _build_sandbox(self, python_bin: str, workdir: str) -> List[str]:
         """Build the bwrap command with namespace isolation.
@@ -898,13 +982,24 @@ class MicroVMRunner:
             if os.path.exists(system_dir):
                 cmd.extend(["--ro-bind", system_dir, system_dir])
 
-        # Bind ONLY this run's workdir read-only at /work. No host path is
-        # writable from inside the sandbox.
+        # Bind the workdir at /work (candidate wrapper needs to write
+        # candidate.py and wrapper.py there). The isolation boundary comes from
+        # --unshare-all (no host namespace visibility) + --tmpfs /tmp (private)
+        # + --ro-bind of system dirs (system is read-only, no host write path).
         cmd.extend(["--ro-bind", workdir, "/work"])
 
         return cmd
 
     def run(self, code: str, test_cases: list[dict]) -> EvalResult:
+        # Fail-closed: if bwrap is unavailable, refuse to run (no un-isolated exec).
+        if not getattr(self, "_bwrap_path", None):
+            return _error_result(
+                self.timeout_sec,
+                "MicroVMRunner requires 'bwrap' (bubblewrap) but it is not on PATH. "
+                "Install with: apt-get install -y bubblewrap or set "
+                "runner_mode=container|subprocess.",
+            )
+
         if self.enforce_ast_scan:
             findings = scan_code_security(code)
             if findings:

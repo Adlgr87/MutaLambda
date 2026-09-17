@@ -400,6 +400,7 @@ class TestCostAwareBandit:
         assert bandit.stats["llm"].tokens == 0
 
 
+@pytest.mark.skipif(not headroom_available(), reason="headroom-ai package not installed")
 def test_headroom_package_available():
     """Fase 1 setup gate: headroom-ai installed & importable."""
     assert headroom_available() is True

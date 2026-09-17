@@ -219,18 +219,24 @@ _SECRET_PATTERNS: List[tuple] = [
     (re.compile(r"\bgh[pousr]_[0-9A-Za-z]{20,}\b"), "[REDACTED_GITHUB_TOKEN]"),
     (re.compile(r"\bxox[baprs]-[0-9A-Za-z\-]{10,}\b"), "[REDACTED_SLACK_TOKEN]"),
     (re.compile(r"\bsk_live_[0-9A-Za-z]{16,}\b"), "[REDACTED_STRIPE_KEY]"),
+    # Generic OpenAI/Mistral-style keys: sk-<20+ chars> (allows _ and - in body).
+    (re.compile(r"sk-[A-Za-z0-9_-]{20,}"), "[REDACTED_API_KEY]"),
     (
         re.compile(r"\b(Bearer\s+)[A-Za-z0-9_\-\.]{16,}\b", re.IGNORECASE),
         r"\1[REDACTED_TOKEN]",
     ),
     (
         re.compile(
-            r"\b(api[_-]?key|apikey|secret|password|passwd|token)\s*[:=]\s*['\"]?"
-            r"[A-Za-z0-9_\-\.]{8,}['\"]?",
+            r"(?<![A-Za-z0-9])([A-Za-z0-9_]*(?:api[_-]?key|apikey|secret|password|passwd|token)[A-Za-z0-9_]*)\s*[:=]\s*['\"]?"
+            r"([A-Za-z0-9_\-\.]{8,})['\"]?",
             re.IGNORECASE,
         ),
         r"\1=[REDACTED]",
     ),
+    # URL query parameters: ?key=value / &key=value (secret-looking value, >=16 chars).
+    (re.compile(r"([?&][A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_\-]{16,})"), r"\1=[REDACTED_URL_PARAM]"),
+    # JSON string values: "key": "value" (secret-looking value, >=16 chars).
+    (re.compile(r'("[A-Za-z_][A-Za-z0-9_]*"\s*:\s*")[^"\s]{16,}("?)'), r'\1[REDACTED_JSON_VALUE]\2'),
 ]
 
 

@@ -49,6 +49,10 @@ ESCAPE_PATTERNS = [
         'open("/etc/passwd", "a")',
         id="open-append",
     ),
+    pytest.param(
+        'import sys; sys.modules["os"].system("id")',
+        id="sys_modules_escape",
+    ),
 ]
 
 # Extra adversarial vectors beyond the plan's six.
@@ -58,6 +62,8 @@ EXTRA_ESCAPES = [
     pytest.param('import pickle; pickle.loads(b"x")', id="pickle-loads"),
     pytest.param('__import__("os").system("id")', id="dunder-import-chain"),
     pytest.param('os = __import__; os("os").system("id")', id="two-step-dunder"),
+    pytest.param('import sys; m = sys.modules.get("os"); m.system("id")', id="sys_modules_get_escape"),
+    pytest.param('import sys; sys.modules["os"].popen("id").read()', id="sys_modules_subscript_attr"),
 ]
 
 
