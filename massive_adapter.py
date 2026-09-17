@@ -17,14 +17,15 @@ from __future__ import annotations
 import ast
 import difflib
 import json
+import os
 import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
-from api_fingerprint import compare_api, extract_api_fingerprint
+from mutalambda_security.api_fingerprint import compare_api, extract_api_fingerprint
 from benchmarking import BenchmarkConfig, BenchmarkResult, run_callable_benchmark
-from differential import DifferentialResult, differential_test
+from mutalambda_core.differential import DifferentialResult, differential_test
 from runners import SubprocessRunner
 from secure_exec import load_function
 
@@ -71,6 +72,20 @@ class MassiveTargetAdapter:
     timeout_sec: float = 10.0
 
     def __post_init__(self) -> None:
+        # ML-002: fail-closed isolation — mirrors SandboxEvaluator (sandbox.py:148-156).
+        # MassiveTargetAdapter.evaluate() always executes candidates through
+        # SubprocessRunner (no container isolation); fail closed when isolation is
+        # required rather than silently running un-isolated.
+        runner_mode = "subprocess"
+        if os.getenv("MUTALAMBDA_REQUIRE_ISOLATION", "0") == "1" and runner_mode in (
+            "subprocess",
+            "local",
+            "dev",
+        ):
+            raise RuntimeError(
+                "MUTALAMBDA_REQUIRE_ISOLATION=1 forbids runner_mode='subprocess' "
+                "(no isolation). Use runner_mode='container' or 'microvm'."
+            )
         self._source_path = Path(self.source_file)
         if self.massive_root and not self._source_path.is_file():
             alt = Path(self.massive_root) / self.source_file

@@ -126,7 +126,7 @@ class BenchmarkRunner:
                 mem_mb = opt.get_memory_usage().get("gpu_memory_used_mb", 0)
             else:
                 # CPU baseline
-                from evolution_engine import CoreEvolutionEngine  # noqa: PLC0415
+                from mutalambda_core.evolution_engine import CoreEvolutionEngine  # noqa: PLC0415
 
                 # Simple CPU fallback: evaluate fitness directly
                 scores = np.array([fitness_fn(ind) for ind in population])

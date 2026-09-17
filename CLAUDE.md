@@ -1,3 +1,7 @@
+
+<!-- FIX #26: AGENTS.md is the canonical agent instruction file.
+CLAUDE.md is legacy for Claude Code compatibility only.
+The .agents/ directory contains specialized agent role definitions. -->
 # CLAUDE.md — MutaLambda
 
 Behavioral guidelines for work on this repository. Prefer caution over speed for non-trivial changes.

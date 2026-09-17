@@ -390,18 +390,41 @@ class PromptGenome:
     fitness: float = 0.0
 
     def render(self, task: str, base_code: str) -> str:
-        """Serializa el genoma en un prompt listo para el LLM."""
+        """Serializa el genoma en un prompt listo para el LLM.
+
+        Untrusted content (task, base_code, few-shot examples) is wrapped in
+        unique delimiter blocks and escaped to prevent prompt-injection /
+        context-break-out attacks (D7).
+        """
+        _CODE_START = "<<<MUTALAMBDA_CODE_START_9f3a7c>>"
+        _CODE_END = "<<<MUTALAMBDA_CODE_END_9f3a7c>>"
+        _TASK_START = "<<<MUTALAMBDA_TASK_START_9f3a7c>>"
+        _TASK_END = "<<<MUTALAMBDA_TASK_END_9f3a7c>>"
+        _ESC_MARKER = "9f3a7c_END_MARKER_escaper"
+
+        def _escape_untrusted(text):
+            if not text:
+                return ""
+            return (text.replace(_CODE_START, _ESC_MARKER)
+                        .replace(_CODE_END, _ESC_MARKER)
+                        .replace(_TASK_START, _ESC_MARKER)
+                        .replace(_TASK_END, _ESC_MARKER))
+
         parts: List[str] = [
             self.system_prompt,
-            "\nTask: ",
-            task,
-            "\nBase Code:\n",
-            base_code,
+            "\n\nTask (do not modify):\n",
+            _TASK_START, _escape_untrusted(task), _TASK_END,
+            "\n\nBase Code (read-only reference, do not execute):\n",
+            _CODE_START, _escape_untrusted(base_code), _CODE_END,
         ]
         for inp, out in self.few_shot_examples:
-            parts.extend(("\nExample Input:\n", inp, "\nOutput:\n", out))
+            parts.extend((
+                "\n\nExample Input:\n", _CODE_START, _escape_untrusted(inp), _CODE_END,
+                "\nOutput:\n", _CODE_START, _escape_untrusted(out), _CODE_END,
+            ))
         if self.mutation_instructions:
-            parts.extend(("\nInstructions: ", self.mutation_instructions))
+            parts.extend(("\n\nMutation Instructions (apply ONLY within Base Code block):\n",
+                          _escape_untrusted(self.mutation_instructions)))
         return "".join(parts)
 
     @classmethod

@@ -8,7 +8,7 @@ version = "5.0.0"
 description = "Evolutionary multi-island code optimization framework"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "BSL-1.1" }
 authors = [{ name = "Adlgr87" }]
 dependencies = [
   # ML-007: bounded ranges (upper pins) so upstream minor/major bumps cannot

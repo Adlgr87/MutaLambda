@@ -6,7 +6,7 @@ import copy
 import random
 from typing import Callable, Dict, List, Optional, Tuple
 
-from models import PromptGenome
+from mutalambda_core.models import PromptGenome
 from sandbox import SandboxEvaluator
 
 

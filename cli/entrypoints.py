@@ -67,7 +67,7 @@ def run_full_test_suite() -> bool:
         ast.parse(result)
 
     def t_diversity_not_placeholder():
-        from island_evolution import IslandPool
+        from mutalambda_core.island_evolution import IslandPool
 
         pool = IslandPool()
         fake_islands = []
@@ -222,7 +222,7 @@ def main() -> None:
 
     if args.config:
         config = EvolveConfig.from_yaml(args.config)
-        from config_loader import load_yaml  # noqa: F401
+        from mutalambda_config.config_loader import load_yaml  # noqa: F401
 
         agent_kwargs = {"config": config}
     else:
@@ -285,7 +285,7 @@ def main() -> None:
         sys.exit(0 if result.success else 1)
 
     if args.resume:
-        from checkpoint_manager import resume_agent
+        from mutalambda_config.checkpoint_manager import resume_agent
 
         agent = resume_agent(
             args.resume,

@@ -27,7 +27,7 @@ from uuid import uuid4
 import numpy as np
 
 if TYPE_CHECKING:
-    from island_evolution import IslandSnapshot  # noqa: F401
+    from mutalambda_core.island_evolution import IslandSnapshot  # noqa: F401
 
 # Package-internal dependencies. These are defined in the package ``__init__``
 # *before* it imports this module, which avoids a circular-import problem:
@@ -91,32 +91,48 @@ class MutaLambdaAgent:
             "retried": 0,
             "gate_failures": {},
         }
-        self.llm_fn = (
-            _resolve_llm_backend(
-                backend=config.llm_backend,
-                model=config.llm_model,
-                timeout_sec=config.llm_timeout_sec,
-                temperature=config.llm_temperature,
-                max_retries=int(getattr(config, "llm_max_retries", 3) or 3),
-                max_calls_per_generation=int(
-                    getattr(config, "llm_max_calls_per_generation", 0) or 0
-                ),
-                max_total_calls=int(getattr(config, "llm_max_total_calls", 0) or 0),
-                max_cost_usd=float(getattr(config, "llm_max_cost_usd", 0.0) or 0.0),
-                privacy_allow_external=bool(getattr(config, "privacy_allow_external_llm", True)),
-                privacy_redact_secrets=bool(getattr(config, "privacy_redact_secrets", True)),
-                replay_log_path=getattr(config, "llm_replay_log", None)
-                or (
-                    str(Path(config.checkpoint_dir) / "llm_replay.jsonl")
-                    if getattr(config, "checkpoint_enabled", False)
-                    else None
-                ),
-            )
-            if llm_fn is None
-            else llm_fn
+        # LLM backend is resolved lazily — _resolve_llm_backend is deferred
+        # until the first actual LLM call, preventing startup crashes when the
+        # configured backend (e.g. Ollama) is not running (D2).
+        self._llm_config = (
+            config.llm_backend,
+            config.llm_model,
+            config.llm_timeout_sec,
+            config.llm_temperature,
         )
-        # Keep backend instance when factory attached it.
-        self._llm_backend = getattr(self.llm_fn, "__self_backend__", None)
+        self._llm_kwargs = dict(
+            max_retries=int(getattr(config, "llm_max_retries", 3) or 3),
+            max_calls_per_generation=int(
+                getattr(config, "llm_max_calls_per_generation", 0) or 0
+            ),
+            max_total_calls=int(getattr(config, "llm_max_total_calls", 0) or 0),
+            max_cost_usd=float(getattr(config, "llm_max_cost_usd", 0.0) or 0.0),
+            privacy_allow_external=False,
+            privacy_redact_secrets=bool(getattr(config, "privacy_redact_secrets", True)),
+            replay_log_path=getattr(config, "llm_replay_log", None)
+            or (
+                str(Path(config.checkpoint_dir) / "llm_replay.jsonl")
+                if getattr(config, "checkpoint_enabled", False)
+                else None
+            ),
+        )
+
+        def _lazy_llm_fn(prompt):
+            """Lazy resolver — constructs LLMBackend on first call."""
+            if not hasattr(self, "_resolved_llm_fn") or self._resolved_llm_fn is None:
+                resolved = _resolve_llm_backend(
+                    backend=self._llm_config[0],
+                    model=self._llm_config[1],
+                    timeout_sec=self._llm_config[2],
+                    temperature=self._llm_config[3],
+                    **self._llm_kwargs,
+                )
+                self._resolved_llm_fn = resolved
+                self._llm_backend = getattr(resolved, "__self_backend__", None)
+            return self._resolved_llm_fn(prompt)
+
+        self.llm_fn = llm_fn if llm_fn is not None else _lazy_llm_fn
+        self._llm_backend = None
         self._base_llm_fn = self.llm_fn
         self._active_prompt_genome: Optional[PromptGenome] = None
 
@@ -324,7 +340,7 @@ class MutaLambdaAgent:
                 rng=self.rng_session.stream("bandit"),
             )
         # Register optional engines under EvolutionExtension contract (WF#20)
-        from extensions import wrap_engine
+        from mutalambda_core.extensions import wrap_engine
 
         for eng, name in (
             (self._hfc, "hfc"),
@@ -769,7 +785,7 @@ class MutaLambdaAgent:
 
         if gen % 5 == 0:
             try:
-                from nsga2 import get_nsga2_stats
+                from mutalambda_engines.nsga2 import get_nsga2_stats
 
                 all_inds = [ind for isl in self.islands for ind in isl.population]
                 nsga_stats = get_nsga2_stats(all_inds)
@@ -990,7 +1006,7 @@ class MutaLambdaAgent:
 
     def _save_checkpoint(self, generation: int) -> Optional[str]:
         try:
-            from checkpoint_manager import save_full_checkpoint
+            from mutalambda_config.checkpoint_manager import save_full_checkpoint
 
             raw_config = getattr(self, "_raw_config", None)
             return save_full_checkpoint(

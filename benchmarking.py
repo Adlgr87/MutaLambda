@@ -1,4 +1,6 @@
-"""Statistical benchmarking for candidate evaluation (ML-F04 / ML-F05).
+"""🔴 DEPRECATED: Use `bench_phase6.py` instead. This file is maintained for backward compatibility only (FIX #18).
+
+Statistical benchmarking for candidate evaluation (ML-F04 / ML-F05).
 
 Produces real percentiles from multiple samples instead of reusing a single
 timing measurement for p50/p99.

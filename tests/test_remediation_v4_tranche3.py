@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import requests
 
-from event_bus import (
+from mutalambda_core.event_bus import (
     GENERATION_COMPLETED,
     GENERATION_STARTED,
     EventBus,
@@ -22,7 +22,7 @@ from llm_backend import (
     parse_structured_response,
 )
 from muta_lambda import EvolveConfig, MutaLambdaAgent, MutaLambdaSession
-from models import Individual
+from mutalambda_core.models import Individual
 
 
 class FlakySession:
@@ -151,7 +151,7 @@ def test_agent_emits_generation_events():
 
 
 def test_core_checkpoint_resume_roundtrip(tmp_path):
-    from checkpoint_manager import save_full_checkpoint, resume_agent, load_checkpoint
+    from mutalambda_config.checkpoint_manager import save_full_checkpoint, resume_agent, load_checkpoint
 
     seed = "def solution(n):\n    return n * (n + 1) // 2\n"
     cfg = EvolveConfig(

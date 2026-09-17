@@ -79,7 +79,7 @@ def _tokens(text: str) -> int:
 
 
 def _main() -> int:
-    from evolution_engine import CoreEvolutionEngine
+    from mutalambda_core.evolution_engine import CoreEvolutionEngine
     from optimization_flags import reset_optimization_flags
 
     engine = CoreEvolutionEngine()

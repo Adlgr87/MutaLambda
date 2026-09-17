@@ -1,3 +1,6 @@
+<!-- FIX #26: This is the CANONICAL agent instruction file for MutaLambda.
+The .agents/ directory contains specialized subagent role definitions.
+CLAUDE.md is legacy for Claude Code compatibility only. -->
 ## MutaLambda — evolutionary code optimization system
 
 ### Phase 6 optimization (completed — 2026-08-18)
@@ -40,10 +43,11 @@ cd /home/adlg/MutaLambda
 python bench_phase6.py            # Phase 6 benchmark
 python scripts/benchmark_nsga2_cache.py
 python scripts/benchmark_checkpoint_serialization.py
-python -m pytest tests/ -q --deselect tests/test_hfc_tiers.py::test_hfc_deduplicates_demoted_elite_duplicate_in_factory
+python -m pytest tests/ -q
 ```
-> Resultados actuales (post-optimización memoización HFC): ~458 tests OK.  
-> Tests preexistentes en error de colección: 7 (dependencia `tree_sitter` no instalada en el entorno local — ver `DEPENDENCIES note` más abajo; no correlacionados con los cambios).
+> Resultados actuales (post-correcciones de seguridad Oleada 1): ~1090 tests OK (8 skipped, 0 failures).  
+> `tree_sitter` está instalado en este checkout; 0 collection errors.  
+> `test_hfc_deduplicates_demoted_elite_duplicate_in_factory` ahora PASA — el `--deselect` era estancado y ha sido eliminado.
 
 # AGENTS.md — MutaLambda Workflow Guide
 

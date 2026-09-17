@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from evaluation_service import EvaluationService, evaluation_key
-from models import Individual, LineageGraph, stable_code_hash
+from mutalambda_core.evaluation_service import EvaluationService, evaluation_key
+from mutalambda_core.models import Individual, LineageGraph, stable_code_hash
 from muta_lambda import EvolveConfig, GenerationResult, MutaLambdaAgent
 from runners import SubprocessRunner, compare_values, scan_code_security
 from sandbox import SandboxEvaluator

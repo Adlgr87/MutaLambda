@@ -476,8 +476,6 @@ def _numeric_literals(source: str) -> Optional[T.List[float]]:
         if isinstance(node, stdlib_ast.Constant) and isinstance(node.value, (int, float)):
             if not isinstance(node.value, bool):
                 values.append(float(node.value))
-        elif isinstance(node, stdlib_ast.Num):  # pragma: no cover - py<3.8 shim
-            values.append(float(node.n))
     return sorted(values)
 
 
@@ -623,7 +621,7 @@ class SecurityGate(Pass):
     # ── source level (reuses mutation_filters) ──────────────────────────────
     def _verify_source(self, source: str) -> List[Diagnostic]:
         try:
-            from mutation_filters import run_all_filters
+            from mutalambda_core.mutation_filters import run_all_filters
         except Exception as exc:  # pragma: no cover - optional import
             return [
                 Diagnostic(

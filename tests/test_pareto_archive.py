@@ -240,7 +240,7 @@ def test_astmutator_survives_ifexp_targets() -> None:
     used to crash with TypeError on such targets."""
     import random
 
-    from evolution_engine import ASTMutator
+    from mutalambda_core.evolution_engine import ASTMutator
 
     target = (
         "def apply_all(data, k=32):\n"

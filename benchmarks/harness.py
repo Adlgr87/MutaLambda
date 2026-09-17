@@ -302,7 +302,7 @@ def _mutate_code(code, function_name, mod=None, arg_factory=None, max_tries=12):
     that is verified correct against the original. Falls back to original if
     none are both correct and faster.
     """
-    from evolution_engine import ASTMutator
+    from mutalambda_core.evolution_engine import ASTMutator
     import random as _r
 
     rng = _r.Random(7)
@@ -473,11 +473,11 @@ def _run_real_mutalambda(code, function_name, test_cases):
     import io
     from contextlib import redirect_stdout
     import muta_lambda as _ml
-    from mutation_filters import _filter_mutant
+    from mutalambda_core.mutation_filters import _filter_mutant
 
     if not hasattr(_ml, "_filter_mutant"):
         _ml._filter_mutant = _filter_mutant
-    from evolution_engine import ASTMutator
+    from mutalambda_core.evolution_engine import ASTMutator
     from muta_lambda import EvolveConfig, MutaLambdaAgent
 
     def mock_llm(prompt):

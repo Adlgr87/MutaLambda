@@ -12,7 +12,7 @@ from typing import Deque, Dict, List, Tuple
 
 import numpy as np
 
-from models import ArchivedSolution
+from mutalambda_core.models import ArchivedSolution
 
 try:
     import faiss as _faiss_module
