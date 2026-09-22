@@ -1,7 +1,6 @@
-"""🔴 DEPRECATED: Use `dashboard_run.py` instead.
-This file is maintained for backward compatibility only (FIX #18).
+"""MutaLambda HITL Dashboard — Streamlit interface for Human-in-the-Loop.
 
-MutaLambda HITL Dashboard — Streamlit interface for Human-in-the-Loop.
+`dashboard.py` is the app module; `dashboard_run.py` is the launcher.
 
 Features:
   • Real-time phylogenetic tree of island evolution

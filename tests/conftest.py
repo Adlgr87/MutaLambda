@@ -1,6 +1,6 @@
-"""Pytest fixtures re-exporting shared helpers (FIX 4.1).
+"""Pytest fixtures re-exporting shared helpers.
 
-Includes an autouse global-state reset fixture (Fase 5C) that clears
+Includes an autouse global-state reset fixture that clears
 module-level caches, process pools, and metric registries between tests
 to eliminate cross-test contamination that produces flaky failures in
 hfc_tiers, progressive_pipeline, and evaluation_service tests.

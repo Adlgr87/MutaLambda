@@ -1,4 +1,4 @@
-"""Tests for performance monitor (FASE 6)."""
+"""Tests for the performance monitor."""
 
 import time
 import pytest

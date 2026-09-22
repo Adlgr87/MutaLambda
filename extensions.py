@@ -1,13 +1,14 @@
-"""🔴 DEPRECATED: This module has been moved to mutalambda_core.extensions.
-FIX #43: Package reorganization. This shim maintains backward compatibility.
-Import from the new location instead. Will be removed in next major version.
+"""Backward-compatibility shim: this module has moved to mutalambda_core.extensions.
+
+Existing imports keep working; new code should import from the package
+directly. This shim is scheduled for removal in the next major release.
 """
 import warnings
+
 warnings.warn(
-    f"This module has been moved to mutalambda_core.extensions. "
-    "Please update your import path.",
+    "extensions has moved to mutalambda_core.extensions. Please update your import path.",
     DeprecationWarning,
-    stacklevel=2
+    stacklevel=2,
 )
 
 from mutalambda_core.extensions import *  # noqa: F401,F403

@@ -13,7 +13,7 @@
 # El loader vive en optimization_flags.py (get_optimization_flags()).
 
 optimization:
-  # ── FASE 0 ─────────────────────────────────────────────────────────────
+  # ── Medición (activa por defecto; no cambia calidad ni costo) ──────────
   # A5: libro de costos (tokens $ + GPU $). Interceptado en el wrapper LLM,
   # en el servicio de evaluación y en la regression gate.
   cost_ledger:
@@ -40,10 +40,11 @@ optimization:
   deterministic_prompt:
     enabled: true
 
-  # ── FASE 1 ─────────────────────────────────────────────────────────────
+  # ── Reducción de costo LLM (palancas independientes) ───────────────────
   # Headroom (paquete `headroom-ai`, github.com/headroomlabs-ai/headroom —
-  # instalado y verificado en Fase 1). Con todos los sub-flags en `false` el
-  # comportamiento es idéntico al pre-Fase-1 (byte a byte); actívalos por
+  # instalado y verificado). Con todos los sub-flags en `false` el
+  # comportamiento es idéntico al de la configuración por defecto (byte a
+  # byte); actívalos por
   # palanca. `enabled` es el paraguas informativo; cada sub-flag manda.
   headroom:
     enabled: false
@@ -72,10 +73,10 @@ optimization:
       enabled: false
       ucb_c: 1.414             # coeficiente de exploración UCB1
 
-  # ── FASE 2 ─────────────────────────────────────────────────────────────
+  # ── Escalera de evaluación N1/N2/N3 (costo por mutante) ─────────────────
   # O4/AmdahlHeadroomFilter + O6 (3 niveles) + A4 (subset de tests).
-  # `enabled` es el paraguas: con `false` el motor es idéntico a pre-Fase-2
-  # (regla 6). Con `true` se activa la escalera:
+  # `enabled` es el paraguas: con `false` el motor mantiene el
+  # comportamiento sin escalera (regla 6). Con `true` se activa la escalera:
   #   N1 nanopass in-memory (<1ms) → N2 subset mínimo (in-proc/subproc) →
   #   N3 solo el top `sandbox_top_pct`% a Docker sandbox + Ray (opcional).
   # Los sub-flags individualmente apagan cada palanca sin tocar las demás.
@@ -95,7 +96,7 @@ optimization:
     ray_profile:
       enabled: false           # N3: distribuir evaluaciones con Ray
 
-  # ── FASE 3 ─────────────────────────────────────────────────────────────
+  # ── Gate económico (early stop por costo) ──────────────────────────────
   # O5: EconomicHeadroomGate — early stop cuando el ΔH por generación no
   # justifica el $GPU de seguir corriendo.
   economic_gate:

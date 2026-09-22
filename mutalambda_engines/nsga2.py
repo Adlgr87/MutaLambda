@@ -70,7 +70,7 @@ def non_dominated_sort(population: List[Individual]) -> List[ParetoFront]:
     Optimization: precompute fitness vectors to avoid O(N²) redundant lookups.
     Previously _get_fitness() was called O(N²) times; now only O(N).
     For populations >= 50, uses a numpy-vectorized dominance matrix which is
-    2.9x-3.5x faster (validated empirically; see EMPIRICAL_EVIDENCE.md).
+    2.9x-3.5x faster (validated empirically).
     """
     n = len(population)
     if n == 0:
@@ -128,7 +128,7 @@ def _non_dominated_sort_numpy(population: List[Individual]) -> List[ParetoFront]
     """Vectorized non-dominated sort using a numpy dominance matrix.
 
     Empirically validated: ~3x speedup over the pure-Python loop for
-    populations >= 50 (see NSGA2_REFACTOR_REPORT.md).
+    populations >= 50.
     """
     n = len(population)
     if n == 0:

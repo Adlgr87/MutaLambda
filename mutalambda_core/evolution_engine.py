@@ -309,7 +309,7 @@ class CoreEvolutionEngine:
                 )
             )
 
-        # O4 (FASE 2, Amdahl): when profiling_filter is enabled, drop regions
+        # Amdahl filter: when profiling_filter is enabled, drop regions
         # that live inside functions owning <min_cpu_pct of the measured CPU.
         # Mutating them cannot move end-to-end runtime → pure token spend.
         spans = self._amdahl_excluded_spans(code)

@@ -265,7 +265,7 @@ class LineageGraph:
         return candidates[:max_candidates]
 
     def stats(self, cached: bool = True) -> Dict[str, Any]:
-        """FIX #29: Optional caching to avoid O(N(N+E)) recomputation."""
+        """Optional caching to avoid O(N(N+E)) recomputation."""
         """Estadísticas resumidas del grafo genealógico."""
         if not self.nodes:
             return {

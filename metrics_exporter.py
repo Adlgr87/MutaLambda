@@ -1,5 +1,5 @@
 """
-FASE 8 — Prometheus / OpenTelemetry Metrics Exporter
+Prometheus / OpenTelemetry Metrics Exporter
 
 Exposición de métricas de MutaLambda en estándares industry-grade:
   - Prometheus scrape endpoint (HTTP /metrics)

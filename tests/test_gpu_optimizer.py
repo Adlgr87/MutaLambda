@@ -1,4 +1,4 @@
-"""Tests for GPU optimizer (FASE 4-5)."""
+"""Tests for the GPU optimizer."""
 
 import pytest
 import numpy as np

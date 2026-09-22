@@ -1,7 +1,8 @@
-"""🔴 DEPRECATED: Use `island_evolution.py` instead. This file is
-maintained for backward compatibility only (FIX #18 – module consolidation).
+"""Island evolution unit.
 
-Island evolution unit.
+This module contains the :class:`Island` unit (one population + its local
+evolution loop). The multi-island coordinator (``IslandPool``) lives in
+``mutalambda_core.island_evolution``.
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ logger = logging.getLogger("MutaLambda")
 
 
 
-# FIX #44: Protocol for optional migration_bus components (prevents getattr typos)
+# Protocol for optional migration_bus components (prevents getattr typos)
 from typing import Protocol
 
 class MigrationBusProtocol(Protocol):
@@ -432,7 +433,7 @@ class Island:
                 pass
 
     def _mutate(self, code: str) -> str:
-        """FIX #21: Legacy mutation (generic prompt). Use _mutate_with_context for LLM-guided mutation."""
+        """Legacy mutation (generic prompt). Use _mutate_with_context for LLM-guided mutation."""
         """Mutación híbrida: AST o LLM."""
         """Mutación híbrida: AST o LLM."""
         if self.rng.random() < 0.4:
@@ -489,7 +490,7 @@ class Island:
         return engine.refine(base_code, candidate_code, self.llm_fn)
 
     def _pattern_signature(self, code: str, _cache: Dict[str, str] = None) -> str:
-        """FIX #31: Cache results by code_hash to avoid re-traversal."""
+        """Cache results by code_hash to avoid re-traversal."""
         """Compact AST shape signature for PatternMemory."""
         try:
             tree = cached_parse(code)
@@ -814,7 +815,7 @@ class Island:
             )
 
     def _stage_scientific_validation(self, context: Dict[str, Any]):
-        """Scientific Validation Layer gate (FASE 1).
+        """Scientific Validation Layer gate.
 
         Opt-in gate between tests/differential and performance. When scientific
         validation is disabled it is a no-op PASS. A hard invariant failure yields

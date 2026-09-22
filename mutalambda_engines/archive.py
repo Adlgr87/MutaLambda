@@ -120,7 +120,7 @@ class SolutionArchive:
                             existing.embedding = emb
                         existing.metrics = merged
                         self._dedupe_updates += 1
-                        # FIX #1: Sync FAISS index with updated embedding (ML-L07)
+                        # Sync FAISS index with updated embedding
                         # IndexFlatIP doesn't support in-place updates, so rebuild.
                         self._rebuild_index()
                         return
@@ -158,7 +158,7 @@ class SolutionArchive:
                 )
 
             evicted = max(0, old_len + len(items) - self.max_size)
-            # FIX #1: Sync index after eviction (deque auto-evicts but index doesn't)
+            # Sync index after eviction (deque auto-evicts but the index does not)
             self._pending_prunes += evicted
             self._rebuild_index()
             if self._pending_prunes >= self.prune_threshold:
@@ -270,7 +270,7 @@ class SolutionArchive:
         archive.embedder = sentence_transformer(
             f"sentence-transformers/{embedder_model}"
         )
-        # FIX #7: Use consistent API detection (same as __init__)
+        # Use consistent API detection (same as __init__)
         if hasattr(archive.embedder, "get_embedding_dimension"):
             archive._dim = archive.embedder.get_embedding_dimension()
         else:
