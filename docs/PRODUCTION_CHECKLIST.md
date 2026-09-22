@@ -1,8 +1,6 @@
 # MutaLambda — Production Readiness Checklist
 
-> Workflow: `Workflow_productionready_mutalambda` · Ejecutado: 2026-08-22, actualizado 2026-08-23
-> Repositorio: https://github.com/Adlgr87/MutaLambda (local sincronizado con `origin/main` @ `a0a6179`)
-> Entorno: Python 3.14.7 · Linux (kernel 7.1.9-200.fc44.x86_64)
+> Estado: revisado 2026-09 · Repositorio: https://github.com/Adlgr87/MutaLambda
 
 ## Resumen ejecutivo
 
@@ -172,7 +170,3 @@ Recomendación: documentar que `container` es el modo soportado para código de 
 Empaquetado revalidado en HEAD: `python -m build` → exit 0
 (`dist/mutalambda-4.0.0-py3-none-any.whl`, `dist/mutalambda-4.0.0.tar.gz`).
 
----
-
-*Checklist generado por OpenHands (agente AI) como parte del workflow
-`Workflow_productionready_mutalambda`.*

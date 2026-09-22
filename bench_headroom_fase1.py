@@ -248,7 +248,7 @@ def _main() -> int:
     ledger = cl.get_cost_ledger().dump_json(out_dir / "fase1_cost_ledger.json")
 
     print("=" * 72)
-    print("MutaLambda — FASE 1 before/after (Headroom levers)")
+    print("MutaLambda — headroom levers before/after")
     print("=" * 72)
     print(
         f"[before] calls={before['llm_calls']} in={before['input_tokens']} out={before['output_tokens']} "

@@ -22,7 +22,7 @@ _AUXILIARY_METRICS = ("latency_p99", "throughput", "parsimony")
 
 # Default weights for weighted-sum scalarisation.
 # With 3 objectives, selective pressure remains strong.
-# FIX #19: DEFAULT_WEIGHTS is used for fallback scoring but to_scalar() uses RESOURCE_PENALTY_WEIGHT
+# DEFAULT_WEIGHTS is used for fallback scoring but to_scalar() uses RESOURCE_PENALTY_WEIGHT
 # for live scoring. Keeping for legacy API compatibility (ML-F04).
 DEFAULT_WEIGHTS: Dict[str, float] = {
     "correctness": 1.00,

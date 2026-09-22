@@ -50,7 +50,7 @@ __all__ = ["EvolveConfig", "EvolveResult", "run_evolution"]
 SUPPORTED_PROFILES = ("enterprise", "scientific", "gpu")
 SUPPORTED_LANGUAGES = ("python", "rust", "cpp")
 
-# FIX #44: Protocol for optional migration_bus components (prevents getattr typos)
+# Protocol for optional migration_bus components (prevents getattr typos)
 class MigrationBusProtocol(Protocol):
     """Protocol for optional migration_bus components."""
     def register_island(self, island_id: int, island: Any) -> None: ...
@@ -60,7 +60,7 @@ class MigrationBusProtocol(Protocol):
 class EvolveConfig:
     """Runtime configuration for the evolve orchestrator.
 
-    FIX #24: should_stop and combined_best_score are runtime state, not config.
+    should_stop and combined_best_score are runtime state, not config.
     They are kept here for backward compat but should be moved to the engine instance.
     """
 
@@ -74,9 +74,9 @@ class EvolveConfig:
     seed: int = 42
     output_dir: Path = field(default_factory=lambda: Path(".mutalambda"))
     fitness_metric: str = "latency_p50"  # lower-is-better
-    mutation_strategy: str = "ast"  # ast | llm | auto (FASE 3: bandit resuelve)
+    mutation_strategy: str = "ast"  # ast | llm | auto (auto: el bandit resuelve)
     allow_untested: bool = True
-    # FASE 3 (A5): warm-start from the pareto archive (same API signature).
+    # Warm-start from the pareto archive (same API signature).
     # Disable per run with --no-warm-start.
     warm_start: bool = True
     timeout_sec: float = 5.0
@@ -436,7 +436,7 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
     else:
         evaluator = _make_offline_evaluator(config.profile, config.seed)
 
-    # ── FASE 2 (O6/A4): tiered evaluation ladder, flag-gated ──────────────
+    # ── Tiered evaluation ladder (flag-gated) ─────────────────────────────
     # profiling_filter.enabled (config/optimization.yaml) ⇒ N1 nanopass
     # (<1 ms) → N2 minimal test subset → N3 top-20 % sandbox.  Zero
     # behaviour change when the flag is off.
@@ -447,7 +447,7 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
     except Exception:
         pass  # the ladder must never take the pipeline down
 
-    # ── FASE 3 (O5/A5): economic gate + pareto archive, flag-gated ─────────
+    # ── Economic gate + pareto archive (flag-gated) ───────────────────────
     gate = None
     archive = None
     warm_start_info: Dict[str, Any] = {"used": False}
@@ -483,7 +483,7 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
     except Exception:
         pass  # levers must never take the pipeline down
 
-    # FASE 3 A3: "auto" resolves to llm when a backend is reachable
+    # "auto" resolves to llm when a backend is reachable
     # (an API key is configured), else ast.  The bandit (island flow)
     # applies the real-$ reward when bandit_reward_usd.enabled.
     if config.mutation_strategy == "auto":
@@ -508,7 +508,7 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
             if len(seed_codes) >= config.population:
                 break
 
-        # FASE 3 (A5): warm-start — a prior best for the SAME public API
+        # Warm-start — a prior best for the SAME public API
         # replaces one random mutant in the seed population.  The archive
         # code is evaluated like any other individual (it is never trusted
         # blindly).  --no-warm-start disables this *read* only; the run
@@ -570,7 +570,7 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
         best_score = engine.best_score if engine.best_score != float("-inf") else 0.0
         engine_stats = engine.stats()
 
-        # FASE 3 (A5/O5): final hypervolume over the tiers' fitness vectors.
+        # Final hypervolume over the tiers' fitness vectors.
         try:
             from economic_gate import hypervolume as _hv_fn
 
@@ -608,7 +608,7 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
                 )
             )
 
-            # FASE 3 (O5): economic gate over the population hypervolume.
+            # Economic gate over the population hypervolume.
             if gate is not None:
                 from economic_gate import hypervolume as _hv_fn
 
@@ -642,7 +642,7 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
 
         optimized_code = best_code
 
-        # FASE 3 (A5/O5): final population hypervolume (always — the
+        # Final population hypervolume (always — the
         # roi_report reports it; one extra cached evaluation at the end).
         try:
             from economic_gate import hypervolume as _hv_fn
@@ -687,7 +687,7 @@ def run_evolution(config: EvolveConfig) -> EvolveResult:
         engine_stats,
     )
 
-    # FASE 3 (A5): roi_report.json — total cost, levers, stop reason, HV.
+    # roi_report.json — total cost, levers, stop reason, HV.
     roi_path = _write_roi_report(
         checkpoint_dir,
         config,
@@ -740,7 +740,7 @@ def _write_roi_report(
     strategy_note: str,
     cache_stats: Optional[Dict[str, Any]],
 ) -> Optional[Path]:
-    """FASE 3 (A5): write roi_report.json for the run.  Never raises."""
+    """Write roi_report.json for the run. Never raises."""
     try:
         from cost_ledger import get_cost_ledger
 
@@ -948,7 +948,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=["ast", "llm", "auto"],
         default="ast",
         help=(
-            "Mutation strategy (default: ast). 'auto' (FASE 3) resolves to "
+            "Mutation strategy (default: ast). 'auto' resolves to "
             "llm when an API key is configured and lets the operator bandit "
             "use real-$ rewards from the cost ledger "
             "(bandit_reward_usd.enabled)."
@@ -958,7 +958,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--no-warm-start",
         action="store_false",
         dest="warm_start",
-        help="FASE 3 (A5): disable warm-start from the pareto archive.",
+        help="Disable warm-start from the pareto archive.",
     )
     return parser
 

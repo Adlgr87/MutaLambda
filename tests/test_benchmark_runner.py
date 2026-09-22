@@ -1,4 +1,4 @@
-"""Tests for benchmark runner (FASE 6)."""
+"""Tests for the benchmark runner."""
 
 import json
 import pytest

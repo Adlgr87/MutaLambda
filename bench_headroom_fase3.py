@@ -279,9 +279,9 @@ def gate_b(tmp: Path) -> dict:
 
 # ── Gate C: cumulative cost model (measured per lever) ─────────────────────
 # Documented measured constants (artefacts in reports/):
-#   FASE 1 bench: 200 candidates — BEFORE 200 calls, in=791,200 tok,
+#   fase1 bench: 200 candidates — BEFORE 200 calls, in=791,200 tok,
 #     out=37,800 tok; AFTER 40 calls, in=35,464, out=16,812.
-#   FASE 2 bench: 120 mutants — full sandbox evals 120 → 18;
+#   fase2 bench: 120 mutants — full sandbox evals 120 → 18;
 #     per-mutant eval time 20.30 ms → 4.56 ms (measured ratio 0.2246).
 # Unit prices (GPT-4o-mini class, documented assumption):
 IN_USD_PER_M = 0.15
@@ -297,7 +297,7 @@ def gate_c(gens_base: int, gens_opt: int) -> dict:
     f2 = {"evals_before": 120, "evals_after": 18, "time_ratio": 4.56 / 20.30}
 
     # One full run = GENS generations × 5 LLM calls (batching model) and
-    # GENS × 16 candidate evaluations.  FASE-1 numbers are for 40 gens
+    # GENS × 16 candidate evaluations.  fase1 numbers are for 40 gens
     # (200 calls / 40 gens = 5 per gen).
     llm_before_40g = (f1["before"]["in"] * IN_USD_PER_M + f1["before"]["out"] * OUT_USD_PER_M) / 1e6
     llm_after_40g = (f1["after"]["in"] * IN_USD_PER_M + f1["after"]["out"] * OUT_USD_PER_M) / 1e6

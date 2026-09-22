@@ -1,4 +1,4 @@
-"""Pareto archive (FASE 3 — A5).
+"""Pareto archive (warm-start store keyed by API signature).
 
 A warm-start store indexed by **API signature hash**: the canonical hash of
 the target's public API fingerprint (function/class names + signatures).

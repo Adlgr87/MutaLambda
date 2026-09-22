@@ -1,7 +1,7 @@
-"""Unified telemetry for MutaLambda FASE 1+ runs.
+"""Unified telemetry for MutaLambda evolution runs.
 
 Captures latency, memory (peak traced) and optional GPU counters around an
-arbitrary callable, producing a :class:`TelemetrySnapshot` that the FASE 6
+arbitrary callable, producing a :class:`TelemetrySnapshot` that the benchmark
 benchmark pipeline persists alongside benchmark results.
 
 Thin wrapper (kept under 200 lines per the repo's refactor policy) — no

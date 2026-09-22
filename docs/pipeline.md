@@ -211,7 +211,7 @@ Evolution runs as **intra-job islands**. A single `evolve` job runs
 the process. The HFC league engine performs real migration between tiers
 (laboratory → factory → elite). There is **no** GitHub Actions matrix for
 islands — the matrix would multiply CI minutes without adding migration
-fidelity (see `PLANS/PIPELINE_2_0_LANDING_PLAN.md`, FASE 3).
+fidelity.
 
 ## Verification
 

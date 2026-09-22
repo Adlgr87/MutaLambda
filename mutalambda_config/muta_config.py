@@ -96,8 +96,8 @@ class PrivacySection(BaseModel):
 class LLMSection(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    enabled: bool = False  # FIX #9: Dead field - has NO effect. LLM usage is controlled at evolution level.
-    provider: Literal["openai"] = "openai"  # FIX #11: Only openai supported (others documented but not implemented)
+    enabled: bool = False  # Dead field - has NO effect. LLM usage is controlled at evolution level.
+    provider: Literal["openai"] = "openai"  # Only openai supported (others documented but not implemented)
     mutator_model: str = "gpt-4o-mini"  # Used by LLM mutator (openai provider)
     mutator_temperature: float = Field(0.1, ge=0.0, le=2.0)
     mutator_max_tokens: int = Field(1400, ge=1)
@@ -177,7 +177,7 @@ class UASTSection(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     use_uast: bool = False
-    # FIX #16: Updated to match MULTILANGUAGE_REPORT.md and docs/config-reference.md
+    # Languages with UAST adapters (see docs/config-reference.md and muta_ext/uast/adapters).
     supported_languages: List[str] = Field(default_factory=lambda: ["python", "rust", "cpp", "go"])
     uast_endpoint: str = ""
     uast_timeout_sec: float = Field(30.0, gt=0)

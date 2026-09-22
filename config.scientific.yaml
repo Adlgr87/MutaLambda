@@ -1,4 +1,4 @@
-# Scientific Optimization Mode — plantilla de configuración (PDF FASE 0/1/2/3)
+# Scientific Optimization Mode — plantilla de configuración
 # Flujo A: SVL + hot-path profiling + domain operators (opt-in, disabled por defecto).
 # Uso:  mutalambda run --source examples/target.py --tests examples/target_tests.json --scientific -g 5
 #    o:  mutalambda run -c config.scientific.yaml -g 5

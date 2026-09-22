@@ -1,4 +1,4 @@
-"""Tests for Ray scheduler (FASE 5)."""
+"""Tests for the Ray scheduler."""
 
 import pytest
 from unittest.mock import patch, MagicMock

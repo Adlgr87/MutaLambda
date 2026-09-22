@@ -1,4 +1,4 @@
-# FASE 8 — Metrics Exporter (Prometheus / OpenTelemetry)
+# Metrics Exporter (Prometheus / OpenTelemetry)
 
 ## Objetivo
 Expose MutaLambda metrics through industry-standard protocols for long-running

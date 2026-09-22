@@ -6,7 +6,7 @@ import copy
 import logging
 import random
 import threading
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from mutalambda_core.island import Island
 
@@ -20,7 +20,7 @@ logger = logging.getLogger("MutaLambda")
 
 
 
-# FIX #44: Protocol for optional migration_bus components (prevents getattr typos)
+# Protocol for optional migration_bus components (prevents getattr typos)
 from typing import Protocol
 
 class MigrationBusProtocol(Protocol):
@@ -42,7 +42,7 @@ class MigrationBus:
         self._islands_version: int = 0
         self._topology_version: int = 0
         self._cache_topology_version: int = -1
-        # FIX #23: _mesh_cols is unused - mesh and spatial_grid topologies overlap
+        # _mesh_cols is unused - mesh and spatial_grid topologies overlap
         # Attribute naming: spatial_topology is the runtime object,
         # spatial_grid is the config string (topology enum value)
         self._mesh_cols: int = 0  # Deprecated - kept for backward compat
@@ -71,7 +71,6 @@ class MigrationBus:
             logger.debug("Island %d registered in MigrationBus.", island_id)
 
     def _get_neighbors(self, island_id: int) -> List[int]:
-        """FIX #30: Build id->pos dict once for O(1) lookup instead of O(N) ids.index()."""
         """Calcula vecinos según topología. Debe llamarse con self._lock adquirido."""
         if (
             self._cache_version == self._islands_version
@@ -279,7 +278,7 @@ class MigrationBus:
 
 
 # ---------------------------------------------------------------------------
-# FASE 1: Fitness-Directed Migration (Migration Plan v2)
+# Fitness-Directed Migration (Migration Plan v2)
 # ---------------------------------------------------------------------------
 
 

@@ -65,3 +65,6 @@ MutaLambda_Commercial/
 # pytest-cov artefactos (generado en CI)
 coverage.xml
 .coverage
+
+# local audit environments
+.venv*/

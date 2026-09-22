@@ -26,12 +26,12 @@ RUN pip install --upgrade pip && \
 # --- Etapa 2: runtime ------------------------------------------------------
 FROM python:3.12-slim AS runtime
 
-ARG MUTALAMBDA_VERSION=4.0.0
+ARG MUTALAMBDA_VERSION=5.0.0
 
 LABEL org.opencontainers.image.title="MutaLambda" \
       org.opencontainers.image.description="Evolutionary multi-island code optimization framework" \
       org.opencontainers.image.version="${MUTALAMBDA_VERSION}" \
-      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.licenses="BUSL-1.1" \
       org.opencontainers.image.source="https://github.com/Adlgr87/MutaLambda"
 
 # Usuario sin privilegios (uid/gid fijos para legibilidad de politicas).

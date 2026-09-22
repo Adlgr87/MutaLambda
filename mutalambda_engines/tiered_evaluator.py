@@ -1,4 +1,4 @@
-"""Tiered Evaluator (FASE 2 — O6 Nanopass + A4 coverage-driven selection).
+"""Tiered Evaluator (nanopass guard + coverage-driven test subset selection).
 
 Cost-aware evaluation ladder.  A candidate climbs the tiers only as far as
 its cheap verdict allows:

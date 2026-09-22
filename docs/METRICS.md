@@ -453,7 +453,7 @@ Cold Paths (No Optimizados)
 2. **Aplicar optimización:** Cambiar código
 3. **Validar corrección:** Asegurar outputs idénticos (ε < 1e-10)
 4. **Medir mejora:** Solo integrar si speedup es real y validado
-5. **Documentar:** Actualizar EMPIRICAL_EVIDENCE.md
+5. **Documentar:** Registro del resultado en el changelog/PR
 
 ### Requisitos de Validación
 
@@ -570,9 +570,8 @@ python benchmark_migration_before_after.py
 
 ## 📚 Referencias
 
-- **EMPIRICAL_EVIDENCE.md** — Reporte completo de optimizaciones validadas y experimentos fallidos
 - **docs/CLI.md** — Guía completa de la CLI
-- **PLANS/AUTO_IMPROVEMENT_PLAN.md** — Plan de auto-mejora en 6 fases
+- **CHANGELOG.md** — Historial de cambios y optimizaciones
 
 ---
 

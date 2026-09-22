@@ -1,4 +1,4 @@
-"""FASE 8 — Integration test for metrics exporter with evolution pipeline."""
+"""Integration test for the metrics exporter with the evolution pipeline."""
 
 import time
 

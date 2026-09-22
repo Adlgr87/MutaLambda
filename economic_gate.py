@@ -1,4 +1,4 @@
-"""Economic Headroom Gate (FASE 3 — O5) + 3-D hypervolume.
+"""Economic Headroom Gate + 3-D hypervolume.
 
 The gate watches the evolution's *economics*, not just its fitness:
 

@@ -1,7 +1,7 @@
 # Full MutaLambda optimization pipeline (6 phases).
 #
 # Triggers: manual dispatch ONLY (no schedule until the pipeline is green for
-# 3 consecutive runs — see PLAN FASE 4). This keeps CI minutes predictable.
+# 3 consecutive runs). This keeps CI minutes predictable.
 #
 # Phases:
 #   1. fingerprint        — code_hash + api_fingerprint

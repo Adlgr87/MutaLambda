@@ -129,7 +129,7 @@ def main(argv: list[str] | None = None) -> int:
     ledger_path = get_cost_ledger().dump_json(out_dir / "fase0_cost_ledger.json")
 
     print("=" * 72)
-    print("MutaLambda — FASE 0 before/after (cost-optimization layer)")
+    print("MutaLambda — cost-optimization layer before/after")
     print("=" * 72)
     for run in (before, after):
         cache = run["fitness_cache"] or {}

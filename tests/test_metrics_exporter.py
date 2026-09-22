@@ -1,4 +1,4 @@
-"""Tests for metrics_exporter.py (FASE 8)."""
+"""Tests for metrics_exporter.py."""
 
 import threading
 import time
