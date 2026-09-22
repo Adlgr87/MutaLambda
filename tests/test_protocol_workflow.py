@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-import island as island_module
+import mutalambda_core.island as island_module
 from mutalambda_engines.fitness_vector import FitnessVector
 from mutalambda_core.island import Island
 from mutalambda_core.models import EvalResult, Individual, IslandConfig
