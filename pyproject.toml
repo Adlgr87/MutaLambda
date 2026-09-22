@@ -8,7 +8,7 @@ version = "5.0.0"
 description = "Evolutionary multi-island code optimization framework"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "BSL-1.1" }
+license = "BUSL-1.1"
 authors = [{ name = "Adlgr87" }]
 dependencies = [
   # ML-007: bounded ranges (upper pins) so upstream minor/major bumps cannot
@@ -76,41 +76,31 @@ all = [
 mutalambda = "mutalambda_cli:cli"
 
 [tool.setuptools]
+# Root-level modules (flat layout). The 4 `mutalambda_*` packages below hold
+# the implementation; several root modules are thin backward-compatibility
+# shims that re-export from them (see their docstrings).
 py-modules = [
+  # CLI / entrypoints
   "mutalambda_cli",
+  "evolve",
+  "benchmark_runner",
+  "benchmarking",
+  # Core evolution (implementation lives in mutalambda_core / mutalambda_engines)
   "sandbox",
-  "models",
   "fitness_vector",
-  "island",
   "island_evolution",
   "migration",
-
   "llm_backend",
   "evolution_engine",
   "mutation_filters",
   "progressive_pipeline",
   "component_evolution",
-  "ast_math_verifier",
-  "hotspot_profiler",
-  "numpy_optimizer",
-  "test_synthesizer",
-  "diagnostics",
-  "dashboard_run",
   "nsga2",
-  "checkpoint_manager",
-  "config_loader",
-  "workflow_protocol",
-  "prompt_evolution",
-  "prompt_evolver",
-  "property_testing",
   "hfc_tiers",
-  "interpretability",
-  "dashboard",
-
   "gpu_optimizer",
+  "ray_scheduler",
   "evaluation_service",
   "runners",
-  "benchmarking",
   "api_fingerprint",
   "differential",
   "event_bus",
@@ -132,11 +122,47 @@ py-modules = [
   "comparison",
   "logging_setup",
   "constants",
+  # Verification / analysis
+  "ast_math_verifier",
+  "hotspot_profiler",
+  "numpy_optimizer",
+  "test_synthesizer",
+  "diagnostics",
+  "interpretability",
+  "invariant_detector",
+  "universal_parser",
+  "regression_gate",
+  "certify",
+  "property_testing",
+  "secure_exec",
+  "workflow_protocol",
+  # Telemetry / reporting
+  "metrics_exporter",
+  "performance_monitor",
+  "telemetry",
+  # Cost layer
+  "economic_gate",
+  "pareto_archive",
+  # Prompt evolution
+  "prompt_evolution",
+  "prompt_evolver",
+  # Dashboard
+  "dashboard",
+  "dashboard_run",
+  # Checkpointing / config
+  "checkpoint_manager",
+  "config_loader",
+  # Backward-compatibility shims (moved into the mutalambda_* packages)
+  "archive",
 ]
 packages = [
   "cli",
   "lsp",
   "muta_lambda",
+  "mutalambda_config",
+  "mutalambda_core",
+  "mutalambda_engines",
+  "mutalambda_security",
   "muta_ext",
   "muta_ext.config",
   "muta_ext.diagnostics",
@@ -176,7 +202,7 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py310"
 
 [tool.coverage.run]
 source = ["muta_lambda", "cli", "muta_ext"]
