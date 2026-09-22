@@ -9,6 +9,7 @@ from mutalambda_engines.hfc_tiers import (
     TIER_FACTORY,
     TIER_LABORATORY,
 )
+from mutalambda_core.evolution_engine import ASTMutator
 from mutalambda_core.models import EvalResult, Individual, LineageGraph
 
 
@@ -48,7 +49,7 @@ class _MockEvaluator:
         return results
 
 
-def _engine(lambda_clones=0, tier3_size=1):
+def _engine(lambda_clones=0, tier3_size=1, **config_overrides):
     return HFCLeagueEngine(
         HFCTierConfig(
             max_tier1_size=10,
@@ -56,6 +57,7 @@ def _engine(lambda_clones=0, tier3_size=1):
             max_tier3_size=tier3_size,
             lambda_clones=lambda_clones,
             top_down_distillation=False,
+            **config_overrides,
         ),
     )
 
@@ -378,7 +380,11 @@ def test_factory_offspring_skip_evaluation_uses_parent_fitness():
             evaluation_count[0] += 1
             return super().evaluate_batch(codes)
 
-    evaluator = _CountingEvaluator(functional_codes={parent_code.strip()})
+    # The engine evaluates raw (unstripped) code; the mock must accept it so
+    # the parent keeps a real (evaluated) fitness for the clones to inherit.
+    evaluator = _CountingEvaluator(
+        functional_codes={parent_code, parent_code.strip()}
+    )
 
     snapshot = engine.step(
         llm_fn=lambda _prompt: parent_code,
@@ -516,15 +522,26 @@ class _MockEvalWithStats(_CountingEvaluator):
 
 
 @pytest.mark.root
-def test_hfc_evaluate_reads_evaluator_cache_stats_for_telemetry():
+def test_hfc_evaluate_reads_evaluator_cache_stats_for_telemetry(monkeypatch):
     """_evaluate must use evaluator.cache_stats deltas for hit/miss telemetry."""
     parent_code = "def f(x):\n    return x + 1\n"
-    engine = _engine(lambda_clones=0, tier3_size=1)  # no factory clones
+    child_code = "def f(x):\n    return x * 2\n"
+    # Force the deterministic mutation branch so the offspring code is known:
+    # the parent (pre-seeded in the mock cache) evaluates to a hit and the
+    # fresh offspring evaluates to a miss, regardless of RNG state.
+    monkeypatch.setattr(
+        ASTMutator, "apply_random_mutation", staticmethod(lambda code: child_code)
+    )
+    engine = _engine(
+        lambda_clones=0,  # no factory clones
+        tier3_size=1,
+        tier1_llm_mutate_prob=0.0,
+    )
     parent = Individual(code=parent_code, tier=TIER_ELITE)  # elite → drives lab reproduction
     engine.tier1 = [parent]
     # Pre-seed: parent's code (raw) is a cache hit, offspring clone is fresh (miss).
     evaluator = _MockEvalWithStats(
-        functional_codes={parent_code.strip()},
+        functional_codes={parent_code.strip(), child_code.strip()},
         cache_map={parent_code: True},
     )
     engine.step(
@@ -535,7 +552,7 @@ def test_hfc_evaluate_reads_evaluator_cache_stats_for_telemetry():
     )
     stats = engine.stats()
     cache_stats = stats["cache"]
-    # _evaluate delta: parent=1 hit, offspring clone=1 miss (no factory clones)
-    assert cache_stats["cache_hits"] >= 1
-    assert cache_stats["cache_misses"] >= 1
+    # _evaluate deltas: parent = 1 hit, offspring = 1 miss (no factory clones)
+    assert cache_stats["cache_hits"] == 1
+    assert cache_stats["cache_misses"] == 1
     assert cache_stats["cache_total"] == cache_stats["cache_hits"] + cache_stats["cache_misses"]

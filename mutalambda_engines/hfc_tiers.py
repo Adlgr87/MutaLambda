@@ -200,9 +200,11 @@ class HFCLeagueEngine:
         self._distilled_concept = self._maybe_distill(llm_fn, generation, task)
         offspring = self._reproduce_laboratory(llm_fn) + self._reproduce_factory(llm_fn)
 
-        # Only evaluate laboratory offspring (score == -inf). Factory clones
-        # inherit parent fitness and skip redundant evaluation.
-        lab_offspring = [ind for ind in offspring if ind.score == float("-inf")]
+        # Only evaluate offspring that have not been scored yet (the -1.0
+        # "not yet evaluated" sentinel documented on Individual). Factory
+        # clones of already-evaluated parents inherit parent fitness and
+        # skip redundant evaluation.
+        lab_offspring = [ind for ind in offspring if ind.score == -1.0]
         self._evaluate(lab_offspring, evaluator)
 
         next_tier1, next_tier2, next_tier3, migration_stats = self._process_migrations(
@@ -660,7 +662,7 @@ ELITE CODE:
     def _individual_from_dict(data: Dict, default_tier: str) -> Individual:
         return Individual(
             code=data.get("code", ""),
-            score=data.get("score", float("-inf")),
+            score=data.get("score", -1.0),
             id=data.get("id", ""),
             parent_ids=data.get("parent_ids", []),
             tier=data.get("tier", default_tier),
