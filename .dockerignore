@@ -6,8 +6,6 @@
 # Desarrollo y pruebas
 tests
 docs
-PLANS
-legacy
 scripts
 run_tests.sh
 .pytest_cache

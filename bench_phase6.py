@@ -1,8 +1,8 @@
 """
-Phase 6 empirical benchmark (AST cache + msgpack checkpoints).
+Empirical benchmark for the AST parse cache and msgpack checkpoints.
 
-Matches EMPIRICAL_EVIDENCE.md philosophy: real wall-clock timing,
-3x repeats, min +/- stderr, isolated components.
+Methodology: real wall-clock timing, 3x repeats, min +/- stderr,
+isolated components.
 
 Run:
   python bench_phase6.py

@@ -40,7 +40,7 @@ jobs:
           black --check . --line-length 100 || true
 
       - name: Unit tests
-        run: pytest tests/ -q --ignore=tests/e2e_tests.py --deselect tests/test_hfc_tiers.py::test_hfc_deduplicates_demoted_elite_duplicate_in_factory
+        run: pytest tests/ -q --ignore=tests/e2e_tests.py
 
       - name: CLI smoke test
         run: |

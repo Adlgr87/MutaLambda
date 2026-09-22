@@ -86,4 +86,4 @@ Run the full benchmark suite:
 python bench_phase6.py --num-generations 20 --population-size 50
 ```
 
-Results are saved to `PHASE6_BENCHMARK_REPORT.md`.
+Results are saved to JSON reports under `reports/` (regenerated on each run).

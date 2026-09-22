@@ -20,8 +20,8 @@
 
 ## For existing users
 
-Code published under MIT License is available in the git history tag `v4.0.0-mit-final`.
-Versions after that tag are licensed under BSL-1.1 (see [LICENSE](LICENSE)).
+Releases up to v4.0.0 were published under the MIT License (see git
+history); versions after v4.0.0 are licensed under BSL-1.1 (see [LICENSE](LICENSE)).
 The Community Edition (BSL-1.1) is free for non-production use.
 
 ## Contact
