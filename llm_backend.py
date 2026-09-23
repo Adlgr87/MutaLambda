@@ -59,6 +59,8 @@ def _normalize_model_key(model: str) -> str:
 
 def _estimate_tokens(text: str) -> int:
     """Quick heuristic token estimator (4 chars/token — good enough for budgeting)."""
+    if not text:
+        return 0
     return max(1, len(text) // 4)
 
 
@@ -513,7 +515,7 @@ class LLMBackend:
             )
             resp.raise_for_status()
             data = resp.json()
-            return data["choices"][0]["message"]["content"]
+            return data["choices"][0]["message"].get("content") or ""
 
         if self.backend == "openrouter":
             payload = {
@@ -531,7 +533,7 @@ class LLMBackend:
             )
             resp.raise_for_status()
             data = resp.json()
-            return data["choices"][0]["message"]["content"]
+            return data["choices"][0]["message"].get("content") or ""
 
         if self.backend == "mistral":
             payload = {
@@ -549,7 +551,7 @@ class LLMBackend:
             )
             resp.raise_for_status()
             data = resp.json()
-            return data["choices"][0]["message"]["content"]
+            return data["choices"][0]["message"].get("content") or ""
 
         if self.backend == "anthropic":
             # A1: the structured contract cap wins when set; otherwise the

@@ -107,7 +107,9 @@ class MutaLambdaAgent:
             ),
             max_total_calls=int(getattr(config, "llm_max_total_calls", 0) or 0),
             max_cost_usd=float(getattr(config, "llm_max_cost_usd", 0.0) or 0.0),
-            privacy_allow_external=False,
+            privacy_allow_external=bool(
+                getattr(config, "privacy_allow_external_llm", True)
+            ),
             privacy_redact_secrets=bool(getattr(config, "privacy_redact_secrets", True)),
             replay_log_path=getattr(config, "llm_replay_log", None)
             or (
