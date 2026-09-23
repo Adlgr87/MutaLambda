@@ -1,0 +1,27 @@
+{
+  "compiler": "clang++",
+  "compiler_version": "22.1.8",
+  "backend": "openai",
+  "model": "agnes-2.5-flash",
+  "provider": "AgnesAI OpenAI-compatible endpoint (https://api.agnes.ai/v1)",
+  "generations": 14,
+  "islands": 3,
+  "population_per_island": 50,
+  "baseline_ns_per_op": 547.8,
+  "optimized_ns_per_op": 416.2,
+  "ratio_to_canonical": 1.3156,
+  "speedup_pct": 31.6,
+  "kat_pass": true,
+  "kat_vectors": {
+    "keccak256_empty": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+    "keccak256_abc": "4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45"
+  },
+  "kat_cross_compile": ["g++ 13.3.0", "clang++ 22.1.8"],
+  "seed": "keccak_f1600",
+  "target": "Bot_Crowdintel/core/crypto/keccak256.hpp",
+  "optimized_artifact": "/tmp/keccak_evolve_uib0wdu0/best_keccak_f1600.hpp",
+  "consumers_updated": ["Bot_Crowdintel/core/crypto/eip712_signer.hpp"],
+  "duration_s": 412.3,
+  "methodology": "baseline = canonical XKCP reference evaluated with the same runner, same samples/warmups policy. Candidate = LLM-generated rewrite gated by correctness (kat_pass) before speedup counted. Timing: ns/op medians over 10 samples, subprocess-isolated. Mutations: rho/pi step rewritten as in-place rotation chain with 'shift==0' guard so zero-rotation lanes skip the barrel-shifter.",
+  "notes": "clang x agnes run 14x3 = 1.3156x committed; KAT cross-validation passed"
+}
