@@ -4,6 +4,17 @@ All notable changes to MutaLambda are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0] — 2026-09-23
+
+### Added
+- **Keccak f1600 optimization integration**: Evolutionary optimization of
+  `keccak_f1600` hot-path kernel from Bot_Crowdintel, achieving **1.3156×
+  speedup** (+31.6%) via in-situ ρ+π rotation rewrite with `shift==0` guard.
+  NSGA-II 3 islands × 14 generations × 50 individuals; KAT verified under
+  g++ 13.3.0 and clang++ 22.1.8. See
+  [benchmarks/MUTALAMBDA_KEECCAK_BENCHMARKS.md](benchmarks/MUTALAMBDA_KEECCAK_BENCHMARKS.md)
+  and [benchmarks/targets/keccak256_optimized.hpp](benchmarks/targets/keccak256_optimized.hpp).
+
 ## [5.0.0] — 2026-09-22
 
 ### Added
