@@ -366,6 +366,36 @@ mercado (Copilot, CodeWhisperer) para comparar MutaLambda head-to-head.
   run). Ver `benchmarks/SMOKY_TESTS.md` para validación completa y
   `benchmarks/BENCHMARK_STRATEGY.md` para la metodología.
 
+### C++ Hot-Path Harness (`cpp_hotpath.py`)
+Optimización evolutiva de kernels C++ críticos (hot-path) en repos
+externos. El motor genético de MutaLambda evoluciona una función C++ bajo
+`--backend openai` (endpoint OpenAI-compatible, p. ej. AgnesAI) con un gate de
+correctness vía Known-Answer Test (KAT) antes de aceptar el *speedup*.
+
+**Ejemplo reproducible** (keccak_f1600 de Bot_Crowdintel):
+```bash
+MUTALAMBDA_UNSAFE_LOCAL=1 python benchmarks/cpp_hotpath.py \
+    --compiler clang++ --backend openai --model agnes-2.5-flash \
+    --generations 14 --islands 3 --population 50 \
+    --samples 10 --warmups 2 \
+    --out benchmarks/results/results_cpp_keccak.json
+```
+
+**Resultados registrados** (`benchmarks/MUTALAMBDA_KEECCAK_BENCHMARKS.md`,
+`benchmarks/results/results_cpp_keccak.json`,
+`benchmarks/targets/keccak256_optimized.hpp`):
+
+| Objetivo | Compilador | Modelo | Gens × Islas | Baseline | Optimizado | Ratio | Speedup | KAT |
+|---|---|---|---|---|---|---|---|---|
+| Bot_Crowdintel `keccak_f1600` | clang++ 22.1.8 | agnes-2.5-flash | 14 × 3 | 547.8 ns/op | 416.2 ns/op | **1.3156×** | +31.6 % | ✅ g++ + clang++ |
+
+La mutación ganadora reescribe el paso ρ+π (rho/pi) de `keccak_f1600` como
+una cadena de rotación in-situ con guardia `shift==0`, de modo que los lanes
+con rotación cero saltan el barrel-shifter — preservando la equivalencia
+funcional (KAT: `keccak256("")` y `keccak256("abc")` idénticos a los
+vectores canónicos de Ethereum bajo ambos compiladores). Ver el repo
+[Adlgr87/Bot_Crowdintel](https://github.com/Adlgr87/Bot_Crowdintel) (PR #2).
+
 ## Componentes
 
 | Componente | Estado | Dónde |
@@ -389,6 +419,7 @@ mercado (Copilot, CodeWhisperer) para comparar MutaLambda head-to-head.
 - [Scientific Optimization Mode (SVL)](docs/SCIENTIFIC_OPTIMIZATION_MODE.md)
 - [Fitness metrics](docs/FITNESS_METRICS.md)
 - [Metrics](docs/METRICS.md) · [Metrics exporter](docs/metrics-exporter.md)
+- [C++ hot-path keccak benchmarks](benchmarks/MUTALAMBDA_KEECCAK_BENCHMARKS.md)
 - [GPU Integration](docs/gpu_integration.md)
 - [Config reference](docs/config-reference.md) · [API reference](docs/api-reference.md) · [Advanced usage](docs/advanced-usage.md)
 - [Pipeline](docs/pipeline.md) · [Migration guide](docs/migration_guide.md)
