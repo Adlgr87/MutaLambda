@@ -36,8 +36,8 @@ antes de tocar nada:
 | LOC `.py` total | 73 786 | 74 510 | +724 |
 | LOC producción (sin `tests/`) | 57 716 | 57 940 | +224 |
 | LOC tests | 16 070 | 16 570 | +500 |
-| **Tests recolectados** | 1123 | 1218 | **+95** |
-| **Tests pasando** (`-m "not e2e"`) | **1070 ✅ / 1 ❌** | **1166 ✅ / 0 ❌** | **+96, −1 fallo** |
+| **Tests recolectados** | 1123 | 1235 | **+112** |
+| **Tests pasando** (`-m "not e2e"`) | **1070 ✅ / 1 ❌** | **1183 ✅ / 0 ❌** | **+113, −1 fallo** |
 | Tests skipped | 22 | 22 | = |
 | Módulos que importan (`py-modules`+`packages`) | 89/89 | 88/88 | −1 (paquete vacío borrado) |
 | ruff clase `F` (bugs reales) | 452 | 151 | **−301** |
@@ -78,6 +78,8 @@ smoke_all.sh                → ALL GREEN
 | A10 | `llm_backend._estimate_tokens` | Test auto-contradictorio: exigía `_estimate_tokens("") == 1` cuando el código (correctamente) devuelve 0 | Se corrigió el **test**, no el código: facturar un token fantasma a una completion vacía sería un error de coste. Docstring aclarado |
 | A11 | `dashboard_run.py` | `import streamlit as st` y después `if st is None: raise ImportError` — rama **inalcanzable** | `try/except ImportError` real con mensaje útil |
 | A12 | `dashboard_run.py` | Renderizaba la página **en tiempo de import**; `st.stop()` (cuando no hay runs) hacía que `import dashboard_run` **reventara**. Detectado por la verificación en entorno limpio, no por la suite | Cuerpo movido a `main()` bajo `if __name__ == "__main__"`. `streamlit run` se comporta igual (Streamlit ejecuta como `__main__`) |
+| **A16** | `mutalambda_config/checkpoint_manager.py` | **Escritura no atómica + corrupción silenciosa.** `open(path,"w")` directo sobre el nombre canónico: una interrupción (Ctrl-C, OOM, disco lleno) dejaba un fichero truncado exactamente donde `--resume` mira. Además: sin retención (re-guardar una generación destruía la única copia buena), y el campo `version` se escribía en cada save pero **nunca se leía**, así que un checkpoint de otro esquema cargaba en silencio perdiendo campos | Escritura a `.tmp` + `fsync` + `os.replace` + `fsync` del directorio; `CheckpointCorruptError` que nombra el checkpoint intacto más reciente; retención de los 5 más nuevos contando sólo directorios legibles; validación de versión de esquema que apunta a `migrate-checkpoints` |
+| **A17** | `muta_ext/uast/handlers/{cpp,rust,python}_handler.py` | **Un binario que crasheaba reportaba latencia excelente.** `result = run_hardened(...)` descartaba `returncode`, así que el tiempo de un fallo instantáneo se registraba como muestra de benchmark válida | Se comprueba `returncode`; se devuelve error con el código de salida y stderr |
 | **A14** | `mutalambda_core/evaluation_service.py` | **El fallo de infraestructura se convertía en fitness.** `SubprocessRunner.run()` nunca lanza (captura todo y devuelve `EvalResult`), así que **cualquier** excepción que escapaba de `_pool_worker` era un fallo del *harness*. Se trataba igual que código malo: `FitnessVector.worst()` + escritura **incondicional en caché**. Como la clave es code+tests+env (estable toda la ejecución), **un solo `BrokenProcessPool` transitorio dejaba código correcto clavado en −1.0 para siempre**: no volvía a ganar selección y su linaje moría. Reproducido antes del fix | El hijo devuelve un `WorkerFailure` picklable con el traceback completo; el padre distingue muerte-de-pool de fallo-de-candidato, loguea el traceback a ERROR, **reintenta en serie** (2 veces), cachea sólo si el reintento midió de verdad, y marca `evaluation_error=1.0` si sigue sin evaluarse |
 | **A15** | `runners.py` (harness del sandbox) | **Un comparador con errata reportaba `passed=True, correctness=1.0`.** La copia inline terminaba en `return got == expected`; `comparison.compare_values` lanza `ValueError`. Además `predicate_registered` no existía en el harness: comparaba la salida contra el *nombre* del predicado | El harness registra los comparadores desconocidos; el padre marca `comparator_undefined=1.0`, avisa con la lista de comparadores válidos y **retira `passed=True`**. No lanza: la ejecución continúa, pero deja de afirmar una corrección que nunca verificó |
 | A13 | `tests/conftest.py`, `tests/test_nsga2.py`, `bench_phase6.py` | Importaban los shims raíz deprecados → la propia suite emitía `DeprecationWarning` | Migrados a las rutas canónicas |
@@ -284,7 +286,8 @@ triaron por ubicación en vez de en bloque:
 | Nivel | Alcance | Estado |
 |---|---|---|
 | **1** | Pool de evaluación / forkserver (`evaluation_service`) | ✅ **HECHO** — ver A14. Los 7 del módulo revisados uno a uno: teardown y telemetría se quedan con `# noqa: BLE001 - <razón>`; `_pkg_version` se estrecha a `(ImportError, OSError, ValueError)` porque **alimenta la clave de caché**; warmup del pool y refinamiento de benchmark ahora loguean `exc_info` (este último promovido de `debug` a `warning`: degradaba en silencio un percentil multi-muestra a una sola muestra) |
-| **2** | Puerta de corrección: `mutation_filters`, `sandbox`, `property_testing`, `ast_math_verifier`, `comparison`, `checkpoint_manager` | ⬜ pendiente. El de `checkpoint_manager` es el más serio: un fallo silencioso al guardar/cargar corrompe `--resume` |
+| **2** | `checkpoint_manager` | ✅ **HECHO** — ver A16. El handler de estado RNG tragaba todo y ponía `random_state=None`: el checkpoint seguía cargando y la ejecución reanudada divergía en silencio, justo lo contrario del propósito del módulo. Estrechado y avisado. Archive y pattern-memory conservan el catch amplio con `# noqa` razonado (aceleradores opcionales: reanudar debe degradar, no morir). Fichero BLE001-limpio → **desinventariado, baseline 98 → 97** |
+| **2** | Resto de la puerta de corrección: `mutation_filters`, `sandbox`, `property_testing`, `ast_math_verifier`, `comparison` | ⬜ pendiente |
 | **3** | `llm_backend` — separar errores de red/timeout de errores de parseo (un JSON inválido no debe reintentarse como un timeout) | ⬜ pendiente |
 | **4** | Top-level de CLI/UI, donde mostrar el error es lo correcto | ⬜ sólo verificar que loguean traceback |
 
@@ -294,8 +297,14 @@ inventario. La lista sólo puede encoger: cualquier fichero nuevo, o ya triado,
 falla CI ante un `except Exception` ciego. Verificado en ambos sentidos.
 Un ciego legítimo se queda, pero debe llevar `# noqa: BLE001 - <razón>`.
 
-Las 38 variables locales sin usar (`F841`) siguen pendientes; están en
-`benchmarks/`, `muta_ext/__main__.py` y harnesses.
+**F841: 38 → 0.** *(HECHO)* No era el barrido trivial que parecía: `ruff --fix`
+sólo ofrece **2 de 38** como fix *seguro*; los otros 36 son `--unsafe-fixes`
+precisamente porque el valor descartado viene de una llamada, y el fix borra la
+sentencia entera. Habría eliminado `run_hardened(...)` (lanza un subproceso),
+`write_run_artifacts(...)` (escribe ficheros) y `non_dominated_sort(population)`
+en un benchmark cuyo único propósito es cronometrar esa llamada. Clasificados por
+AST: 14 con RHS puro → sentencia borrada; 16 con llamada con efectos → se conserva
+la llamada y se quita sólo el binding. **Tres destaparon el defecto A17.**
 
 **D5 — `evolve.py` (38 KB) y `mutalambda_cli.py` (43 KB) son monolitos.**
 Trocearlos es un refactor estructural, no limpieza. Debe ir después del ADR 0042.
