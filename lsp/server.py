@@ -87,10 +87,13 @@ class LSPMessage:
 class MutaLambdaLSPServer:
     """LSP Server for MutaLambda optimization suggestions."""
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[Dict] = None, *, framing: str = "lsp"):
         self.config = config or {}
         self.document_store: Dict[str, str] = {}
         self.analysis_queue: List[Dict] = []
+        # "lsp"  -> Content-Length framed output (what editors expect)
+        # "line" -> one JSON object per line (legacy / scripting)
+        self.framing = framing
         self._running = False
         self._thread: Optional[threading.Thread] = None
 
@@ -110,7 +113,14 @@ class MutaLambdaLSPServer:
                 pass
 
     def _run_server(self):
-        """Main server loop reading from stdin.
+        """Main server loop reading JSON-RPC frames from stdin.
+
+        Accepts both wire formats:
+
+        * ``Content-Length: N\\r\\n\\r\\n<body>`` — the base protocol every real
+          LSP client (VS Code, Neovim, Helix, ...) speaks. The server used to
+          only read newline-delimited JSON, so no editor could talk to it.
+        * one JSON object per line — kept for scripts and the test-suite.
 
         Uses select() with a short timeout so the loop can re-check
         ``self._running`` periodically, allowing ``stop()`` to cleanly
@@ -118,17 +128,57 @@ class MutaLambdaLSPServer:
         """
         import select
 
+        stream = getattr(sys.stdin, "buffer", None) or sys.stdin
+
         while self._running:
             try:
-                ready, _, _ = select.select([sys.stdin], [], [], 0.1)
+                ready, _, _ = select.select([stream], [], [], 0.1)
             except (ValueError, OSError):
                 break
             if not ready:
                 continue
-            line = sys.stdin.readline()
-            if not line:
+            try:
+                frame = self._read_frame(stream)
+            except (ValueError, OSError):
                 break
-            self._handle_message(line.strip())
+            if frame is None:
+                break
+            if frame:
+                self._handle_message(frame)
+
+    def _read_frame(self, stream) -> Optional[str]:
+        """Read one JSON-RPC frame. Returns None at EOF, "" to skip."""
+        line = stream.readline()
+        if not line:
+            return None
+        if isinstance(line, bytes):
+            text = line.decode("utf-8", errors="replace")
+        else:
+            text = line
+        stripped = text.strip()
+        if not stripped:
+            return ""
+        if not stripped.lower().startswith("content-length:"):
+            # Legacy newline-delimited frame.
+            return stripped
+
+        try:
+            length = int(stripped.split(":", 1)[1].strip())
+        except ValueError:
+            log.warning("Malformed Content-Length header: %r", stripped)
+            return ""
+        # Consume the remaining headers up to the blank separator line.
+        while True:
+            header = stream.readline()
+            if not header:
+                return None
+            header_text = header.decode("utf-8", "replace") if isinstance(header, bytes) else header
+            if not header_text.strip():
+                break
+        body = stream.read(length) if hasattr(stream, "read") else ""
+        if isinstance(body, bytes):
+            body = body.decode("utf-8", errors="replace")
+        return body
 
     def _handle_message(self, line: str):
         """Handle incoming LSP message."""
@@ -362,9 +412,18 @@ class MutaLambdaLSPServer:
         return mapping.get(ext)
 
     def _send(self, message: LSPMessage):
-        """Send LSP message to stdout."""
+        """Send an LSP message on stdout using base-protocol framing.
+
+        ``framing="lsp"`` (the default) emits the ``Content-Length`` header
+        required by every LSP client. ``framing="line"`` keeps the historic
+        newline-delimited output for scripted use.
+        """
         msg_dict = {k: v for k, v in asdict(message).items() if v is not None}
-        sys.stdout.write(json.dumps(msg_dict) + "\n")
+        body = json.dumps(msg_dict)
+        if self.framing == "line":
+            sys.stdout.write(body + "\n")
+        else:
+            sys.stdout.write(f"Content-Length: {len(body.encode('utf-8'))}\r\n\r\n{body}")
         sys.stdout.flush()
 
 
@@ -372,6 +431,12 @@ def main():
     """Entry point for LSP server."""
     parser = argparse.ArgumentParser(description="MutaLambda LSP Server")
     parser.add_argument("--config", help="Path to config file")
+    parser.add_argument(
+        "--framing",
+        choices=["lsp", "line"],
+        default="lsp",
+        help="Wire format: 'lsp' = Content-Length frames (editors), 'line' = one JSON per line",
+    )
     args = parser.parse_args()
 
     config = {}
@@ -379,7 +444,7 @@ def main():
         with open(args.config) as f:
             config = json.load(f)
 
-    server = MutaLambdaLSPServer(config)
+    server = MutaLambdaLSPServer(config, framing=args.framing)
     server.start()
 
     # Keep the main thread alive while the stdin worker runs. This used to call

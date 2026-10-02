@@ -2,7 +2,7 @@
   "name": "mutalambda",
   "displayName": "MutaLambda",
   "description": "Evolutionary code optimization assistant",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "engines": {
     "vscode": "^1.80.0"
   },
@@ -16,9 +16,10 @@
     "onLanguage:go",
     "onLanguage:rust",
     "onLanguage:cpp",
-    "onLanguage:c"
+    "onLanguage:c",
+    "onCommand:mutalambda.analyzeProject"
   ],
-  "main": "./dist/extension.js",
+  "main": "./extension.js",
   "contributes": {
     "commands": [
       {
@@ -47,13 +48,20 @@
         },
         "mutalambda.mode": {
           "type": "string",
-          "enum": ["fast", "deep"],
+          "enum": [
+            "fast",
+            "deep"
+          ],
           "default": "fast",
           "description": "Optimization mode"
         },
         "mutalambda.llm.provider": {
           "type": "string",
-          "enum": ["ollama", "openai", "anthropic"],
+          "enum": [
+            "ollama",
+            "openai",
+            "anthropic"
+          ],
           "default": "ollama",
           "description": "LLM provider for explanations"
         },
@@ -61,39 +69,57 @@
           "type": "boolean",
           "default": true,
           "description": "Show optimization explanations"
+        },
+        "mutalambda.python.interpreter": {
+          "type": "string",
+          "default": "python3",
+          "description": "Python interpreter used to launch the MutaLambda LSP server"
+        },
+        "mutalambda.server.path": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to lsp/server.py (leave empty to use the bundled server)"
         }
       }
     },
     "languages": [
       {
         "id": "python",
-        "extensions": [".py"]
+        "extensions": [
+          ".py"
+        ]
       },
       {
         "id": "go",
-        "extensions": [".go"]
+        "extensions": [
+          ".go"
+        ]
       },
       {
         "id": "rust",
-        "extensions": [".rs"]
+        "extensions": [
+          ".rs"
+        ]
       },
       {
         "id": "cpp",
-        "extensions": [".cpp", ".c", ".h", ".hpp"]
+        "extensions": [
+          ".cpp",
+          ".c",
+          ".h",
+          ".hpp"
+        ]
       }
     ],
     "grammars": [],
     "snippets": []
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "vscode:prepublish": "echo 'no build step: extension.js is plain JS'"
   },
   "devDependencies": {
     "@types/vscode": "^1.80.0",
-    "@types/node": "^18.x",
-    "typescript": "^5.0.0"
+    "@types/node": "^18.x"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.0"
