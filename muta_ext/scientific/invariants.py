@@ -4,7 +4,7 @@ Proporciona verificaciones de integridad científica para código evolutivo.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 import math
 

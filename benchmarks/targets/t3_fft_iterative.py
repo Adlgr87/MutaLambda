@@ -1,7 +1,6 @@
 TARGET_NAME = "fft_iterative"
 TIER = 3
 function_name = "fft_iterative"
-import math
 
 source = """
 import math

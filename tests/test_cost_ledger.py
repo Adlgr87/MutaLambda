@@ -17,7 +17,6 @@ from pathlib import Path
 
 import pytest
 
-import cost_ledger as cl
 from cost_ledger import CostLedger, get_cost_ledger, reset_cost_ledger
 
 

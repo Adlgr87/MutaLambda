@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
 """Tests for Rust adapter in Phase 2."""
 
-import subprocess
-import shutil
 
 import pytest
 
 from muta_ext.uast.core_uast import (
     CoreUAST,
     Function,
-    If,
-    For,
-    While,
     BinaryOp,
-    LiteralNode,
     Identifier,
 )
 from muta_ext.uast.adapters.rust_adapter import RustAdapter

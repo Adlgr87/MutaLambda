@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Visitor / transformer / dump tests for UAST v2."""
 
-import pytest
 
 from muta_ext.uast2 import core as v2
 from muta_ext.uast2.adapters import parse_to_uast

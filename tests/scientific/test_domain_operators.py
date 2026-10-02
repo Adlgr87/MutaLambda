@@ -1,5 +1,4 @@
 """Tests para operadores de dominio científicos."""
-import pytest
 from muta_ext.uast.core_uast import CoreUAST, LiteralNode, Identifier, BinaryOp, Function
 from muta_ext.uast.mutators.scientific.strength_reduction import StrengthReductionMutator
 from muta_ext.uast.mutators.scientific.numerical_stability import NumericalStabilityMutator

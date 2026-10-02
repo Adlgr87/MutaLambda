@@ -5,7 +5,6 @@ from __future__ import annotations
 import ast
 import json
 
-import pytest
 
 from structured_ops import (
     OP_TYPES,
@@ -14,9 +13,7 @@ from structured_ops import (
     apply_unified_diff,
     build_repair_prompt,
     build_schema_prompt,
-    extract_json_object,
     parse_ops,
-    validate_ops,
 )
 
 SOURCE = """def solution(n: int) -> int:

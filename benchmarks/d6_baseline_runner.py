@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import os
 import sys
-import statistics
 import time
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -31,11 +30,8 @@ from benchmarks.harness import (  # noqa: E402
     _is_valid_python,
     _build_arg_factory,
     _build_arg_factory_from_strategy,
-    _verify,
     time_function_code,
     median_iqr,
-    get_git_sha,
-    _env_info,
 )
 from llm_backend import parse_structured_response  # noqa: E402
 from benchmarks.verification import verify_candidate  # noqa: E402

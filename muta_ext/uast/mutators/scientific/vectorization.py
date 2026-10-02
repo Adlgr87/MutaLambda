@@ -2,7 +2,7 @@
 
 import random
 from typing import Optional
-from muta_ext.uast.core_uast import CoreUAST, Node, BinaryOp, Function, For, Identifier, Assign, Call, LiteralNode
+from muta_ext.uast.core_uast import CoreUAST, Node, BinaryOp, Function, For, Identifier, Assign, Call
 from muta_ext.uast.mutators.scientific.base_mutator import BaseScientificMutator, MutationResult
 
 

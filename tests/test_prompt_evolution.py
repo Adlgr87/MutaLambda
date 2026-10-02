@@ -2,10 +2,7 @@
 Tests for RichPromptEvolver and PromptGenome — meta‑evolution of prompts.
 """
 
-import copy
-import random
 
-import pytest
 
 # Import directly (prompt_evolution imports muta_lambda internally)
 from muta_lambda import PromptGenome

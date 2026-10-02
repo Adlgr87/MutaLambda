@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import ast
 import copy
-import heapq
 import logging
 import random
 import time
@@ -17,7 +16,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from mutalambda_core.evolution_engine import ASTMutator, CoreEvolutionEngine, ast_crossover, component_evolve
 from mutalambda_core.code_hash import cached_parse
-from mutalambda_core.models import EvalResult, Individual, IslandConfig
+from mutalambda_core.models import Individual, IslandConfig
 from sandbox import SandboxEvaluator
 from workflow_protocol import (
     PASS,

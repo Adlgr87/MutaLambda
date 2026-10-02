@@ -15,12 +15,9 @@ This script generates the auditable report format showing:
 
 import json
 import subprocess
-import sys
 import statistics
 from pathlib import Path
 from datetime import datetime
-import hashlib
-import os
 
 
 def get_git_info() -> dict:

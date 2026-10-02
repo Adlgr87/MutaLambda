@@ -5,7 +5,6 @@ import time
 import pytest
 
 from metrics_exporter import (
-    MetricsRegistry,
     get_registry,
     reset_registry,
     register_mutalambda_metrics,

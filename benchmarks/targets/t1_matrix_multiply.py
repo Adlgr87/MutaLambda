@@ -1,7 +1,6 @@
 TARGET_NAME = "matrix_multiply_naive"
 TIER = 1
 function_name = "matrix_multiply"
-import numpy as np
 
 source = """def matrix_multiply(a, b):
     rows = len(a)

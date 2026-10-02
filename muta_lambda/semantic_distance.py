@@ -8,7 +8,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import math
-from typing import Set, Tuple
+from typing import Set
 
 
 def ast_token_set(code: str) -> Set[str]:

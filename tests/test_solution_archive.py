@@ -14,7 +14,6 @@ Run:  pytest test_solution_archive.py -v
 
 import json
 import os
-import tempfile
 from unittest.mock import MagicMock, patch
 
 import numpy as np

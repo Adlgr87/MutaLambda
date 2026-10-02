@@ -13,16 +13,13 @@ from mutalambda_core.event_bus import (
     GENERATION_STARTED,
     EventBus,
     CommandQueue,
-    EvolutionEvent,
 )
 from llm_backend import (
     LLMBackend,
-    LLMBackendError,
     LLMBudgetExceeded,
     parse_structured_response,
 )
 from muta_lambda import EvolveConfig, MutaLambdaAgent, MutaLambdaSession
-from mutalambda_core.models import Individual
 
 
 class FlakySession:

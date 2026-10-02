@@ -1,7 +1,6 @@
 """Tests for THC Engine - cross-language transfer blocking and integration."""
 
-import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 
 from mutalambda_core.models import Individual
 from muta_ext.thc_engine import HorizontalTransferEngine, FragmentRecord, THCConfig

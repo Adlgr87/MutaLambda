@@ -21,7 +21,7 @@ import os
 import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional
 
 from mutalambda_security.api_fingerprint import compare_api, extract_api_fingerprint
 from benchmarking import BenchmarkConfig, BenchmarkResult, run_callable_benchmark

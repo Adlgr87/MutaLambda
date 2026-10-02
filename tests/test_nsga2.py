@@ -3,7 +3,6 @@ Tests for NSGA-II multi-objective selection.
 """
 
 import pytest
-from mutalambda_engines.fitness_vector import FitnessVector
 from muta_lambda import Individual
 from mutalambda_engines.nsga2 import (
     non_dominated_sort,

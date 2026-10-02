@@ -12,7 +12,7 @@ import statistics
 import subprocess
 import tempfile
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 
 @dataclass

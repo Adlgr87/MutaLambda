@@ -17,11 +17,10 @@ Recomendado para CI:
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 # Prefer package install; fall back to repo root for uninstalled checkouts.
 import sys

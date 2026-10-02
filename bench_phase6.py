@@ -16,12 +16,9 @@ import json
 import os
 import statistics
 import sys
-import tempfile
 import time
 from contextlib import redirect_stdout
-from pathlib import Path
 
-import numpy as np
 from muta_lambda import EvolveConfig, MutaLambdaAgent
 
 # Pre-existing bug (independent of Phase 6): muta_lambda.py uses the global
@@ -36,7 +33,7 @@ if not hasattr(_ml, "_filter_mutant"):
     _ml._filter_mutant = _filter_mutant
 
 
-from mutalambda_config.checkpoint_manager import CheckpointData, save_full_checkpoint, load_checkpoint
+from mutalambda_config.checkpoint_manager import CheckpointData
 
 try:
     from mutalambda_config.checkpoint_manager import MSGPACK_THRESHOLD  # Phase 6 addition

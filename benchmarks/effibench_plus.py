@@ -15,10 +15,8 @@ invariants that Copilot/GPT-4 generated code violates.
 import json
 import time
 import statistics
-import tempfile
-import subprocess
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 from secure_exec import exec_guarded
 

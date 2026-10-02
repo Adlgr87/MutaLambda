@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 import tracemalloc
-from typing import Callable, Dict, Any
+from typing import Callable, Dict
 
 from secure_exec import load_function
 

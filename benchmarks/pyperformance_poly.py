@@ -5,15 +5,11 @@ Runs official CPython pyperformance suite (subset) + custom PolyBench-style
 kernels to measure UAST/vectorization effectiveness.
 """
 
-import sys
 import time
 import statistics
-import subprocess
 import json
-import tempfile
-import os
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 
 
 @dataclass

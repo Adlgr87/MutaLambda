@@ -11,7 +11,6 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from typing import Tuple
 
@@ -28,8 +27,8 @@ from invariant_detector import (
     CODATA_CONSTANTS,
     LOCKFILE_VERSION,
 )
-from regression_gate import GateConfig, evaluate_gate, run_gate, GateResult
-from certify import Certificate, CertificateBuilder, CERTIFICATE_VERSION
+from regression_gate import GateConfig, run_gate
+from certify import CertificateBuilder
 from evolve import EvolveConfig, run_evolution, SUPPORTED_PROFILES
 
 pytestmark = pytest.mark.v4
@@ -79,7 +78,6 @@ def tmp_workspace(tmp_path: Path) -> Path:
 @pytest.fixture
 def sample_uast_json(tmp_path: Path) -> Path:
     """Parse SAMPLE_PYTHON into a uast.json file."""
-    from muta_ext.uast.core_uast import CoreUAST
     from universal_parser import emit_uast_dict
 
     from muta_ext.uast.adapters import get_adapter

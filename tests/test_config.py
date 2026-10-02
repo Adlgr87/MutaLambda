@@ -2,18 +2,12 @@
 Tests for config_loader (YAML validation) and checkpoint_manager.
 """
 
-import json
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from mutalambda_config.config_loader import (
     validate_config,
     apply_defaults,
-    load_yaml,
     _get_nested,
 )
 from muta_lambda import EvolveConfig

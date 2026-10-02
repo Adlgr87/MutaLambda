@@ -9,7 +9,6 @@ the original for array inputs.
 import ast
 
 import numpy as np
-import pytest
 
 from numpy_optimizer import (
     NumPyBroadcastOptimizer,

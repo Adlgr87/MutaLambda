@@ -1,6 +1,5 @@
 """Tests for the Ray scheduler."""
 
-import pytest
 from unittest.mock import patch, MagicMock
 
 from ray_scheduler import RayScheduler, RayConfig, get_ray_scheduler, reset_ray_scheduler

@@ -6,16 +6,15 @@ from __future__ import annotations
 import ast
 import json
 import os
-from typing import Callable, List, Optional
+from typing import List
 
 import pytest
 
-from headroom_integration import HeadroomStats, headroom_available, llm_mutation_candidate
+from headroom_integration import headroom_available, llm_mutation_candidate
 from operator_bandit import (
     COST_AWARE_SCALE,
     OperatorBandit,
     compute_cost_aware_reward,
-    compute_operator_reward,
 )
 
 SOURCE = """def solution(n: int) -> int:

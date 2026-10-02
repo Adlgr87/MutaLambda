@@ -5,7 +5,7 @@ import logging
 import random
 from typing import Optional
 
-from muta_ext.uast.core_uast import CoreUAST, Node
+from muta_ext.uast.core_uast import CoreUAST
 from muta_ext.uast.adapters import get_adapter
 from muta_ext.uast.emitters import PythonEmitter
 from muta_ext.uast.mutators.base_mutator import (

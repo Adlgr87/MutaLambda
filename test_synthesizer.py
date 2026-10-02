@@ -8,10 +8,8 @@ generation from Python type hints.
 from __future__ import annotations
 
 import ast
-import inspect
-import sys
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any, Callable
+from typing import List, Dict, Optional
 from pathlib import Path
 
 

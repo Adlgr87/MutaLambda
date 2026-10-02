@@ -175,7 +175,6 @@ packages = [
   "muta_ext.scientific",
   "muta_ext.uast",
   "muta_ext.uast.adapters",
-  "muta_ext.uast.emitter",
   "muta_ext.uast.emitters",
   "muta_ext.uast.handlers",
   "muta_ext.uast.mutators",

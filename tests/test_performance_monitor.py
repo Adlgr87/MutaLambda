@@ -1,7 +1,6 @@
 """Tests for the performance monitor."""
 
 import time
-import pytest
 from unittest.mock import patch, MagicMock
 
 from performance_monitor import PerformanceMonitor, MonitorConfig, get_monitor, reset_monitor

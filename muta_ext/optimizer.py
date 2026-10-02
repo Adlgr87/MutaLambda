@@ -7,7 +7,6 @@ UAST parsing, mutation generation, and code emission.
 
 from __future__ import annotations
 import json
-import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 

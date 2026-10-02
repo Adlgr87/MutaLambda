@@ -6,14 +6,12 @@ inspired by Atari/retro gaming aesthetics.
 """
 
 import time
-import sys
-from typing import List, Optional
+from typing import List
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.live import Live
 from rich.text import Text
-from rich.layout import Layout
 
 
 class RetroAnimator:

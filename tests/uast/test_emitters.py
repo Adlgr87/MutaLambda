@@ -4,26 +4,10 @@ import pytest
 
 from muta_ext.uast.core_uast import (
     CoreUAST,
-    LiteralNode,
     Identifier,
     BinaryOp,
     Function,
-    If,
-    For,
-    While,
-    Return,
-    Comment,
     Opaque,
-    TypeAnnotation,
-    TryExcept,
-    ExceptClause,
-    StructDef,
-    FieldDef,
-    Match,
-    MatchArm,
-    Reference,
-    Break,
-    ParallelFor,
 )
 from muta_ext.uast.emitters.rust_emitter import RustEmitter
 from muta_ext.uast.emitters.cpp_emitter import CppEmitter

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Tests for Go language support in MutaLambda."""
 
-import pytest
 import sys
 from pathlib import Path
 

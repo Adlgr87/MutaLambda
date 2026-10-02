@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 
 from mutalambda_core.island import Island
 from mutalambda_core.models import FitnessVector, Individual, IslandConfig

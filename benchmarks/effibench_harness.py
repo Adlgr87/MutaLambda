@@ -33,7 +33,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from benchmarks.effibench_loader import PREAMBLE, load_tasks, to_test_cases
+from benchmarks.effibench_loader import PREAMBLE, load_tasks
 from mutalambda_core.evaluation_service import EvaluationService
 
 

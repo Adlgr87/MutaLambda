@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Round-trip tests: parse → mutate → emit → validate."""
 
-import pytest
 import ast
 
 

@@ -9,7 +9,6 @@ mutations in milliseconds.
 from __future__ import annotations
 
 import ast
-import copy
 from typing import Optional, Tuple, List
 from dataclasses import dataclass
 

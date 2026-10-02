@@ -13,15 +13,13 @@ import os
 import json
 import hashlib
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass, field, asdict
+from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass, asdict
 from datetime import datetime
-import time
 import subprocess
 
 from muta_ext.uast.adapters import get_adapter
 from muta_ext.optimizer import MutaLambdaOptimizer
-from muta_ext.project_optimizer import ProjectAnalyzer
 
 
 @dataclass

@@ -18,17 +18,11 @@ from muta_ext.uast.core_uast import (
     While,
     Return,
     Function,
-    Comment,
     Opaque,
-    TryExcept,
-    ExceptClause,
     StructDef,
-    FieldDef,
     TypeAnnotation,
     Match,
-    MatchArm,
     Reference,
-    Break,
     ParallelFor,
 )
 

@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Callable, List
 
 import pytest
 
-import trace_compressor as tc
 from trace_compressor import (
     TraceCompressor,
     compress_for_llm,
-    get_trace_compressor,
     reset_trace_compressor,
 )
 

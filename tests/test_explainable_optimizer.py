@@ -4,8 +4,6 @@
 import pytest
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-import json
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -15,7 +13,6 @@ from muta_ext.explainable_optimizer import (
     OptimizationType,
     RiskLevel,
     ComplexityAnalysis,
-    OptimizationExplanation,
 )
 
 

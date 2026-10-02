@@ -15,13 +15,11 @@ from __future__ import annotations
 
 import copy
 import json
-import logging
 import os
 from pathlib import Path
 import random
-import sys
 import time
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 from uuid import uuid4
 
 import numpy as np
@@ -998,7 +996,6 @@ class MutaLambdaAgent:
                 # Auto-doc only the final elite, never every candidate
                 if best is not None and getattr(self.config, "autodoc_elites", True):
                     try:
-                        from interpretability import CodeDocumenter
 
                         doc_path = art_dir / "best_solution_documented.md"
                         # Lightweight report without extra LLM if documenter needs one

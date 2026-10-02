@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Scoped verification (nanopass guards), touch log and hash-cache behaviour."""
 
-import pytest
 
 from muta_ext.uast2 import core as v2
 from muta_ext.uast2.adapters import parse_to_uast
 from muta_ext.uast2.merkle import begin_touch, end_touch, hash_stats, reset_hash_stats
-from muta_ext.uast2.mutators import CommutativeSwapPass, ConstantFoldingPass, default_mutators
+from muta_ext.uast2.mutators import CommutativeSwapPass, default_mutators
 from muta_ext.uast2.passes import MutationPass, Pipeline
 from muta_ext.uast2.verify import (
     ChildSchemaVerify,

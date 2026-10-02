@@ -12,10 +12,9 @@ These safeguards ensure evolved code remains maintainable and auditable.
 from __future__ import annotations
 
 import re
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 
 @dataclass

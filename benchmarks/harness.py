@@ -22,7 +22,7 @@ import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -30,9 +30,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from benchmarking import run_callable_benchmark  # noqa: E402
 from benchmarks.verification import verify_candidate  # noqa: E402
-from comparison import compare_values  # noqa: E402
 
 try:
     from numba import njit

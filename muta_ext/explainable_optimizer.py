@@ -10,8 +10,7 @@ Generates LLM-powered explanations for optimization decisions, including:
 
 from __future__ import annotations
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field
-import json
+from dataclasses import dataclass
 import hashlib
 from enum import Enum
 

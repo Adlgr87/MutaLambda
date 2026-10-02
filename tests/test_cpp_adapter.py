@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Tests for C++ adapter in Phase 3."""
 
-import pytest
 
-from muta_ext.uast.core_uast import CoreUAST, Function, If, Identifier
+from muta_ext.uast.core_uast import CoreUAST, Function, Identifier
 from muta_ext.uast.adapters.cpp_adapter import CppAdapter
 from muta_ext.uast.emitters.cpp_emitter import CppEmitter
 from muta_ext.uast.handlers.cpp_handler import CppHandler

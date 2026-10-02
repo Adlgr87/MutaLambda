@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Arena slab, parent pointers and incremental Merkle hashing."""
 
-import pytest
 
 from muta_ext.uast2 import core as v2
 from muta_ext.uast2.adapters import parse_to_uast

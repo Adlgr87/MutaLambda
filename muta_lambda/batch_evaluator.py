@@ -11,7 +11,7 @@ reduces per-candidate overhead and is ~15-25% faster on GPU backends.
 
 from __future__ import annotations
 
-from typing import List, Dict, Tuple, Any, Optional
+from typing import List, Dict, Tuple, Any
 import logging
 
 logger = logging.getLogger("MutaLambda")

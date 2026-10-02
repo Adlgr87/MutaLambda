@@ -3,8 +3,7 @@
 
 import shutil
 import subprocess
-import tempfile
-from typing import Any, Optional, List
+from typing import Any, Optional
 
 from muta_ext.uast.core_uast import (
     CoreUAST,
@@ -19,19 +18,13 @@ from muta_ext.uast.core_uast import (
     While,
     Return,
     Function,
-    Comment,
     Opaque,
-    TryExcept,
-    ExceptClause,
     StructDef,
-    FieldDef,
     TypeAnnotation,
     Match,
-    MatchArm,
     Reference,
     Break,
     ParallelFor,
-    Node,
 )
 
 

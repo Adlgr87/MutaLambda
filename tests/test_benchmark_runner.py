@@ -1,9 +1,7 @@
 """Tests for the benchmark runner."""
 
 import json
-import pytest
 import numpy as np
-from pathlib import Path
 
 from benchmark_runner import BenchmarkRunner, BenchmarkConfig, BenchmarkResult, run_phase6_benchmark
 

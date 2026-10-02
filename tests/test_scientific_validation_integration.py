@@ -1,10 +1,8 @@
 from types import SimpleNamespace
-import pytest
 import mutalambda_core.island as island_module
 from mutalambda_engines.fitness_vector import FitnessVector
 from mutalambda_core.island import Island
 from mutalambda_core.models import EvalResult, Individual, IslandConfig
-from workflow_protocol import PASS, RETRYABLE_FAIL
 
 # T4 Helper
 class _EvalWithMetrics:

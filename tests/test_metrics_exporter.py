@@ -3,7 +3,7 @@
 import threading
 import time
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -11,7 +11,6 @@ from metrics_exporter import (
     Gauge,
     Counter,
     Histogram,
-    MetricsRegistry,
     get_registry,
     reset_registry,
     register_mutalambda_metrics,

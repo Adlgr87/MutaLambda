@@ -13,7 +13,7 @@ import sys
 
 import pytest
 
-from runners import MicroVMRunner, EvalResult, create_runner, scan_code_security
+from runners import MicroVMRunner, EvalResult, create_runner
 
 
 @pytest.fixture
@@ -120,7 +120,6 @@ def test_microvm_runner_bwrap_missing():
         pytest.skip("bwrap not installed (fail-closed behavior covered above)")
     runner = MicroVMRunner(enforce_ast_scan=False, timeout_sec=5.0)
     # We simulate by patching the bwrap command to a non-existent path.
-    import runners
 
     original_build = runner._build_sandbox
 

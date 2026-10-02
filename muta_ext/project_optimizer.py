@@ -2,15 +2,14 @@
 """Multi-file/Project-level optimization for MutaLambda."""
 
 from __future__ import annotations
-import os
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set
 from dataclasses import dataclass, field
 import json
 import hashlib
 from collections import defaultdict
 
-from muta_ext.uast.core_uast import CoreUAST, Function, Identifier
+from muta_ext.uast.core_uast import Function
 from muta_ext.uast.adapters import get_adapter
 
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Regression test: ensure use_uast=False produces identical output to baseline."""
 
-import pytest
 
 
 class TestUASTRegression:

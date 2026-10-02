@@ -1,6 +1,5 @@
 """Tests for archive.py fixes (Issue #1, #7)."""
 import pytest
-import numpy as np
 
 # Check dependencies BEFORE importing archive module
 # (archive.py requires both faiss and sentence-transformers)

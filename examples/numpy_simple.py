@@ -1,6 +1,5 @@
 """Example: Simple NumPy array operation for optimization."""
 
-import numpy as np
 
 
 def compute_stats(data):

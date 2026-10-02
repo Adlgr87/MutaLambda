@@ -13,23 +13,14 @@ from muta_ext.uast.core_uast import (
     BinaryOp,
     UnaryOp,
     Call,
-    Assign,
     If,
-    For,
-    While,
-    Return,
     Function,
-    Comment,
     Opaque,
-    TryExcept,
-    ExceptClause,
     StructDef,
     FieldDef,
     TypeAnnotation,
     Match,
     MatchArm,
-    Reference,
-    Break,
 )
 
 

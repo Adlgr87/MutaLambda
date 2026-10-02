@@ -18,7 +18,7 @@ import sys
 import time
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 
 def _git_commit() -> str:

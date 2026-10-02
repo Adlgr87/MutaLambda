@@ -1,6 +1,5 @@
 """Tests for the GPU optimizer."""
 
-import pytest
 import numpy as np
 
 from gpu_optimizer import GPUOptimizer, GPUConfig, get_gpu_optimizer, reset_gpu_optimizer

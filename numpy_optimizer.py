@@ -22,7 +22,6 @@ regression tests) — never assumed.
 from __future__ import annotations
 
 import ast
-import copy
 import random
 from typing import List, Optional
 

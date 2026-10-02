@@ -20,8 +20,8 @@ Usage
 """
 
 import zlib
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
+from dataclasses import dataclass
+from typing import Dict, Optional, Set
 import logging
 
 logger = logging.getLogger(__name__)

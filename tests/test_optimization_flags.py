@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-import optimization_flags as oflags
 from optimization_flags import (
     OptimizationFlags,
     default_config_path,

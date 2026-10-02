@@ -1,6 +1,6 @@
 """Python → CoreUAST adapter using tree-sitter (with ast fallback)."""
 
-from typing import List, Optional
+from typing import Optional
 import ast as stdlib_ast
 
 try:
@@ -23,15 +23,12 @@ from muta_ext.uast.core_uast import (
     While,
     Return,
     Function,
-    ParallelFor,
-    Comment,
     Opaque,
     Node,
     TryExcept,
     ExceptClause,
     StructDef,
     FieldDef,
-    TypeAnnotation,
     MatchArm,
     Match,
 )

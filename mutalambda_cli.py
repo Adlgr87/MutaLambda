@@ -1097,7 +1097,6 @@ def explain_run(ctx, run_dir, full):
     if full:
         bp = rd / "best_solution.py"
         if bp.exists():
-            from rich.console import Console
 
             console.print("\n[bold]Mejor solución:[/bold]")
             console.print(bp.read_text(encoding="utf-8"))

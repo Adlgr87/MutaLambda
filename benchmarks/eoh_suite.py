@@ -23,7 +23,7 @@ import statistics
 import subprocess
 import tempfile
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 from secure_exec import exec_guarded
 

@@ -6,7 +6,7 @@ the real MASSIVE file via MassiveTargetAdapter.from_massive_utility_logic().
 
 from __future__ import annotations
 
-from typing import Iterable, Sequence
+from typing import Sequence
 
 
 def calculate_group_cohesion(opinions: Sequence[float]) -> float:

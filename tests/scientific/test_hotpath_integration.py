@@ -1,7 +1,6 @@
 """Tests de integración hot-path (INT-*)."""
 from muta_ext.scientific.hotpath import profile_workload
 from muta_ext.scientific.hotpath_types import ProfileConfig
-from muta_ext.uast.call_graph import extract_call_graph_from_source
 import json
 
 

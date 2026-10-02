@@ -253,7 +253,6 @@ class TestMathFidelityContract:
 
     def test_preserving_mutator_is_still_held_to_arithmetic(self):
         from muta_ext.uast2.passes import MutationPass
-        from muta_ext.uast2.verify import StructuralVerify
 
         class _Drift(MutationPass):
             name = "drift"  # preserves_math defaults to True

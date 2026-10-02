@@ -1,6 +1,5 @@
 """CoreUAST → Python source emitter."""
 
-import ast
 from typing import Optional
 
 from muta_ext.uast.core_uast import (
@@ -17,15 +16,11 @@ from muta_ext.uast.core_uast import (
     Return,
     Function,
     ParallelFor,
-    Comment,
     Opaque,
     Node,
     TryExcept,
-    ExceptClause,
     StructDef,
-    FieldDef,
     TypeAnnotation,
-    MatchArm,
     Match,
     Reference,
 )

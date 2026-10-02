@@ -1,6 +1,5 @@
 import ast
 
-import muta_lambda
 from muta_lambda import LineageGraph, LineageNode, MutaLambdaAgent, EvolveConfig, Individual
 from muta_ext.lineage.compression import LineageCompressor
 

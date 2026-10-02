@@ -11,7 +11,6 @@ from muta_ext.uast2.passes import (
     Diagnostic,
     InvalidIR,
     MutationPass,
-    Pass,
     Pipeline,
 )
 from muta_ext.uast2.verify import (

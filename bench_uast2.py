@@ -25,7 +25,6 @@ import argparse
 import copy
 import gc
 import json
-import random
 import statistics
 import sys
 import time
@@ -39,13 +38,7 @@ if str(REPO) not in sys.path:  # pragma: no cover - script convenience
     sys.path.insert(0, str(REPO))
 
 from muta_ext.uast.adapters import get_adapter  # noqa: E402
-from muta_ext.uast2.arena import Arena  # noqa: E402
 from muta_ext.uast2.adapters import parse_to_uast as parse_v2  # noqa: E402
-from muta_ext.uast2.mutators import (  # noqa: E402
-    CommutativeSwapPass,
-    ConstantFoldingPass,
-    LegacyMutatorPass,
-)
 from muta_ext.uast2.passes import Pipeline  # noqa: E402
 from muta_ext.uast2.serialize import dumps as v2_dumps  # noqa: E402
 from muta_ext.uast2.serialize import loads as v2_loads  # noqa: E402

@@ -1,7 +1,6 @@
 TARGET_NAME = "kmeans_step"
 TIER = 2
 function_name = "kmeans_step"
-import numpy as np
 
 source = """
 def kmeans_step(points, labels, k):
