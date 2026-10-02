@@ -62,78 +62,95 @@ def load_lineage(run_dir: Path) -> dict:
 
 # ── Streamlit UI ──
 
-st.set_page_config(page_title="MutaLambda Dashboard", layout="wide")
-st.title("🧬 MutaLambda Run Dashboard")
 
-runs = list_runs()
+def main() -> None:
+    """Render the run-inspector page.
 
-if not runs:
-    st.info("No runs found. Run `mutalambda quick my_script.py` first.")
-    st.stop()
+    Kept inside a function so that plain ``import dashboard_run`` (the module
+    is listed in pyproject py-modules and exercised by the smoke tests) has no
+    side effects. Previously the page body ran at import time and
+    ``st.stop()`` raised whenever no runs existed on disk, which made the
+    module unimportable from any directory without a ``checkpoints/`` folder.
+    Streamlit executes the script with ``__name__ == "__main__"``, so
+    ``streamlit run dashboard_run.py`` still renders exactly as before.
+    """
 
-# Sidebar: run selector
-with st.sidebar:
-    st.header("🗂 Runs")
-    run_names = [r.name for r in runs]
-    selected = st.selectbox("Selecciona un run", run_names, index=0)
-    selected_run = next(r for r in runs if r.name == selected)
+    st.set_page_config(page_title="MutaLambda Dashboard", layout="wide")
+    st.title("🧬 MutaLambda Run Dashboard")
 
-manifest = load_run_manifest(selected_run)
-fitness_gens, fitness_scores = load_fitness_history(selected_run)
-lineage = load_lineage(selected_run)
+    runs = list_runs()
 
-# ── Tabs ──
-tab_overview, tab_fitness, tab_lineage, tab_code = st.tabs(
-    ["📋 Overview", "📈 Fitness", "🌳 Lineage", "💻 Best Code"]
-)
+    if not runs:
+        st.info("No runs found. Run `mutalambda quick my_script.py` first.")
+        st.stop()
 
-with tab_overview:
-    if manifest:
-        st.caption(f"**Run ID:** `{manifest.get('run_id', '—')}`")
-        st.caption(f"**Task:** {manifest.get('task', '—')}")
-        metrics: dict = manifest.get("metrics", {})
-        if metrics:
-            cols = st.columns(4)
-            cols[0].metric("Best Score", f"{metrics.get('best_score', 0):.4f}")
-            cols[1].metric("Generations", metrics.get("total_generations", 0))
-            cols[2].metric("Total Time", f"{metrics.get('total_time_sec', 0):.1f}s")
-            cols[3].metric("Avg Gen Time", f"{metrics.get('avg_generation_time_sec', 0):.2f}s")
-        if manifest.get("config"):
-            with st.expander("Config"):
-                st.json(manifest["config"])
-    else:
-        st.warning("No manifest found.")
+    # Sidebar: run selector
+    with st.sidebar:
+        st.header("🗂 Runs")
+        run_names = [r.name for r in runs]
+        selected = st.selectbox("Selecciona un run", run_names, index=0)
+        selected_run = next(r for r in runs if r.name == selected)
 
-with tab_fitness:
-    if fitness_scores:
-        st.line_chart(fitness_scores)
-        latest = fitness_scores[-1] if fitness_scores else 0
-        st.caption(f"Última puntuación: **{latest:.4f}** (mejor global)")
-    else:
-        st.info("No fitness history available.")
+    manifest = load_run_manifest(selected_run)
+    fitness_gens, fitness_scores = load_fitness_history(selected_run)
+    lineage = load_lineage(selected_run)
 
-with tab_lineage:
-    if lineage:
-        nodes: dict = lineage.get("nodes", {})
-        st.caption(f"Total nodes: **{len(nodes)}**")
-        st.caption(f"Max depth: **{lineage.get('max_depth', '—')}**")
-        st.caption(f"Resurrections: **{lineage.get('resurrection_count', 0)}**")
-        if nodes:
-            node_ids = sorted(nodes.keys())
-            selected_node = st.selectbox("Node ID", node_ids)
-            node = nodes[selected_node]
-            st.json({k: v for k, v in node.items() if k != "code"})
-    else:
-        st.info("No lineage data available.")
+    # ── Tabs ──
+    tab_overview, tab_fitness, tab_lineage, tab_code = st.tabs(
+        ["📋 Overview", "📈 Fitness", "🌳 Lineage", "💻 Best Code"]
+    )
 
-with tab_code:
-    best_path = selected_run / "best_solution.py"
-    if best_path.exists():
-        code = best_path.read_text()
-        st.code(code, language="python")
-        if (selected_run / "best_solution.patch").exists():
-            patch = (selected_run / "best_solution.patch").read_text()
-            with st.expander("📄 Patch"):
-                st.code(patch, language="diff")
-    else:
-        st.info("No best solution found for this run.")
+    with tab_overview:
+        if manifest:
+            st.caption(f"**Run ID:** `{manifest.get('run_id', '—')}`")
+            st.caption(f"**Task:** {manifest.get('task', '—')}")
+            metrics: dict = manifest.get("metrics", {})
+            if metrics:
+                cols = st.columns(4)
+                cols[0].metric("Best Score", f"{metrics.get('best_score', 0):.4f}")
+                cols[1].metric("Generations", metrics.get("total_generations", 0))
+                cols[2].metric("Total Time", f"{metrics.get('total_time_sec', 0):.1f}s")
+                cols[3].metric("Avg Gen Time", f"{metrics.get('avg_generation_time_sec', 0):.2f}s")
+            if manifest.get("config"):
+                with st.expander("Config"):
+                    st.json(manifest["config"])
+        else:
+            st.warning("No manifest found.")
+
+    with tab_fitness:
+        if fitness_scores:
+            st.line_chart(fitness_scores)
+            latest = fitness_scores[-1] if fitness_scores else 0
+            st.caption(f"Última puntuación: **{latest:.4f}** (mejor global)")
+        else:
+            st.info("No fitness history available.")
+
+    with tab_lineage:
+        if lineage:
+            nodes: dict = lineage.get("nodes", {})
+            st.caption(f"Total nodes: **{len(nodes)}**")
+            st.caption(f"Max depth: **{lineage.get('max_depth', '—')}**")
+            st.caption(f"Resurrections: **{lineage.get('resurrection_count', 0)}**")
+            if nodes:
+                node_ids = sorted(nodes.keys())
+                selected_node = st.selectbox("Node ID", node_ids)
+                node = nodes[selected_node]
+                st.json({k: v for k, v in node.items() if k != "code"})
+        else:
+            st.info("No lineage data available.")
+
+    with tab_code:
+        best_path = selected_run / "best_solution.py"
+        if best_path.exists():
+            code = best_path.read_text()
+            st.code(code, language="python")
+            if (selected_run / "best_solution.patch").exists():
+                patch = (selected_run / "best_solution.patch").read_text()
+                with st.expander("📄 Patch"):
+                    st.code(patch, language="diff")
+        else:
+            st.info("No best solution found for this run.")
+
+
+if __name__ == "__main__":
+    main()
