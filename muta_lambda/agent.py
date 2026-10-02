@@ -791,6 +791,9 @@ class MutaLambdaAgent:
 
                 all_inds = [ind for isl in self.islands for ind in isl.population]
                 nsga_stats = get_nsga2_stats(all_inds)
+                # Cached so GenerationCompleted can carry it on every
+                # generation without paying for a sort each time.
+                self._last_pareto_size = int(nsga_stats["pareto_frontier_size"])
                 logger.debug(
                     "NSGA-II fronts=%d pareto=%d crowding=%.3f",
                     nsga_stats["num_fronts"],
@@ -873,6 +876,10 @@ class MutaLambdaAgent:
         ext_ctx.best = self._global_best
         ext_ctx.metadata["combined_best_score"] = current_combined_score
         self.extensions.on_generation_end(ext_ctx)
+        # `diversity`, `island_scores` and `pareto_size` are consumed by
+        # dashboard.integrate_hitl -> DashboardState.record_generation. They
+        # used to be absent from the payload, which left the diversity,
+        # per-island and Pareto charts permanently empty.
         self.event_bus.emit(
             GENERATION_COMPLETED,
             {
@@ -881,6 +888,11 @@ class MutaLambdaAgent:
                 "combined_best_score": current_combined_score,
                 "should_stop": should_stop,
                 "snapshots": len(island_snapshots),
+                "diversity": cross_diversity,
+                "island_scores": {
+                    int(snap.island_id): float(snap.best_score) for snap in island_snapshots
+                },
+                "pareto_size": int(getattr(self, "_last_pareto_size", 0)),
                 "extension_metrics": self.extensions.all_metrics(),
             },
             run_id=self.run_id,

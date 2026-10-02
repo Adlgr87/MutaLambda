@@ -47,6 +47,9 @@ cli = [
 ]
 dashboard = [
   "streamlit>=1.50,<2",
+  # dashboard.py builds every chart through pandas.DataFrame; without it the
+  # Fitness/Diversity/Islands/Pareto tabs raise ModuleNotFoundError at render.
+  "pandas>=2,<3",
 ]
 scientific = [
   "z3-solver>=4.12,<6",

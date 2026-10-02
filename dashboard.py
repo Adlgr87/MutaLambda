@@ -19,10 +19,10 @@ Usage:
 
 from __future__ import annotations
 
-import json
+import threading
 import time
 from collections import deque
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 # Streamlit is optional — graceful import
 try:
@@ -43,10 +43,14 @@ class DashboardState:
     """
     Shared state between the evolution engine and the Streamlit dashboard.
 
-    Thread-safe accumulators for real-time visualisation.
+    Thread-safe accumulators for real-time visualisation: the evolution thread
+    writes through :meth:`record_generation` / :meth:`add_hint` while the
+    Streamlit script thread reads via the snapshot accessors, so every mutation
+    is guarded by ``self._lock``.
     """
 
     def __init__(self, max_history: int = 500):
+        self._lock = threading.RLock()
         self.max_history = max_history
         # Generation metrics
         self.gen_numbers: deque = deque(maxlen=max_history)
@@ -71,23 +75,51 @@ class DashboardState:
         pareto_frontier_size: int = 0,
         island_data: Optional[Dict[int, float]] = None,
     ):
-        self.gen_numbers.append(gen)
-        self.global_best.append(best_score)
-        self.diversity.append(diversity)
-        self.pareto_size.append(pareto_frontier_size)
-        if island_data:
-            for isl_id, score in island_data.items():
-                if isl_id not in self.island_bests:
-                    self.island_bests[isl_id] = deque(maxlen=self.max_history)
-                self.island_bests[isl_id].append(score)
+        with self._lock:
+            self.gen_numbers.append(gen)
+            self.global_best.append(best_score)
+            self.diversity.append(diversity)
+            self.pareto_size.append(pareto_frontier_size)
+            if island_data:
+                for isl_id, score in island_data.items():
+                    if isl_id not in self.island_bests:
+                        self.island_bests[isl_id] = deque(maxlen=self.max_history)
+                    self.island_bests[isl_id].append(score)
 
     def add_hint(self, code: str):
-        self.pending_hints.append(code)
+        with self._lock:
+            self.pending_hints.append(code)
 
     def get_hints(self) -> List[str]:
-        hints = list(self.pending_hints)
-        self.pending_hints.clear()
-        return hints
+        with self._lock:
+            hints = list(self.pending_hints)
+            self.pending_hints.clear()
+            return hints
+
+    def record_review(self, code: str, *, approved: bool) -> None:
+        """Record a human approve/reject decision on a variant."""
+        with self._lock:
+            target = self.approved_variants if approved else self.rejected_variants
+            target.append(code)
+
+    def snapshot(self) -> Dict[str, Any]:
+        """Consistent copy of every series, for rendering without tearing.
+
+        The Streamlit thread must not iterate the live deques while the
+        evolution thread appends to them.
+        """
+        with self._lock:
+            return {
+                "gen_numbers": list(self.gen_numbers),
+                "global_best": list(self.global_best),
+                "diversity": list(self.diversity),
+                "pareto_size": list(self.pareto_size),
+                "island_bests": {k: list(v) for k, v in self.island_bests.items()},
+                "approved_variants": list(self.approved_variants),
+                "rejected_variants": list(self.rejected_variants),
+                "paused": self.paused,
+                "stop_requested": self.stop_requested,
+            }
 
 
 # ── Dashboard Renderer ────────────────────────────────────────────────
@@ -239,14 +271,14 @@ class DashboardRenderer:
                                     f"✅ Approve Island {island.id}",
                                     key=f"approve_{island.id}",
                                 ):
-                                    self.state.approved_variants.append(best.code)
+                                    self.state.record_review(best.code, approved=True)
                                     st.success("Approved!")
                             with col_r:
                                 if st.button(
                                     f"❌ Reject Island {island.id}",
                                     key=f"reject_{island.id}",
                                 ):
-                                    self.state.rejected_variants.append(best.code)
+                                    self.state.record_review(best.code, approved=False)
                                     st.warning("Rejected. Island will be reseeded.")
 
     def _render_advanced_metrics(self, agent):
