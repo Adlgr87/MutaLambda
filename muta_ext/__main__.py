@@ -261,7 +261,6 @@ def cmd_recommend(args):
     )
 
     # File size heuristic
-    file_size = len(source)
     lines = source.count("\n")
 
     if code_type == "numpy" or "ml" in code_type:
@@ -328,7 +327,7 @@ def _print_text_dashboard(run_id_or_dir: Optional[str] = None):
     """Fallback: print recent run stats as text (no Streamlit required)."""
     from cli.checkpoint_manager import CheckpointManager
 
-    mgr = CheckpointManager()
+    CheckpointManager()
 
     checkpoints_dir = Path("checkpoints")
     if not checkpoints_dir.exists():
@@ -626,7 +625,7 @@ def _run_with_preset(args, preset_name: str):
     """Shared helper: load a preset config and run evolution."""
     from muta_ext.cli.config_manager import ConfigManager
 
-    config_mgr = ConfigManager()
+    ConfigManager()
     preset_path = Path("presets") / f"{preset_name}.yaml"
     if not preset_path.exists():
         console.print(f"[red]✗ Preset not found: {preset_path}[/red]")

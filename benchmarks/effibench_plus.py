@@ -207,7 +207,7 @@ M1 = final_rho.sum()
 
 def attach_invariants():
     """Attach relevant invariants to each scientific task."""
-    invs = get_scientific_invariants()
+    get_scientific_invariants()
 
     SCIENTIFIC_TASKS[0].invariants = [
         InvariantCheck(
@@ -365,7 +365,7 @@ result = heat_diffusion_2d_vec(initial, steps=50)
     times = [t["p50_ms"] for t in results["tasks"] if t["status"] == "ok"]
     results["summary"] = {
         "n_tasks": len(results["tasks"]),
-        "n_passed": len(ok := [t for t in results["tasks"] if t["status"] == "ok"]),
+        "n_passed": sum(1 for t in results["tasks"] if t["status"] == "ok"),
         "mean_p50_ms": round(statistics.mean(times), 2) if times else 0,
     }
 

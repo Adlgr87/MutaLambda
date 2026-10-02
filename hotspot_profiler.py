@@ -100,7 +100,7 @@ stats.print_stats(20)
         profiler.enable()
 
         start = time.perf_counter()
-        result = func(*args, **kwargs)
+        func(*args, **kwargs)
         wall_time = time.perf_counter() - start
 
         profiler.disable()

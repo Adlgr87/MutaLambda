@@ -106,12 +106,8 @@ def make_llm_stub(mode: str = "good") -> Any:
         if mode == "syntax_error":
             return "this is not python"
 
-        # Extrae código base del prompt (heurística minimalista)
-        # Buscamos a partir de "Base Code:".
-        base = ""
-        if "Base Code:" in prompt:
-            base = prompt.split("Base Code:", 1)[1]
-        # devolvemos módulo completo ignorando el base; es determinista
+        # El stub devuelve un módulo completo y determinista, así que el
+        # "Base Code:" del prompt se ignora deliberadamente.
 
         if mode == "bad":
             compute_body = "    return n"

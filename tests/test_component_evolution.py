@@ -122,7 +122,6 @@ def test_interface_crossover():
         complexity_score=4.0,
     )
 
-    rng = random.Random(42)
     child = spec_a.crossover(spec_b)
 
     assert isinstance(child, InterfaceSpec)

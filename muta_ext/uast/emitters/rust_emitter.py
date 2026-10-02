@@ -154,7 +154,7 @@ class RustEmitter:
                 lines.append(f"{indent_str}match {{}} {{")
                 for clause in node.except_clauses:
                     if clause.exception_type:
-                        exc_type = " ".join(self._emit_node(clause.exception_type, indent))
+                        " ".join(self._emit_node(clause.exception_type, indent))
                         binding = clause.binding if clause.binding else "_"
                         lines.append(f"{indent_str}    Ok(v) => v,")
                         lines.append(f"{indent_str}    Err({binding}) => {{}}")

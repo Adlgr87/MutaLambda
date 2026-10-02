@@ -371,14 +371,18 @@ class GoAdapter(BaseAdapter):
         """Transform variable declaration."""
         # Parse var x int = value
         variables = []
-        type_name = None
         value = None
 
         for child in node.children:
             if child.type == "identifier":
                 variables.append(Identifier(name=_get_text(child, source)))
             elif child.type == "type_identifier":
-                type_name = _get_text(child, source)
+                # Known limitation: the declared type is parsed by tree-sitter
+                # but dropped, because UAST `Assign` has no type-annotation
+                # slot. `var x int = v` therefore round-trips as `x = v`.
+                # Previously this branch called _get_text() and discarded the
+                # result, which looked like an implementation rather than a gap.
+                pass
             elif child.type == "expression":
                 value = self._visit(child, source)
 

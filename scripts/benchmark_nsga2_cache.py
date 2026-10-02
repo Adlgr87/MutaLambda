@@ -54,7 +54,7 @@ def benchmark_sort(population: List[Individual], runs: int = 5) -> Tuple[float, 
     times = []
     for _ in range(runs):
         start = time.perf_counter()
-        fronts = non_dominated_sort(population)
+        non_dominated_sort(population)
         elapsed = time.perf_counter() - start
         times.append(elapsed)
 

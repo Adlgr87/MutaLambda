@@ -3,6 +3,7 @@
 
 import ast
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -99,9 +100,21 @@ class PythonHandler(BaseLanguageHandler):
                     timeout=self._config.get("run_timeout_sec", 10),
                 )
                 elapsed = time.perf_counter() - start
+                if result.returncode != 0:
+                    # Timing a crash is not a benchmark. Discarding the exit
+                    # status meant a script that failed instantly reported an
+                    # excellent latency.
+                    return {
+                        "error": (
+                            f"Script exited {result.returncode}: "
+                            f"{(result.stderr or '').strip()[:200]}"
+                        )
+                    }
                 times.append(elapsed)
-        except Exception:
-            pass
+        except subprocess.TimeoutExpired:
+            pass  # partial timings are still usable; a timeout caps the loop
+        except OSError as exc:
+            return {"error": f"Could not run {binary_path}: {exc}"}
 
         if not times:
             return {"error": "No successful runs"}

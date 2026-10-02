@@ -212,7 +212,6 @@ def run_after(codes: list[str]) -> dict:
 
 def main() -> int:
     _compute_expected()
-    rng = random.Random(SEED)
     mutants = [_mutant(i, random.Random(SEED + i)) for i in range(N_MUTANTS)]
     codes = [c for c, _ in mutants]
     labels = [l for _, l in mutants]

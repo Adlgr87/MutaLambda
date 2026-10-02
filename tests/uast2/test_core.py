@@ -226,7 +226,6 @@ class TestCanonicalHash:
         assert first.canonical_hash() == second.canonical_hash()
 
     def test_hash_ignores_metadata(self):
-        body = [v2.Break()]
         first = v2.CoreUAST(body=[v2.Break()], language="python", metadata={"a": 1})
         second = v2.CoreUAST(body=[v2.Break()], language="python", metadata={"a": 2})
         assert first.canonical_hash() == second.canonical_hash()

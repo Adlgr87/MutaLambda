@@ -224,7 +224,6 @@ def _search(source: str, opt: str, archive=None, population: int = 12,
         best_ever = max(best_ever, best_gen)
         trajectory.append(best_ever)
         # next population: keep top 4, mutate the rest + occasional LLM move
-        keep = [c for _f, c in scored[:4]]
         next_codes: dict = {}
         for f_, c in scored:
             next_codes[c] = None  # carry over

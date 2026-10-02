@@ -29,7 +29,7 @@ def run_python_code(code: str, iterations: int = 10) -> tuple[float, float, bool
         t0 = time.perf_counter()
         try:
             exec(code, {})
-        except Exception as e:
+        except Exception:
             return 0.0, 0.0, False
         t1 = time.perf_counter()
         times.append((t1 - t0) * 1000)

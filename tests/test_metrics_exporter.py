@@ -300,7 +300,7 @@ class TestOTelMetricsBridge:
 
     def test_records_to_registry(self):
         reset_registry()
-        bridge = OTelMetricsBridge()
+        OTelMetricsBridge()
         # Directly set on registry since OTel is not installed
         reg = get_registry()
         reg.gauge("evolution_best_score").set(0.88)

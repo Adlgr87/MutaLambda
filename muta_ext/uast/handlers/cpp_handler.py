@@ -133,6 +133,16 @@ class CppHandler(BaseLanguageHandler):
                 start = time.perf_counter()
                 result = run_hardened([binary_path], timeout=self._run_timeout)
                 elapsed = time.perf_counter() - start
+                if result.returncode != 0:
+                    # Timing a crash is not a benchmark. Discarding the exit
+                    # status meant a binary that failed instantly reported an
+                    # excellent latency.
+                    return {
+                        "error": (
+                            f"Binary exited {result.returncode}: "
+                            f"{(result.stderr or '').strip()[:200]}"
+                        )
+                    }
                 times.append(elapsed)
         except subprocess.TimeoutExpired:
             pass

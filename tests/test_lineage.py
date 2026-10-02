@@ -263,7 +263,7 @@ def test_find_abandoned_branches_score_threshold():
 def test_serialization_roundtrip():
     """to_dict() → from_dict() preserva datos."""
     graph = LineageGraph()
-    inds = _populate_chain(graph, count=5)
+    _populate_chain(graph, count=5)
 
     data = graph.to_dict()
     restored = LineageGraph.from_dict(data)

@@ -44,7 +44,7 @@ class MutaLambdaOptimizer:
         adapter = get_adapter(language)
 
         # Parse into UAST
-        uast = adapter.parse(source)
+        adapter.parse(source)
 
         # Generate optimized variants (stub - in production this runs NSGA-II)
         variants: List[Dict[str, Any]] = []

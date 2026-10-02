@@ -130,7 +130,6 @@ def test_pending_migrants_deferred_until_apply():
     sent = bus.stage_all_migrations(generation=0, deferred=True)
     assert sent > 0
     # Populations unchanged until apply
-    codes_before = [ind.code for ind in islands[1].population]
     assert islands[1]._pending_migrants
     islands[1].apply_pending_migrants()
     assert not islands[1]._pending_migrants

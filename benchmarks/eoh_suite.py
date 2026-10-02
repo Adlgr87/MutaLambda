@@ -96,7 +96,6 @@ SOLUTION_QUALITY: dict[str, list[dict]] = {}
 # ---- Circle Packing ----
 def circle_packing_rect_greedy(n: int, side: float) -> float:
     """Greedily pack n circles of radius r=1 into smallest square."""
-    circles = []
     r = 1.0
     # Simple grid placement
     grid_n = math.ceil(math.sqrt(n))
@@ -110,7 +109,7 @@ def circle_packing_circ_greedy(n: int) -> float:
     r = 1.0
     # Use hexagonal packing
     rows = math.ceil(math.sqrt(n))
-    cols = math.ceil(n / rows)
+    math.ceil(n / rows)
     radius = rows * r * math.sqrt(3) / 2 + r
     return radius
 
@@ -161,7 +160,6 @@ def bin_packing_best_fit(items: list[float], capacity: float = 1.0) -> int:
 # ---- Knapsack ----
 def knapsack_dp(items: list[tuple[int, int]], capacity: int) -> int:
     """Dynamic programming 0/1 knapsack."""
-    n = len(items)
     dp = [0] * (capacity + 1)
     for weight, value in items:
         for w in range(capacity, weight - 1, -1):

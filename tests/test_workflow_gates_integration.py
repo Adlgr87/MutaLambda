@@ -186,7 +186,7 @@ class TestTraceSerialization:
         trace.add_stage(stage)
 
         json_str = json.dumps(trace.to_dict())
-        restored = ProtocolTrace(
+        ProtocolTrace(
             run_id="restored",
             subject_id="restored",
         )

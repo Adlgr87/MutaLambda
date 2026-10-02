@@ -44,7 +44,6 @@ import cmath
 
 
 def _ref_fft(real, imag):
-    n = len(real)
     vals = [complex(r, i) for r, i in zip(real, imag)]
 
     def _fft(a):

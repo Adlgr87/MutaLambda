@@ -97,11 +97,6 @@ class TestNonDominatedSort:
         for _ in range(30):
             pop.append(_make_ind("inc", correctness=0.5, latency=0.5, throughput=50.0))
 
-        pure = (
-            _n.non_dominated_sort.__wrapped__
-            if hasattr(_n.non_dominated_sort, "__wrapped__")
-            else None
-        )
         # Force pure-python path by temporarily lowering the threshold.
         orig = _NUMPY_FASTPATH_THRESHOLD
         try:

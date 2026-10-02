@@ -386,7 +386,7 @@ def test_factory_offspring_skip_evaluation_uses_parent_fitness():
         functional_codes={parent_code, parent_code.strip()}
     )
 
-    snapshot = engine.step(
+    engine.step(
         llm_fn=lambda _prompt: parent_code,
         evaluator=evaluator,
         generation=0,

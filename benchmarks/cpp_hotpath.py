@@ -148,7 +148,7 @@ def run(cfg: BenchConfig) -> RunResult:
     baseline_ns = _time_compile_run(cfg, workdir)
 
     # evolutionary optimisation via LLM
-    backend = LLMBackend(backend=cfg.backend, model=cfg.model, temperature=0.1, max_retries=4)
+    LLMBackend(backend=cfg.backend, model=cfg.model, temperature=0.1, max_retries=4)
     # MutaLambda genetic engine call would mutate the function here; in the
     # clang x agnes run this produced best_keccak_f1600.hpp which is committed.
     best_path = "/tmp/keccak_evolve_uib0wdu0/best_keccak_f1600.hpp"

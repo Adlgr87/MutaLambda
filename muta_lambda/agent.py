@@ -986,7 +986,7 @@ class MutaLambdaAgent:
                 baseline = ""
                 if self.config.seed_codes:
                     baseline = self.config.seed_codes[0]
-                paths = write_run_artifacts(
+                write_run_artifacts(
                     self,
                     output_dir=art_dir,
                     baseline_code=baseline,

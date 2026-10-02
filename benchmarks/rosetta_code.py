@@ -166,7 +166,7 @@ def benchmark_python(code: str, iterations: int = 5) -> float:
         t0 = time.perf_counter()
         try:
             exec(code, {})
-        except Exception as e:
+        except Exception:
             return None
         t1 = time.perf_counter()
         times.append((t1 - t0) * 1000)

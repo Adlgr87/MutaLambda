@@ -303,7 +303,6 @@ def _mutate_code(code, function_name, mod=None, arg_factory=None, max_tries=12):
     from mutalambda_core.evolution_engine import ASTMutator
     import random as _r
 
-    rng = _r.Random(7)
     attempts = []
     # 1) numpy vectorization variants (often correct + faster for numeric targets)
     try:
@@ -932,10 +931,6 @@ def _write_summary(results):
     print(f"Targets: {len(results)} | Significant (p_adj<0.05 & faster): {sig}")
     for r in results:
         tag = "SIG " if r.statistics.get("significant") else "    "
-        alts = {
-            k: (round(v.median_s, 6) if v and v.median_s else None)
-            for k, v in r.alternatives.items()
-        }
         print(
             f"  {tag} {r.target:26s} T{r.tier} muta_speedup={r.speedup} "
             f"L2div={r.correctness.get('divergences')} corr={r.correctness.get('verified')} "

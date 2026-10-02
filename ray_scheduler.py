@@ -230,7 +230,6 @@ class RayScheduler:
         stats: Dict,
     ) -> tuple:
         """Evaluate locally (fallback)."""
-        n = len(individuals)
         scores = np.array([fitness_fn(ind) for ind in individuals])
         stats["batches"] = 1
         return scores, stats

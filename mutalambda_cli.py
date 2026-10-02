@@ -802,7 +802,7 @@ def _run_with_preset(ctx, preset_name, file_arg):
     from cli.config_manager import ConfigManager
     import yaml
 
-    cm = ConfigManager()
+    ConfigManager()
     # Use importlib.resources for package-relative path (works when installed via pip)
     import importlib.resources as pkg_resources
     try:
