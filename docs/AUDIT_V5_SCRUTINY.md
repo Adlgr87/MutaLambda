@@ -36,11 +36,12 @@ antes de tocar nada:
 | LOC `.py` total | 73 786 | 74 510 | +724 |
 | LOC producción (sin `tests/`) | 57 716 | 57 940 | +224 |
 | LOC tests | 16 070 | 16 570 | +500 |
-| **Tests recolectados** | 1123 | 1177 | **+54** |
-| **Tests pasando** (`-m "not e2e"`) | **1070 ✅ / 1 ❌** | **1125 ✅ / 0 ❌** | **+55, −1 fallo** |
+| **Tests recolectados** | 1123 | 1218 | **+95** |
+| **Tests pasando** (`-m "not e2e"`) | **1070 ✅ / 1 ❌** | **1166 ✅ / 0 ❌** | **+96, −1 fallo** |
 | Tests skipped | 22 | 22 | = |
 | Módulos que importan (`py-modules`+`packages`) | 89/89 | 88/88 | −1 (paquete vacío borrado) |
 | ruff clase `F` (bugs reales) | 452 | 151 | **−301** |
+| `except Exception` ciegos **sin inventariar** | 309 | **0** | ratchet BLE001 en CI |
 | · F401 imports sin usar | 372 | 79 | −293 |
 | · F811 redefiniciones | 7 | 4 | −3 |
 | Errores de colección pytest | 0* | 0 | = |
@@ -77,6 +78,8 @@ smoke_all.sh                → ALL GREEN
 | A10 | `llm_backend._estimate_tokens` | Test auto-contradictorio: exigía `_estimate_tokens("") == 1` cuando el código (correctamente) devuelve 0 | Se corrigió el **test**, no el código: facturar un token fantasma a una completion vacía sería un error de coste. Docstring aclarado |
 | A11 | `dashboard_run.py` | `import streamlit as st` y después `if st is None: raise ImportError` — rama **inalcanzable** | `try/except ImportError` real con mensaje útil |
 | A12 | `dashboard_run.py` | Renderizaba la página **en tiempo de import**; `st.stop()` (cuando no hay runs) hacía que `import dashboard_run` **reventara**. Detectado por la verificación en entorno limpio, no por la suite | Cuerpo movido a `main()` bajo `if __name__ == "__main__"`. `streamlit run` se comporta igual (Streamlit ejecuta como `__main__`) |
+| **A14** | `mutalambda_core/evaluation_service.py` | **El fallo de infraestructura se convertía en fitness.** `SubprocessRunner.run()` nunca lanza (captura todo y devuelve `EvalResult`), así que **cualquier** excepción que escapaba de `_pool_worker` era un fallo del *harness*. Se trataba igual que código malo: `FitnessVector.worst()` + escritura **incondicional en caché**. Como la clave es code+tests+env (estable toda la ejecución), **un solo `BrokenProcessPool` transitorio dejaba código correcto clavado en −1.0 para siempre**: no volvía a ganar selección y su linaje moría. Reproducido antes del fix | El hijo devuelve un `WorkerFailure` picklable con el traceback completo; el padre distingue muerte-de-pool de fallo-de-candidato, loguea el traceback a ERROR, **reintenta en serie** (2 veces), cachea sólo si el reintento midió de verdad, y marca `evaluation_error=1.0` si sigue sin evaluarse |
+| **A15** | `runners.py` (harness del sandbox) | **Un comparador con errata reportaba `passed=True, correctness=1.0`.** La copia inline terminaba en `return got == expected`; `comparison.compare_values` lanza `ValueError`. Además `predicate_registered` no existía en el harness: comparaba la salida contra el *nombre* del predicado | El harness registra los comparadores desconocidos; el padre marca `comparator_undefined=1.0`, avisa con la lista de comparadores válidos y **retira `passed=True`**. No lanza: la ejecución continúa, pero deja de afirmar una corrección que nunca verificó |
 | A13 | `tests/conftest.py`, `tests/test_nsga2.py`, `bench_phase6.py` | Importaban los shims raíz deprecados → la propia suite emitía `DeprecationWarning` | Migrados a las rutas canónicas |
 
 ### Deriva docstring ↔ código corregida
@@ -229,14 +232,24 @@ se listan los 8 paquetes de primer orden; `benchmarks/` se excluye explícitamen
 `benchmark_runner` están en `py-modules`: viajan en el wheel de todos los usuarios.
 No son API. Recomendado moverlos a `tools/` y sacarlos del paquete (Fase 2 del ADR 0042).
 
-**D2 — Divergencia semántica de comparadores (riesgo de corrección).**
-`comparison.compare_values` **lanza `ValueError`** ante un comparador desconocido;
-la copia inline `_compare` del harness de sandbox hace `return got == expected`
-(silencioso). Un `comparison:` mal escrito en un fichero de tests se rechaza en
-*differential testing* pero se acepta como `equal` en la evaluación en sandbox.
-Además al harness le falta `predicate_registered`.
-**No corregido**: alinear los comportamientos puede empezar a hacer fallar runs que
-hoy pasan. Decisión de producto.
+**D2 — Divergencia semántica de comparadores.** *(CORREGIDO — ver A15)*
+Se aplicó el **Paso 0 (medir antes de cambiar)**: el harness ahora registra los
+comparadores desconocidos, y una auditoría estática sobre **todos** los `.json` y
+`.yaml` distribuidos encontró **cero** usos de un comparador indefinido. Alinear
+era por tanto seguro, y la suite lo confirma (1166 passed, nada roto).
+
+Semántica elegida: **«no concluyente», no «fallo»**. El padre marca
+`comparator_undefined=1.0`, avisa, y retira `passed=True` — pero **no lanza**. Las
+ejecuciones siguen; sólo dejan de afirmar una corrección que nunca establecieron.
+Es el mismo patrón que `evaluation_error`: «nunca verificado» ≠ «verificado malo».
+
+La **duplicación se mantiene** porque es inevitable: el harness se ensambla como
+texto y se ejecuta en el proceso hijo con builtins restringidos y sin acceso a los
+paquetes del proyecto. Lo que sí se eliminó es la **deriva silenciosa**:
+`tests/test_comparator_parity.py` (26 tests) ejecuta ambas implementaciones sobre
+cada comparador compartido y exige que la allowlist del harness sea exactamente
+`COMPARATORS − {predicate_registered}` (ese sí no puede cruzar la frontera de
+proceso: los predicados se registran en el padre).
 
 **D3 — Las 4 plantillas YAML de UAST.** *(RESUELTO: reubicadas, no borradas)*
 Triaje aplicado: **(a)** YAML válido → las 4 pasan. **(b)** campos presentes en el
@@ -264,11 +277,25 @@ tabla de arriba, la traducción plano→seccionado y las dos piezas que faltarí
 para convertirlas en presets reales. Quedan en un extremo claro: ejemplos
 documentados, no configuración.
 
-**D4 — 38 variables locales sin usar (`F841`) y 311 `except Exception` ciegos.**
-Fuera de los 5 corregidos, las demás están en `benchmarks/`, `muta_ext/__main__.py`
-y harnesses. Los `except` ciegos requieren revisar caso por caso si tragan errores
-reales — en particular en `evaluation_service` con `forkserver`, donde un fallo del
-proceso hijo debe propagarse. No auditado en profundidad.
+**D4 — `except Exception` ciegos: triaje por niveles.** *(Nivel 1 CORREGIDO)*
+El conteo bruto de 311 mezclaba casos intencionales con fallos reales, así que se
+triaron por ubicación en vez de en bloque:
+
+| Nivel | Alcance | Estado |
+|---|---|---|
+| **1** | Pool de evaluación / forkserver (`evaluation_service`) | ✅ **HECHO** — ver A14. Los 7 del módulo revisados uno a uno: teardown y telemetría se quedan con `# noqa: BLE001 - <razón>`; `_pkg_version` se estrecha a `(ImportError, OSError, ValueError)` porque **alimenta la clave de caché**; warmup del pool y refinamiento de benchmark ahora loguean `exc_info` (este último promovido de `debug` a `warning`: degradaba en silencio un percentil multi-muestra a una sola muestra) |
+| **2** | Puerta de corrección: `mutation_filters`, `sandbox`, `property_testing`, `ast_math_verifier`, `comparison`, `checkpoint_manager` | ⬜ pendiente. El de `checkpoint_manager` es el más serio: un fallo silencioso al guardar/cargar corrompe `--resume` |
+| **3** | `llm_backend` — separar errores de red/timeout de errores de parseo (un JSON inválido no debe reintentarse como un timeout) | ⬜ pendiente |
+| **4** | Top-level de CLI/UI, donde mostrar el error es lo correcto | ⬜ sólo verificar que loguean traceback |
+
+**Prevención activada**: `BLE001` está en `select` de ruff y los **302 casos
+preexistentes (98 ficheros)** quedan congelados en `per-file-ignores` como
+inventario. La lista sólo puede encoger: cualquier fichero nuevo, o ya triado,
+falla CI ante un `except Exception` ciego. Verificado en ambos sentidos.
+Un ciego legítimo se queda, pero debe llevar `# noqa: BLE001 - <razón>`.
+
+Las 38 variables locales sin usar (`F841`) siguen pendientes; están en
+`benchmarks/`, `muta_ext/__main__.py` y harnesses.
 
 **D5 — `evolve.py` (38 KB) y `mutalambda_cli.py` (43 KB) son monolitos.**
 Trocearlos es un refactor estructural, no limpieza. Debe ir después del ADR 0042.
@@ -289,11 +316,17 @@ Ningún algoritmo (NSGA-II, mutadores, evaluación) fue reescrito.
 | Commit | Lote | Tests después |
 |---|---|---|
 | `deea2c0` | `fix(A)` — 13 desperfectos de corrección + deriva de docstrings | 1073 ✅ / 0 ❌ |
-| `—` | `fix(E)` — dashboard ↔ motor reconectado, locks, pandas | 1084 ✅ / 0 ❌ |
-| `—` | `fix(E.3)` — cadena LSP ↔ VSCode reparada, `index.js` borrado | 1096 ✅ / 0 ❌ |
-| `—` | `chore(C/D)` — paquete muerto + 286 imports | 1096 ✅ / 0 ❌ |
-| `—` | `refactor(5)` — fuente única de defaults + bounds | 1125 ✅ / 0 ❌ |
-| `—` | `fix(E)` — `dashboard_run` importable + batería de humo | 1125 ✅ / 0 ❌ |
+| `8ca0f42` | `fix(E)` — dashboard ↔ motor reconectado, locks, pandas | 1084 ✅ / 0 ❌ |
+| `be810a2` | `fix(E.3)` — cadena LSP ↔ VSCode reparada, `index.js` borrado | 1096 ✅ / 0 ❌ |
+| `53c3769` | `chore(C/D)` — paquete muerto + 286 imports | 1096 ✅ / 0 ❌ |
+| `4b1605c` | `refactor(5)` — fuente única de defaults + bounds | 1125 ✅ / 0 ❌ |
+| `24c8265` | `fix(E)` — `dashboard_run` importable + batería de humo | 1125 ✅ / 0 ❌ |
+| `d0a6ae3` | `docs` — este informe + ADR 0042 (plan src-layout) | 1125 ✅ / 0 ❌ |
+| `21fe756` | `fix(E.4)` — coverage mide los 8 paquetes, no 3 | 1125 ✅ / 0 ❌ |
+| `e0c3761` | **`fix(A,tier1)`** — fallo de harness ya no se convierte en fitness (A14) | 1140 ✅ / 0 ❌ |
+| `f275e2f` | `chore(lint)` — ratchet BLE001 | 1140 ✅ / 0 ❌ |
+| `6bfbf92` | **`fix(A,D2)`** — comparador indefinido ya no reporta corrección (A15) | 1166 ✅ / 0 ❌ |
+| `0d281f2` | `docs(D3)` — plantillas UAST reubicadas a `examples/` | 1166 ✅ / 0 ❌ |
 
 Cada lote es revertible por separado (`git revert <sha>`).
 
@@ -302,6 +335,6 @@ Cada lote es revertible por separado (`git revert <sha>`).
 ```bash
 python -m venv .venv
 .venv/bin/pip install -e ".[cli,dashboard,uast,dev]"
-.venv/bin/python -m pytest -q -m "not e2e"   # 1125 passed, 22 skipped, 0 failed
+.venv/bin/python -m pytest -q -m "not e2e"   # 1166 passed, 22 skipped, 0 failed
 ./.audit/smoke_all.sh .venv/bin/python       # SMOKE: ALL GREEN
 ```
