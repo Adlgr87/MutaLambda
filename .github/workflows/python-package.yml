@@ -50,5 +50,10 @@ jobs:
     - name: Fast E2E (serial)
       env:
         MUTALAMBDA_E2E_SERIAL: "1"
-      run: |
-        python tests/e2e_tests.py --fast --serial || python tests/e2e_tests.py --fast
+      # Exit codes are meaningful and must not be swallowed:
+      #   0 = good beat bad with margin
+      #   1 = real quality regression
+      #   2 = indeterminate (a pipeline scored exactly -1.0, i.e. it never ran)
+      # The previous `|| python tests/e2e_tests.py --fast` retried on failure
+      # and then let the second result stand, which would hide both 1 and 2.
+      run: python tests/e2e_tests.py --fast --serial

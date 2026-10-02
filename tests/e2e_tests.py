@@ -115,31 +115,17 @@ def make_llm_stub(mode: str = "good") -> Any:
             # sum(i for i in range(n))
             compute_body = "    return sum(range(n))"
 
-        # El harness: lee test_cases desde stdin y ejecuta.
-        # Para que funcione con el sandbox existente, imprimimos al final un JSON.
-        return (
-            "import sys, json\n"
-            "from typing import Any\n\n"
-            "def compute_sum(n):\n"
-            f"{compute_body}\n\n"
-            "def _run():\n"
-            "    test_cases = json.loads(sys.stdin.read() or '[]')\n"
-            "    passed = 0\n"
-            "    total = max(1, len(test_cases))\n"
-            "    for tc in test_cases:\n"
-            "        fn = tc.get('function')\n"
-            "        args = tc.get('args', [])\n"
-            "        expected = tc.get('expected')\n"
-            "        try:\n"
-            "            got = globals()[fn](*args)\n"
-            "            if got == expected:\n"
-            "                passed += 1\n"
-            "        except Exception:\n"
-            "            pass\n"
-            "    print(json.dumps({'passed': passed, 'total': total}))\n\n"
-            "if __name__ == '__main__':\n"
-            "    _run()\n"
-        )
+        # IMPORTANTE: devolver SOLO la función.
+        #
+        # Este stub incluía antes su propio harness `_run()` que leía los
+        # test_cases de stdin y los despachaba con `globals()[fn](*args)`.
+        # Eso quedó obsoleto cuando el sandbox pasó a generar su propio
+        # wrapper (`runners.build_wrapper_source`), y además el escáner de
+        # seguridad (ML-002) rechaza `globals` como `sensitive_name`. El
+        # resultado: TODO candidato era rechazado antes de ejecutar un solo
+        # test, así que "good" y "bad" puntuaban idénticamente -1.0 y el
+        # gate e2e no comprobaba nada. Mantener este módulo mínimo.
+        return f"def compute_sum(n):\n{compute_body}\n"
 
     return llm_fn
 
@@ -159,29 +145,10 @@ def run_e2e(
         )
     )
 
-    # Semilla: una implementación mínima pero que también incluye harness.
-    seed_code = (
-        "import sys, json\n"
-        "def compute_sum(n):\n"
-        "    return 0\n\n"
-        "def _run():\n"
-        "    test_cases = json.loads(sys.stdin.read() or '[]')\n"
-        "    passed = 0\n"
-        "    total = max(1, len(test_cases))\n"
-        "    for tc in test_cases:\n"
-        "        fn = tc.get('function')\n"
-        "        args = tc.get('args', [])\n"
-        "        expected = tc.get('expected')\n"
-        "        try:\n"
-        "            got = globals()[fn](*args)\n"
-        "            if got == expected:\n"
-        "                passed += 1\n"
-        "        except Exception:\n"
-        "            pass\n"
-        "    print(json.dumps({'passed': passed, 'total': total}))\n\n"
-        "if __name__ == '__main__':\n"
-        "    _run()\n"
-    )
+    # Semilla mínima: igual que el stub, solo la función. El harness lo
+    # aporta el sandbox; incluir uno propio con globals() hacía que el
+    # escáner de seguridad rechazara la semilla.
+    seed_code = "def compute_sum(n):\n    return 0\n"
 
     cfg = core.EvolveConfig(
         num_islands=2,
@@ -227,6 +194,125 @@ def run_e2e(
     }
 
 
+
+# ── Diagnóstico ───────────────────────────────────────────────────────────
+
+# Umbrales del gate. "good" debe resolver realmente el problema y "bad" debe
+# fallarlo de forma inequívoca; un margen estrecho significaría que el gate
+# no distingue una evolución sana de una rota.
+GOOD_MIN_SCORE = 0.5
+BAD_MAX_SCORE = 0.0
+# Suelo de corrección: FitnessVector.to_scalar() devuelve correctness-1.0
+# para cualquier candidato imperfecto, así que -1.0 exacto = correctness 0,
+# es decir "no pasó ni un solo test" — típicamente porque nunca llegó a
+# ejecutarse (rechazo del escáner de seguridad, error de carga, timeout).
+UNEVALUATED_SCORE = -1.0
+
+
+def diagnose_candidate(code: str, test_cases: List[Dict[str, Any]]) -> List[str]:
+    """Explica *por qué* un candidato puntuó como puntuó.
+
+    Un score de -1.0 puede significar "todos los tests fallaron" o "el código
+    nunca se ejecutó", y esos dos casos se arreglan de formas opuestas. Esta
+    función los separa: escáner de seguridad, error de carga, y después, caso
+    a caso, qué devolvió frente a qué se esperaba y con qué comparador.
+    """
+    lines: List[str] = []
+
+    # 1. ¿Lo rechazó el escáner antes de ejecutarlo?
+    try:
+        from runners import scan_code_security
+
+        findings = scan_code_security(code)
+        if findings:
+            lines.append(
+                f"RECHAZADO POR EL ESCÁNER DE SEGURIDAD: {', '.join(findings)}"
+            )
+            lines.append(
+                "  -> el candidato NUNCA se ejecutó; el score no mide corrección."
+            )
+            return lines
+    except Exception as exc:  # noqa: BLE001 - diagnóstico, nunca debe romper el gate
+        lines.append(f"(no se pudo ejecutar el escáner de seguridad: {exc!r})")
+
+    # 2. Ejecutar caso a caso y reportar got/expected/comparador/excepción.
+    try:
+        from comparison import compare_values
+    except Exception:  # noqa: BLE001 - diagnóstico
+        compare_values = None  # type: ignore[assignment]
+
+    ns: Dict[str, Any] = {}
+    try:
+        exec(compile(code, "<candidate>", "exec"), ns)  # noqa: S102 - código propio del test
+    except (KeyboardInterrupt, MemoryError):
+        raise
+    except BaseException as exc:  # noqa: BLE001 - ver nota
+        # BaseException, no Exception: un candidato con `raise SystemExit(...)`
+        # a nivel de módulo mataría el diagnóstico y con él toda la ejecución
+        # e2e, ocultando justo lo que se intentaba explicar. KeyboardInterrupt
+        # y MemoryError sí se propagan: son del operador o de la máquina.
+        lines.append(f"EL MÓDULO NO CARGA: {type(exc).__name__}: {exc}")
+        return lines
+
+    for i, tc in enumerate(test_cases):
+        fn_name = tc.get("function")
+        args = tc.get("args", [])
+        expected = tc.get("expected")
+        comparator = tc.get("comparison", "equal")
+        fn = ns.get(fn_name)
+        if not callable(fn):
+            lines.append(f"  caso {i}: función {fn_name!r} ausente o no invocable")
+            continue
+        try:
+            got = fn(*args)
+        except (KeyboardInterrupt, MemoryError):
+            raise
+        except BaseException as exc:  # noqa: BLE001 - la excepción ES el dato
+            lines.append(
+                f"  caso {i}: {fn_name}{tuple(args)} LANZÓ "
+                f"{type(exc).__name__}: {exc}  (esperaba {expected!r})"
+            )
+            continue
+        if compare_values is not None:
+            try:
+                ok = compare_values(got, expected, comparator)
+            except ValueError as exc:
+                lines.append(f"  caso {i}: COMPARADOR INDEFINIDO {comparator!r} ({exc})")
+                continue
+        else:
+            ok = got == expected
+        mark = "ok " if ok else "FAIL"
+        lines.append(
+            f"  caso {i}: {mark} {fn_name}{tuple(args)} -> {got!r} "
+            f"(esperaba {expected!r}, comparador={comparator!r})"
+        )
+    return lines
+
+
+def classify(good: float, bad: float) -> tuple[int, str]:
+    """Devuelve (exit_code, veredicto).
+
+    0 = good supera a bad con margen; 1 = fallo real; 2 = indeterminado.
+    El 2 es deliberadamente distinto del 1: "el pipeline no midió nada" es un
+    problema de instrumentación, no una regresión de calidad evolutiva, y
+    confundirlos fue exactamente lo que dejó este gate verde durante meses.
+    """
+    if good == UNEVALUATED_SCORE or bad == UNEVALUATED_SCORE:
+        return 2, (
+            "INDETERMINADO: algún pipeline puntuó exactamente -1.0 (correctness=0). "
+            "Eso normalmente significa que el candidato nunca llegó a ejecutarse, "
+            "no que sea peor. El gate no puede concluir nada."
+        )
+    if good <= bad:
+        return 1, f"FALLO: good ({good:.4f}) no supera a bad ({bad:.4f})."
+    if good < GOOD_MIN_SCORE or bad > BAD_MAX_SCORE:
+        return 1, (
+            f"FALLO: margen insuficiente. Se exige good >= {GOOD_MIN_SCORE} y "
+            f"bad <= {BAD_MAX_SCORE}; se obtuvo good={good:.4f}, bad={bad:.4f}."
+        )
+    return 0, f"OK: good ({good:.4f}) supera a bad ({bad:.4f}) con margen."
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--fast", action="store_true")
@@ -258,15 +344,30 @@ def main() -> None:
     for out in (out_good, out_bad, out_syntax):
         ast.parse(out["best_solution_code"])
 
-    # Exigencia principal: el modo "good" no debe ser peor que el modo "bad".
     final_good = out_good["agent_metrics"]["best_score_history"][-1]
     final_bad = out_bad["agent_metrics"]["best_score_history"][-1]
-    # Fase 6: con NSGA-II y FitnessVector, la latencia variable puede
-    # causar pequeñas diferencias. Verificamos que ambas pipelines
-    # producen scores razonables (no -inf).
-    assert final_good > -1e4, f"E2E good pipeline score anómalo: {final_good}"
-    assert final_bad > -1e5, f"E2E bad pipeline score anómalo: {final_bad}"
-    print(f"  [E2E] good={final_good:.4f}  bad={final_bad:.4f}")
+
+    exit_code, verdict = classify(final_good, final_bad)
+
+    # Diagnóstico activo: cuando el gate no puede concluir, decir POR QUÉ en
+    # el momento, en vez de dejar un -1.0 mudo que hay que investigar a mano.
+    if exit_code != 0:
+        test_cases = build_test_cases_sum()
+        print("\n[E2E DIAGNÓSTICO]")
+        for label, out, score in (
+            ("good", out_good, final_good),
+            ("bad", out_bad, final_bad),
+        ):
+            print(f"\n  --- {label} (score={score:.4f}) ---")
+            for line in diagnose_candidate(out["best_solution_code"], test_cases):
+                print(f"  {line}")
+            print("  código del mejor candidato:")
+            for cl in out["best_solution_code"].splitlines()[:15]:
+                print(f"    | {cl}")
+
+    print(f"\n  [E2E] good={final_good:.4f}  bad={final_bad:.4f}")
+    print(f"  [E2E] {verdict}")
+    raise SystemExit(exit_code)
 
 
 if __name__ == "__main__":
