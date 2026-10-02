@@ -123,7 +123,7 @@ Lo que parecía basura pero tenía una referencia que obliga a conservarlo:
 | `dashboard.py` vs `dashboard_run.py` | Dos apps Streamlit | HITL en vivo vs inspector post-mortem. Sin solapamiento funcional. Docstrings corregidos para que no vuelva a confundir |
 | `test_remediation_v4{,_tranche2,3,4}.py` | Sospecha de casos repetidos | Revisados: tranches disjuntos (v4 base, EventBus/CommandQueue, migración, workflow). Ningún test duplicado |
 | `_compare` inline en el harness de `runners.py` vs `comparison.compare_values` | Lógica de comparación duplicada | **Duplicación necesaria**: el harness se ejecuta en el proceso hijo del sandbox, sin acceso a los paquetes del proyecto. Ver deuda D2 en §7 |
-| `muta_ext/uast/config/*.yaml` (4 plantillas) | Cero referencias en todo el repo | Plantillas de lenguaje posiblemente mantenidas a mano para futuros adapters. Borrar datos sin referencias **ni** confirmación del autor viola el principio cardinal → ver §7 |
+| `muta_ext/uast/config/*.yaml` (4 plantillas) | Cero referencias en todo el repo | **RESUELTO**: no son basura — los 4 handlers y los 14 mutadores que nombran existen. Lo que no existe es un *loader*. Movidas a `examples/configs/uast/` con un README que documenta qué se consume de verdad (3 claves de 48). Ver §7 D3 |
 | `LLMSection.enabled` | Comentado en el código como «dead field» | **Falso**: `cli/main.py:794` gatea `generate-mutator` con él. Se corrigió el comentario |
 
 ---
@@ -238,11 +238,31 @@ Además al harness le falta `predicate_registered`.
 **No corregido**: alinear los comportamientos puede empezar a hacer fallar runs que
 hoy pasan. Decisión de producto.
 
-**D3 — `muta_ext/uast/config/*.yaml` (4 plantillas) sin ninguna referencia.**
-`go_config.yaml`, `cpp_template.yaml`, `rust_template.yaml`,
-`python_uast_template.yaml`: cero referencias en todo el repo, y **el directorio no
-está en `packages`** (no se instala). O son material muerto, o son plantillas
-mantenidas a mano que deberían empaquetarse. Requiere confirmación.
+**D3 — Las 4 plantillas YAML de UAST.** *(RESUELTO: reubicadas, no borradas)*
+Triaje aplicado: **(a)** YAML válido → las 4 pasan. **(b)** campos presentes en el
+schema Pydantic actual → **las 4 fallan**: ninguna de las 48 claves valida contra
+`MutaLambdaConfig`, porque usan el vocabulario plano pre-v5 (`generations`,
+`population_size`, `islands`) que hoy vive seccionado (`evolution.generations`,
+`population.size`, …). **(c)** ¿presets con sentido? → **sí**: los 4 handlers que
+nombran existen y los 14 mutadores que listan existen.
+
+No son basura: son **bocetos de diseño precisos sin loader**. Lo único que un
+handler consume de verdad son 3 claves (`compile_timeout_sec`, `run_timeout_sec`,
+`sanitizers`, leídas por `CppHandler`/`RustHandler`):
+
+| Fichero | Claves | Consumibles |
+|---|---|---|
+| `cpp_template.yaml` | 17 | 3 |
+| `rust_template.yaml` | 14 | 3 |
+| `python_uast_template.yaml` | 9 | 0 |
+| `go_config.yaml` | 8 | 0 |
+
+Estaban en el peor sitio posible: dentro del paquete (parecían config de runtime)
+pero **sin entrada en `packages`** (nunca se instalaban) y sin nadie que las
+leyera. Movidas con `git mv` a `examples/configs/uast/` + README que documenta la
+tabla de arriba, la traducción plano→seccionado y las dos piezas que faltarían
+para convertirlas en presets reales. Quedan en un extremo claro: ejemplos
+documentados, no configuración.
 
 **D4 — 38 variables locales sin usar (`F841`) y 311 `except Exception` ciegos.**
 Fuera de los 5 corregidos, las demás están en `benchmarks/`, `muta_ext/__main__.py`
