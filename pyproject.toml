@@ -207,8 +207,21 @@ line-length = 100
 target-version = "py310"
 
 [tool.coverage.run]
-source = ["muta_lambda", "cli", "muta_ext"]
-omit = ["tests/*", ".venv/*"]
+# Must list every first-party package, or coverage silently reports a healthy
+# number while measuring nothing in the packages it omits. The four
+# mutalambda_* packages hold the engine, the config model and the checkpoint
+# format and were previously invisible to the coverage gate.
+source = [
+    "muta_lambda",
+    "cli",
+    "lsp",
+    "muta_ext",
+    "mutalambda_core",
+    "mutalambda_config",
+    "mutalambda_engines",
+    "mutalambda_security",
+]
+omit = ["tests/*", ".venv/*", "benchmarks/*"]
 
 [tool.coverage.report]
 exclude_lines = [

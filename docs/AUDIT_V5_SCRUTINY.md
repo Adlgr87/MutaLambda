@@ -44,6 +44,8 @@ antes de tocar nada:
 | · F401 imports sin usar | 372 | 79 | −293 |
 | · F811 redefiniciones | 7 | 4 | −3 |
 | Errores de colección pytest | 0* | 0 | = |
+| Sentencias medidas por coverage | 10 617 | 15 811 | **+5194** (4 paquetes antes invisibles) |
+| Cobertura global | 60 % (parcial) | **64 %** (real) | medida honesta |
 
 \* requiere los extras `uast` instalados; sin ellos la base daba 6 errores de colección.
 
@@ -215,6 +217,12 @@ Ningún campo renombrado ni eliminado en este trabajo → `--resume` intacto.
 ## 7. Pendientes y recomendaciones (requieren decisión del autor)
 
 ### Deuda detectada, NO tocada
+
+**D0 — `[tool.coverage.run] source` omitía los 4 paquetes `mutalambda_*` y `lsp`.** *(CORREGIDO)*
+La puerta de cobertura medía 10 617 sentencias de 15 811: el motor de evolución,
+el modelo de configuración, el formato de checkpoint y el servidor LSP eran
+**invisibles** y reportaban un 60 % saludable sobre dos tercios del código. Ahora
+se listan los 8 paquetes de primer orden; `benchmarks/` se excluye explícitamente.
 
 **D1 — `benchmarks/` y `bench_*.py` se empaquetan como API pública.**
 `bench_cost_ledger`, `bench_headroom_fase{1,2,3}`, `bench_phase6`, `bench_uast2`,
