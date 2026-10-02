@@ -14,9 +14,13 @@ import logging
 import multiprocessing
 import os
 import sys
+import pickle
 import threading
 import time
+import traceback
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
+from concurrent.futures import BrokenExecutor
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
@@ -94,11 +98,13 @@ def shutdown_all_pools() -> None:
         for key, pool in list(_POOL_REGISTRY.items()):
             try:
                 pool.shutdown(wait=False, cancel_futures=True)
-            except Exception:
+            except Exception as exc:  # noqa: BLE001 - teardown must never raise
+                # Older executors reject cancel_futures; retry without it.
+                logger.debug("Pool %s rejected cancel_futures (%s); retrying", key, exc)
                 try:
                     pool.shutdown(wait=False)
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 - teardown must never raise
+                    logger.warning("Pool %s could not be shut down cleanly", key, exc_info=True)
         _POOL_REGISTRY.clear()
         _POOL_REF_COUNTS.clear()
 
@@ -121,7 +127,11 @@ def _pkg_version(name: str) -> str:
         return version(name)
     except PackageNotFoundError:
         return "unknown"
-    except Exception:
+    except (ImportError, OSError, ValueError) as exc:
+        # This value feeds environment_hash(), which is part of the evaluation
+        # cache key. A lookup that fails intermittently would silently change
+        # the key and invalidate the cache, so make it visible.
+        logger.debug("Version lookup for %r failed (%s); using 'unknown'", name, exc)
         return "unknown"
 
 
@@ -148,16 +158,74 @@ def evaluation_key(
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 
 
+@dataclass
+class WorkerFailure:
+    """A harness fault captured in the child and shipped back to the parent.
+
+    ``SubprocessRunner.run`` never raises: a candidate that crashes, times out
+    or fails its security scan comes back as a normal ``EvalResult`` with
+    ``passed=False``. Therefore *any* exception escaping the worker body is a
+    fault of the evaluation harness itself (import error, pickling failure,
+    resource exhaustion, a bug in the runner) and must never be scored as if it
+    were a property of the candidate.
+
+    The exception is returned rather than raised so the child's traceback
+    survives the process boundary intact. Re-raising would force
+    ``concurrent.futures`` to pickle the exception, which silently degrades for
+    exception types with non-trivial ``__init__`` signatures and loses the
+    frames below the pool boundary.
+    """
+
+    exc_type: str
+    exc_message: str
+    traceback_text: str
+
+    @classmethod
+    def from_exception(cls, exc: BaseException) -> "WorkerFailure":
+        return cls(
+            exc_type=type(exc).__name__,
+            exc_message=str(exc)[:2000],
+            traceback_text="".join(
+                traceback.format_exception(type(exc), exc, exc.__traceback__)
+            )[:8000],
+        )
+
+    def describe(self) -> str:
+        return f"{self.exc_type}: {self.exc_message}"
+
+
+# Exceptions that mean "the pool/transport died", as opposed to a fault raised
+# inside a worker body. These never carry a child traceback because the child
+# is already gone.
+_POOL_TRANSPORT_ERRORS = (
+    BrokenProcessPool,
+    BrokenExecutor,
+    ConnectionError,
+    EOFError,
+    OSError,
+    pickle.PicklingError,
+    pickle.UnpicklingError,
+)
+
+
 def _pool_worker(args):
-    """Top-level worker for ProcessPoolExecutor (must be picklable)."""
+    """Top-level worker for ProcessPoolExecutor (must be picklable).
+
+    Returns either an ``EvalResult`` (the candidate was evaluated, whatever the
+    verdict) or a ``WorkerFailure`` (the harness broke). The two are never
+    conflated: see ``WorkerFailure``.
+    """
     code, test_cases, timeout_sec, memory_mb, allow_expression_eval, enforce_ast_scan = args
-    runner = SubprocessRunner(
-        timeout_sec=timeout_sec,
-        memory_mb=memory_mb,
-        allow_expression_eval=allow_expression_eval,
-        enforce_ast_scan=enforce_ast_scan,
-    )
-    return runner.run(code, test_cases)
+    try:
+        runner = SubprocessRunner(
+            timeout_sec=timeout_sec,
+            memory_mb=memory_mb,
+            allow_expression_eval=allow_expression_eval,
+            enforce_ast_scan=enforce_ast_scan,
+        )
+        return runner.run(code, test_cases)
+    except Exception as exc:  # noqa: BLE001 - deliberate: reported, never swallowed
+        return WorkerFailure.from_exception(exc)
 
 
 @dataclass
@@ -177,6 +245,9 @@ class EvaluationService:
     benchmark_warmups: int = 0
     benchmark_samples: int = 1
     benchmark_operations_per_case: int = 1
+    # In-process serial retries after an evaluation-harness fault (not after a
+    # candidate failure, which is a verdict rather than an error).
+    harness_retries: int = 2
 
     def __post_init__(self) -> None:
         self._pool: Optional[ProcessPoolExecutor] = None
@@ -189,6 +260,9 @@ class EvaluationService:
         # Cache telemetry: distinguish true cache hits from fresh evaluations.
         self._cache_hits = 0
         self._cache_misses = 0
+        # Harness-fault telemetry (see _recover_failed_evaluation).
+        self._harness_failures = 0
+        self._harness_recoveries = 0
         # Cache invariant hashes once — tests_hash + environment_hash do not
         # change during the life of an EvaluationService instance. Without this,
         # evaluation_key() recomputes json.dumps(test_cases) + environment_hash
@@ -296,9 +370,12 @@ class EvaluationService:
                 # The first submit bootstraps the forkserver and its first
                 # worker; performing it under the lock removes the race.
                 self._pool.submit(int, 0).result(timeout=60.0)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - bootstrap fails many ways
                 logger.warning(
-                    "Process pool unavailable (%s); falling back to serial evaluation", exc
+                    "Process pool unavailable (%s); falling back to serial evaluation. "
+                    "Throughput will drop to one candidate at a time.",
+                    exc,
+                    exc_info=True,
                 )
                 # Release our ref to the shared pool so it can be garbage collected.
                 if self._pool_key is not None:
@@ -358,8 +435,9 @@ class EvaluationService:
                     "mode": self.last_mode,
                 },
             )
-        except Exception:  # pragma: no cover - observability only
-            pass
+        except Exception:  # noqa: BLE001 - telemetry must never break evaluation
+            # pragma: no cover - observability only
+            logger.debug("evaluate_batch telemetry emit failed", exc_info=True)
         return results
 
     def _evaluate_batch_impl(self, codes: List[str]) -> List[EvalResult]:
@@ -395,6 +473,13 @@ class EvaluationService:
         else:
             pending_idx = list(range(len(codes)))
             self._cache_misses += len(codes)
+
+        # Indices whose evaluation failed for harness reasons. These are kept
+        # out of the cache: caching an infrastructure fault would condemn
+        # perfectly good code for the rest of the run (the key is
+        # code+tests+env, which is stable), silently deleting it from the gene
+        # pool. See WorkerFailure and _recover_failed_evaluation.
+        harness_failed: set = set()
 
         if not pending_idx:
             self.last_mode = "cache-only"
@@ -440,18 +525,35 @@ class EvaluationService:
             }
             for future in as_completed(future_map):
                 idx = future_map[future]
+                failure: Optional[WorkerFailure] = None
                 try:
-                    results[idx] = future.result()
-                except Exception as exc:
-                    logger.warning("Eval worker %d raised: %s", idx, exc)
-                    results[idx] = EvalResult(
-                        fitness=FitnessVector.worst(),
-                        passed=False,
-                        metrics={"error": str(exc)[:200]},
-                        stdout="",
-                        stderr=str(exc)[:2000],
-                        timed_out=False,
+                    outcome = future.result()
+                except _POOL_TRANSPORT_ERRORS as exc:
+                    # The pool or its transport died. No child traceback exists
+                    # because the child is already gone.
+                    failure = WorkerFailure(
+                        exc_type=type(exc).__name__,
+                        exc_message=str(exc)[:2000],
+                        traceback_text="".join(
+                            traceback.format_exception(type(exc), exc, exc.__traceback__)
+                        )[:8000],
                     )
+                except Exception as exc:  # noqa: BLE001 - reported with traceback below
+                    failure = WorkerFailure.from_exception(exc)
+                else:
+                    if isinstance(outcome, WorkerFailure):
+                        failure = outcome
+                    else:
+                        results[idx] = outcome
+
+                if failure is not None:
+                    recovered = self._recover_failed_evaluation(codes[idx], idx, failure)
+                    results[idx] = recovered
+                    # A successful retry is a real measurement and is cacheable.
+                    # Only a still-unevaluated candidate must stay out of the
+                    # cache, so a transient fault cannot condemn it for the run.
+                    if recovered.metrics.get("evaluation_error"):
+                        harness_failed.add(idx)
 
         # Optional multi-sample latency refinement (ML-F04).
         if self.benchmark_samples > 1:
@@ -462,10 +564,93 @@ class EvaluationService:
         if self.cache_enabled:
             with self._cache_lock:
                 for i in pending_idx:
-                    if results[i] is not None:
+                    if results[i] is not None and i not in harness_failed:
                         self._cache[keys[i]] = results[i]  # type: ignore[assignment]
 
         return results  # type: ignore[return-value]
+
+    def _recover_failed_evaluation(
+        self, code: str, idx: int, failure: WorkerFailure
+    ) -> EvalResult:
+        """Handle a harness fault: log it, retry in-process, never fake a score.
+
+        A candidate that crashes its own evaluation is a legitimate verdict and
+        never reaches this method. Getting here means the *harness* broke, so
+        the candidate's quality is simply unknown. Assigning worst-fitness and
+        moving on would let infrastructure flakiness silently delete viable
+        genomes from the population, and caching that verdict (the old
+        behaviour) made the deletion permanent for the whole run.
+
+        Recovery is a bounded number of in-process serial retries: the pool is
+        the component under suspicion, so retrying through it would likely fail
+        the same way. If every attempt fails the result is flagged
+        ``evaluation_error`` so downstream selection can exclude it rather than
+        treat it as a measured score.
+        """
+        self._harness_failures += 1
+        logger.error(
+            "Evaluation harness failed for candidate %d (%s). Child traceback:\n%s",
+            idx,
+            failure.describe(),
+            failure.traceback_text or "<unavailable: worker process died>",
+        )
+
+        for attempt in range(1, self.harness_retries + 1):
+            try:
+                runner = SubprocessRunner(
+                    timeout_sec=self.timeout_sec,
+                    memory_mb=self.memory_mb,
+                    allow_expression_eval=self.allow_expression_eval,
+                    enforce_ast_scan=self.enforce_ast_scan,
+                )
+                result = runner.run(code, self.test_cases)
+            except Exception as exc:  # noqa: BLE001 - logged with traceback, loop continues
+                logger.warning(
+                    "Serial retry %d/%d for candidate %d also failed: %s",
+                    attempt,
+                    self.harness_retries,
+                    idx,
+                    exc,
+                    exc_info=True,
+                )
+                continue
+            logger.info(
+                "Serial retry %d/%d recovered candidate %d (passed=%s)",
+                attempt,
+                self.harness_retries,
+                idx,
+                result.passed,
+            )
+            self._harness_recoveries += 1
+            return result
+
+        logger.error(
+            "Candidate %d is UNEVALUATED after %d retries (%s). Flagging "
+            "evaluation_error; its fitness is not a measurement.",
+            idx,
+            self.harness_retries,
+            failure.describe(),
+        )
+        return EvalResult(
+            fitness=FitnessVector.worst(),
+            passed=False,
+            metrics={
+                "error": failure.describe()[:200],
+                # Machine-readable flag so selection/reporting can tell
+                # "measured as bad" apart from "never measured".
+                "evaluation_error": 1.0,
+            },
+            stdout="",
+            stderr=(failure.traceback_text or failure.describe())[:2000],
+            timed_out=False,
+        )
+
+    def harness_stats(self) -> Dict[str, int]:
+        """Counters for harness faults — surfaced so runs can be audited."""
+        return {
+            "harness_failures": self._harness_failures,
+            "harness_recoveries": self._harness_recoveries,
+        }
 
     def _refine_with_benchmark(self, code: str, base: EvalResult) -> EvalResult:
         """Re-run samples for real p50/p95/p99 when configured."""
@@ -483,8 +668,16 @@ class EvaluationService:
             for _ in range(cfg.samples):
                 r = runner.run(code, self.test_cases)
                 samples_sec.append(float(r.metrics.get("latency", r.fitness.latency_p50)))
-        except Exception as exc:
-            logger.debug("benchmark refine failed: %s", exc)
+        except Exception as exc:  # noqa: BLE001 - degrade to the single-sample result
+            # Not fatal, but it silently lowers measurement quality: the
+            # candidate keeps its single-sample latency instead of the
+            # multi-sample percentile the config asked for. Warn, don't hide.
+            logger.warning(
+                "Benchmark refinement failed (%s); keeping single-sample latency "
+                "for this candidate",
+                exc,
+                exc_info=True,
+            )
             return base
 
         if not samples_sec:
