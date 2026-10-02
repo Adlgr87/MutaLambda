@@ -25,13 +25,19 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install flake8 pytest click rich pytest-rerunfailures
+        python -m pip install flake8 ruff pytest click rich pytest-rerunfailures
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         pip install -e ".[cli,uast]"
     - name: Lint with flake8
       run: |
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Lint with ruff (includes the BLE001 gate)
+      run: ruff check . --select BLE001
+    - name: BLE001 ratchet guard
+      # The per-file-ignores inventory may only shrink. Without this, a new
+      # entry could be appended and the gate above would still pass.
+      run: python scripts/check_ble_ratchet.py
     - name: Unit tests (pytest)
       run: |
         pytest tests/ -v --ignore=tests/e2e_tests.py
