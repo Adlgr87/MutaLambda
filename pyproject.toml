@@ -206,6 +206,127 @@ markers = [
 line-length = 100
 target-version = "py310"
 
+[tool.ruff.lint]
+# BLE001 (blind `except Exception`) is enforced as a RATCHET, not a warning:
+# it is an error everywhere except the files listed in per-file-ignores below,
+# which is the frozen inventory of pre-existing cases at the time the rule was
+# turned on. Consequences:
+#   * any NEW file, and any file already cleaned, fails CI on a blind except;
+#   * triaging a module means removing its line from the list, which can only
+#     ever shrink.
+# A blind except that is genuinely correct (teardown paths, telemetry) stays,
+# but must carry an inline `# noqa: BLE001 - <reason>` so the intent is
+# explicit and reviewable.
+#
+# Triage tiers (see docs/AUDIT_V5_SCRUTINY.md):
+#   1. evaluation pool / forkserver .... DONE
+#   2. correctness gate: mutation_filters, sandbox, property_testing,
+#      ast_math_verifier, comparison, checkpoint_manager
+#   3. llm_backend: separate network/timeout from parse errors
+#   4. CLI/UI top level: keep, but must log a traceback
+select = ["E4", "E7", "E9", "F", "BLE001"]
+
+[tool.ruff.lint.per-file-ignores]
+# ── BLE001 debt inventory — remove lines as modules are triaged, never add ──
+    "bench_headroom_fase3.py" = ["BLE001"]
+    "bench_uast2.py" = ["BLE001"]
+    "benchmark_runner.py" = ["BLE001"]
+    "benchmarking.py" = ["BLE001"]
+    "benchmarks/check_regression.py" = ["BLE001"]
+    "benchmarks/d6_baseline_runner.py" = ["BLE001"]
+    "benchmarks/effibench_harness.py" = ["BLE001"]
+    "benchmarks/effibench_plus.py" = ["BLE001"]
+    "benchmarks/eoh_suite.py" = ["BLE001"]
+    "benchmarks/harness.py" = ["BLE001"]
+    "benchmarks/market_comparison_harness.py" = ["BLE001"]
+    "benchmarks/pie_harness.py" = ["BLE001"]
+    "benchmarks/pyperformance_poly.py" = ["BLE001"]
+    "benchmarks/rosetta_code.py" = ["BLE001"]
+    "benchmarks/run_full_suite.py" = ["BLE001"]
+    "benchmarks/verification.py" = ["BLE001"]
+    "cli/__init__.py" = ["BLE001"]
+    "cli/checkpoint_manager.py" = ["BLE001"]
+    "cli/config_manager.py" = ["BLE001"]
+    "cli/entrypoints.py" = ["BLE001"]
+    "cli/main.py" = ["BLE001"]
+    "comparison.py" = ["BLE001"]
+    "cost_ledger.py" = ["BLE001"]
+    "economic_gate.py" = ["BLE001"]
+    "evolve.py" = ["BLE001"]
+    "gpu_optimizer.py" = ["BLE001"]
+    "headroom_integration.py" = ["BLE001"]
+    "hotspot_profiler.py" = ["BLE001"]
+    "interpretability.py" = ["BLE001"]
+    "llm_backend.py" = ["BLE001"]
+    "lsp/server.py" = ["BLE001"]
+    "massive_adapter.py" = ["BLE001"]
+    "metrics_exporter.py" = ["BLE001"]
+    "migration.py" = ["BLE001"]
+    "muta_ext/__main__.py" = ["BLE001"]
+    "muta_ext/advanced_selection.py" = ["BLE001"]
+    "muta_ext/ci_integration.py" = ["BLE001"]
+    "muta_ext/diagnostics/tipping.py" = ["BLE001"]
+    "muta_ext/evaluation/numerical_health.py" = ["BLE001"]
+    "muta_ext/explainable_optimizer.py" = ["BLE001"]
+    "muta_ext/lineage/compression.py" = ["BLE001"]
+    "muta_ext/mutation/stepper_protocol.py" = ["BLE001"]
+    "muta_ext/project_optimizer.py" = ["BLE001"]
+    "muta_ext/scientific/validation.py" = ["BLE001"]
+    "muta_ext/thc_engine.py" = ["BLE001"]
+    "muta_ext/uast/adapters/cpp_adapter.py" = ["BLE001"]
+    "muta_ext/uast/adapters/go_adapter.py" = ["BLE001"]
+    "muta_ext/uast/adapters/rust_adapter.py" = ["BLE001"]
+    "muta_ext/uast/cli_extension.py" = ["BLE001"]
+    "muta_ext/uast/emitters/cpp_emitter.py" = ["BLE001"]
+    "muta_ext/uast/emitters/go_emitter.py" = ["BLE001"]
+    "muta_ext/uast/emitters/rust_emitter.py" = ["BLE001"]
+    "muta_ext/uast/evolution_adapter.py" = ["BLE001"]
+    "muta_ext/uast/handlers/cpp_handler.py" = ["BLE001"]
+    "muta_ext/uast/handlers/go_handler.py" = ["BLE001"]
+    "muta_ext/uast/handlers/python_handler.py" = ["BLE001"]
+    "muta_ext/uast/handlers/rust_handler.py" = ["BLE001"]
+    "muta_ext/uast/workflow.py" = ["BLE001"]
+    "muta_ext/uast2/adapters.py" = ["BLE001"]
+    "muta_ext/uast2/emitters.py" = ["BLE001"]
+    "muta_ext/uast2/mutators.py" = ["BLE001"]
+    "muta_ext/uast2/shadow.py" = ["BLE001"]
+    "muta_ext/uast2/verify.py" = ["BLE001"]
+    "muta_lambda/agent.py" = ["BLE001"]
+    "muta_lambda/config.py" = ["BLE001"]
+    "muta_lambda/metrics_injector.py" = ["BLE001"]
+    "muta_lambda/session.py" = ["BLE001"]
+    "mutalambda_cli.py" = ["BLE001"]
+    "mutalambda_config/checkpoint_manager.py" = ["BLE001"]
+    "mutalambda_config/muta_config.py" = ["BLE001"]
+    "mutalambda_core/differential.py" = ["BLE001"]
+    "mutalambda_core/evolution_engine.py" = ["BLE001"]
+    "mutalambda_core/extensions.py" = ["BLE001"]
+    "mutalambda_core/island.py" = ["BLE001"]
+    "mutalambda_core/island_evolution.py" = ["BLE001"]
+    "mutalambda_core/mutation_filters.py" = ["BLE001"]
+    "mutalambda_engines/hfc_tiers.py" = ["BLE001"]
+    "mutalambda_engines/tiered_evaluator.py" = ["BLE001"]
+    "mutalambda_security/diagnostics.py" = ["BLE001"]
+    "numpy_optimizer.py" = ["BLE001"]
+    "operator_bandit.py" = ["BLE001"]
+    "pareto_archive.py" = ["BLE001"]
+    "performance_monitor.py" = ["BLE001"]
+    "progressive_pipeline.py" = ["BLE001"]
+    "property_testing.py" = ["BLE001"]
+    "ray_scheduler.py" = ["BLE001"]
+    "regression_gate.py" = ["BLE001"]
+    "run_artifacts.py" = ["BLE001"]
+    "runners.py" = ["BLE001"]
+    "scripts/generate_status_report.py" = ["BLE001"]
+    "structured_ops.py" = ["BLE001"]
+    "telemetry.py" = ["BLE001"]
+    "tests/conftest.py" = ["BLE001"]
+    "tests/test_metrics_exporter.py" = ["BLE001"]
+    "tests/test_rust_adapter.py" = ["BLE001"]
+    "tests/uast2/test_adapters_emitters.py" = ["BLE001"]
+    "trace_compressor.py" = ["BLE001"]
+    "universal_parser.py" = ["BLE001"]
+
 [tool.coverage.run]
 # Must list every first-party package, or coverage silently reports a healthy
 # number while measuring nothing in the packages it omits. The four
