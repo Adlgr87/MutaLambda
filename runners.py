@@ -482,8 +482,21 @@ def build_wrapper_source(
             "        namespace['_load_error'] = str(exc)[:500]",
             "    return namespace",
             "",
+            "# Comparators whose semantics are mirrored from comparison.py.",
+            "# The canonical module cannot be imported here: this harness runs in",
+            "# the sandboxed child, which has no access to project packages.",
+            "# tests/test_comparator_parity.py asserts the two stay in step.",
+            "_KNOWN_COMPARATORS = ('equal', 'float_close', 'array_allclose', 'contains')",
+            "_COMPARATOR_FALLBACKS = []",
+            "",
             "def _compare(got, expected, comparison='equal'):",
             "    comparison = (comparison or 'equal').lower()",
+            "    if comparison not in _KNOWN_COMPARATORS:",
+            "        # Record and fall through to ==, preserving historical",
+            "        # behaviour. The parent turns this into comparator_undefined",
+            "        # so an unverifiable result is never reported as 'correct'.",
+            "        if comparison not in _COMPARATOR_FALLBACKS:",
+            "            _COMPARATOR_FALLBACKS.append(comparison)",
             "    if comparison == 'equal':",
             "        return got == expected",
             "    if comparison == 'float_close':",
@@ -504,6 +517,7 @@ def build_wrapper_source(
             "            return expected in got",
             "        except TypeError:",
             "            return False",
+            "    # Unknown comparator: recorded above, result is not trustworthy.",
             "    return got == expected",
             "",
             "def _run_case(namespace, tc):",
@@ -552,7 +566,11 @@ def build_wrapper_source(
             "            details.append({'index': idx, 'ok': bool(ok)})",
             "        except Exception as exc:",
             "            details.append({'index': idx, 'ok': False, 'error': str(exc)[:200]})",
-            "    return {'passed': passed, 'total': total, 'details': details}",
+            "    report = {'passed': passed, 'total': total, 'details': details}",
+            "    if _COMPARATOR_FALLBACKS:",
+            "        report['comparator_fallback'] = True",
+            "        report['unknown_comparators'] = sorted(_COMPARATOR_FALLBACKS)",
+            "    return report",
             "",
             "def _main():",
             "    raw = sys.stdin.read() or '[]'",
@@ -633,10 +651,32 @@ def _metrics_from_report(
         "tests_passed": float(passed),
         "tests_total": float(total),
     }
+
+    # An unknown comparator means the harness could not verify the output: it
+    # silently fell back to `==`. The result is INCONCLUSIVE, not correct.
+    # Flagging it (rather than raising, as comparison.compare_values does)
+    # keeps existing runs alive while stopping the report from claiming a
+    # correctness it never established.
+    comparator_undefined = bool(report.get("comparator_fallback"))
+    if comparator_undefined:
+        unknown = report.get("unknown_comparators") or []
+        metrics["comparator_undefined"] = 1.0
+        logger.warning(
+            "Unverifiable evaluation: unknown comparator(s) %s fell back to equality. "
+            "Allowed comparators are %s. This candidate is NOT counted as correct.",
+            ", ".join(map(str, unknown)) or "<unnamed>",
+            ", ".join(sorted(COMPARATORS)),
+        )
+
     return EvalResult(
         fitness=fitness,
         passed=(
-            passed >= total and returncode == 0 and total > 0 and report.get("error") != "no_tests"
+            passed >= total
+            and returncode == 0
+            and total > 0
+            and report.get("error") != "no_tests"
+            # Cannot claim correctness that was never verified.
+            and not comparator_undefined
         ),
         metrics=metrics,
         stdout="",
