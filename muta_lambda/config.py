@@ -19,6 +19,26 @@ try:
 except ImportError:  # pragma: no cover - fallback
     RNGSession = None  # type: ignore
 
+# Canonical defaults — do not retype these literals (see constants.py).
+from mutalambda_core.constants import (
+    DEFAULT_CHECKPOINT_DIR,
+    DEFAULT_CHECKPOINT_INTERVAL,
+    DEFAULT_EARLY_STOP_DELTA,
+    DEFAULT_EARLY_STOP_PATIENCE,
+    DEFAULT_GENERATIONS,
+    DEFAULT_HFC_LAMBDA_CLONES,
+    DEFAULT_HFC_TIER1_SIZE,
+    DEFAULT_HFC_TIER2_SIZE,
+    DEFAULT_HFC_TIER3_SIZE,
+    DEFAULT_MIGRANTS_PER_ISLAND,
+    DEFAULT_MIGRATION_INTERVAL,
+    DEFAULT_NOVELTY_ALPHA,
+    DEFAULT_NUM_ISLANDS,
+    DEFAULT_POPULATION_SIZE,
+    DEFAULT_TOP_K,
+    DEFAULT_TOPOLOGY,
+)
+
 __all__ = ["EvolveConfig"]
 
 
@@ -27,23 +47,23 @@ class EvolveConfig:
     """Configuración global del agente."""
 
     rng_session: Optional[Any] = None
-    num_islands: int = 4
-    generations: int = 50
+    num_islands: int = DEFAULT_NUM_ISLANDS
+    generations: int = DEFAULT_GENERATIONS
     seed_codes: List[str] = field(default_factory=list)
-    topology: str = "ring"
-    population_size: int = 8
-    top_k: int = 3
-    migration_interval: int = 10
-    migrants_per_island: int = 2
+    topology: str = DEFAULT_TOPOLOGY
+    population_size: int = DEFAULT_POPULATION_SIZE
+    top_k: int = DEFAULT_TOP_K
+    migration_interval: int = DEFAULT_MIGRATION_INTERVAL
+    migrants_per_island: int = DEFAULT_MIGRANTS_PER_ISLAND
     archive_solutions: bool = True
     prompt_evolution: bool = True
     checkpoint_enabled: bool = True
-    checkpoint_interval: int = 10
-    checkpoint_dir: str = "checkpoints"
+    checkpoint_interval: int = DEFAULT_CHECKPOINT_INTERVAL
+    checkpoint_dir: str = DEFAULT_CHECKPOINT_DIR
     checkpoint_format: str = "auto"  # 'auto' (threshold-based), 'json', or 'msgpack'
-    early_stop_patience: int = 15
-    early_stop_delta: float = 0.001
-    novelty_alpha: float = 0.15
+    early_stop_patience: int = DEFAULT_EARLY_STOP_PATIENCE
+    early_stop_delta: float = DEFAULT_EARLY_STOP_DELTA
+    novelty_alpha: float = DEFAULT_NOVELTY_ALPHA
     workflow_enabled: bool = True
     workflow_max_retries: int = 1
     workflow_correctness_threshold: float = 1.0
@@ -71,10 +91,10 @@ class EvolveConfig:
     prompt_pop_size: int = 6
     prompt_elite_frac: float = 0.5
     hfc_enabled: bool = False
-    hfc_tier1_size: int = 100
-    hfc_tier2_size: int = 50
-    hfc_tier3_size: int = 10
-    hfc_lambda_clones: int = 8
+    hfc_tier1_size: int = DEFAULT_HFC_TIER1_SIZE
+    hfc_tier2_size: int = DEFAULT_HFC_TIER2_SIZE
+    hfc_tier3_size: int = DEFAULT_HFC_TIER3_SIZE
+    hfc_lambda_clones: int = DEFAULT_HFC_LAMBDA_CLONES
     hfc_top_down_distillation: bool = True
     hfc_top_down_interval: int = 5
     hfc_promotion_correctness: float = 1.0

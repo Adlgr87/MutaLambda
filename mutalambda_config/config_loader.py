@@ -14,6 +14,29 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from mutalambda_core.constants import (
+    DEFAULT_ARCHIVE_DEDUPE_SIMILARITY,
+    DEFAULT_CHECKPOINT_DIR,
+    DEFAULT_CHECKPOINT_INTERVAL,
+    DEFAULT_EARLY_STOP_DELTA,
+    DEFAULT_EARLY_STOP_PATIENCE,
+    DEFAULT_GENERATIONS,
+    DEFAULT_HFC_LAMBDA_CLONES,
+    DEFAULT_HFC_TIER1_SIZE,
+    DEFAULT_HFC_TIER2_SIZE,
+    DEFAULT_HFC_TIER3_SIZE,
+    DEFAULT_MIGRANTS_PER_ISLAND,
+    DEFAULT_MIGRATION_INTERVAL,
+    DEFAULT_NOVELTY_ALPHA,
+    DEFAULT_NUM_ISLANDS,
+    DEFAULT_POPULATION_SIZE,
+    DEFAULT_SANDBOX_TIMEOUT_SEC,
+    DEFAULT_SANDBOX_WORKERS,
+    DEFAULT_TOP_K,
+    DEFAULT_TOPOLOGY,
+)
+
+
 # YAML is optional — fallback gracefully
 try:
     import yaml
@@ -45,19 +68,21 @@ _VALID_VALUES: Dict[str, list] = {
     "uast.shadow_mode": ["exact", "subset"],
 }
 
+# Canonical default values live in mutalambda_core.constants — never retype a
+# literal here, or the YAML layer silently drifts from the Pydantic model.
 _DEFAULTS: Dict[str, Any] = {
-    "evolution.num_islands": 4,
-    "evolution.generations": 50,
-    "evolution.topology": "ring",
-    "evolution.early_stop_patience": 15,
-    "evolution.early_stop_delta": 0.001,
-    "evolution.novelty_alpha": 0.15,
-    "population.size": 8,
-    "population.top_k": 3,
-    "population.migration_interval": 10,
-    "population.migrants_per_island": 2,
-    "sandbox.timeout_sec": 10.0,
-    "sandbox.max_workers": 4,
+    "evolution.num_islands": DEFAULT_NUM_ISLANDS,
+    "evolution.generations": DEFAULT_GENERATIONS,
+    "evolution.topology": DEFAULT_TOPOLOGY,
+    "evolution.early_stop_patience": DEFAULT_EARLY_STOP_PATIENCE,
+    "evolution.early_stop_delta": DEFAULT_EARLY_STOP_DELTA,
+    "evolution.novelty_alpha": DEFAULT_NOVELTY_ALPHA,
+    "population.size": DEFAULT_POPULATION_SIZE,
+    "population.top_k": DEFAULT_TOP_K,
+    "population.migration_interval": DEFAULT_MIGRATION_INTERVAL,
+    "population.migrants_per_island": DEFAULT_MIGRANTS_PER_ISLAND,
+    "sandbox.timeout_sec": DEFAULT_SANDBOX_TIMEOUT_SEC,
+    "sandbox.max_workers": DEFAULT_SANDBOX_WORKERS,
     "sandbox.runner": "subprocess",
     "sandbox.allow_expression_eval": False,
     "sandbox.enforce_ast_scan": True,
@@ -68,9 +93,9 @@ _DEFAULTS: Dict[str, Any] = {
     "prompt_evolution.enabled": True,
     "prompt_evolution.pop_size": 6,
     "prompt_evolution.elite_frac": 0.5,
-    "checkpoint.interval": 10,
+    "checkpoint.interval": DEFAULT_CHECKPOINT_INTERVAL,
     "checkpoint.enabled": True,
-    "checkpoint.dir": "checkpoints",
+    "checkpoint.dir": DEFAULT_CHECKPOINT_DIR,
     "checkpoint.save_archive": True,
     "checkpoint.save_prompts": True,
     "workflow.enabled": True,
@@ -94,10 +119,10 @@ _DEFAULTS: Dict[str, Any] = {
     "reproducibility.seed": None,
     "reproducibility.track_git_commit": True,
     "hfc.enabled": False,
-    "hfc.lambda_clones": 8,
-    "hfc.tier1_size": 100,
-    "hfc.tier2_size": 50,
-    "hfc.tier3_size": 10,
+    "hfc.lambda_clones": DEFAULT_HFC_LAMBDA_CLONES,
+    "hfc.tier1_size": DEFAULT_HFC_TIER1_SIZE,
+    "hfc.tier2_size": DEFAULT_HFC_TIER2_SIZE,
+    "hfc.tier3_size": DEFAULT_HFC_TIER3_SIZE,
     "hfc.top_down_distillation": True,
     "hfc.top_down_interval": 5,
     "hfc.promotion_correctness": 1.0,

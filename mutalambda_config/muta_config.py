@@ -15,16 +15,40 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from mutalambda_core.constants import (
+    DEFAULT_ARCHIVE_DEDUPE_SIMILARITY,
+    DEFAULT_CHECKPOINT_DIR,
+    DEFAULT_CHECKPOINT_INTERVAL,
+    DEFAULT_EARLY_STOP_DELTA,
+    DEFAULT_EARLY_STOP_PATIENCE,
+    DEFAULT_GENERATIONS,
+    DEFAULT_HFC_TIER1_SIZE,
+    DEFAULT_HFC_TIER2_SIZE,
+    DEFAULT_HFC_TIER3_SIZE,
+    DEFAULT_MIGRANTS_PER_ISLAND,
+    DEFAULT_MIGRATION_INTERVAL,
+    DEFAULT_NOVELTY_ALPHA,
+    DEFAULT_NUM_ISLANDS,
+    DEFAULT_POPULATION_SIZE,
+    DEFAULT_SANDBOX_TIMEOUT_SEC,
+    DEFAULT_SANDBOX_WORKERS,
+    DEFAULT_TOP_K,
+    DEFAULT_TOPOLOGY,
+    MIN_POPULATION_SIZE,
+)
+
 
 class EvolutionSection(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    num_islands: int = Field(4, ge=1)
-    generations: int = Field(50, ge=1)
-    topology: Literal["ring", "fully_connected", "random", "mesh", "spatial_grid"] = "ring"
-    early_stop_patience: int = Field(15, ge=0)
-    early_stop_delta: float = Field(0.001, ge=0.0)
-    novelty_alpha: float = Field(0.15, ge=0.0, le=1.0)
+    num_islands: int = Field(DEFAULT_NUM_ISLANDS, ge=1)
+    generations: int = Field(DEFAULT_GENERATIONS, ge=1)
+    topology: Literal["ring", "fully_connected", "random", "mesh", "spatial_grid"] = (
+        DEFAULT_TOPOLOGY  # type: ignore[assignment]
+    )
+    early_stop_patience: int = Field(DEFAULT_EARLY_STOP_PATIENCE, ge=0)
+    early_stop_delta: float = Field(DEFAULT_EARLY_STOP_DELTA, ge=0.0)
+    novelty_alpha: float = Field(DEFAULT_NOVELTY_ALPHA, ge=0.0, le=1.0)
     fitness_normalize: bool = True
     use_process_pool: bool = False
     operator_bandit_enabled: bool = True
@@ -46,10 +70,10 @@ class EvolutionSection(BaseModel):
 class PopulationSection(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    size: int = Field(8, ge=2)
-    top_k: int = Field(3, ge=1)
-    migration_interval: int = Field(10, gt=0)
-    migrants_per_island: int = Field(2, ge=0)
+    size: int = Field(DEFAULT_POPULATION_SIZE, ge=MIN_POPULATION_SIZE)
+    top_k: int = Field(DEFAULT_TOP_K, ge=1)
+    migration_interval: int = Field(DEFAULT_MIGRATION_INTERVAL, gt=0)
+    migrants_per_island: int = Field(DEFAULT_MIGRANTS_PER_ISLAND, ge=0)
 
     @model_validator(mode="after")
     def _top_k_bound(self) -> "PopulationSection":
@@ -61,8 +85,8 @@ class PopulationSection(BaseModel):
 class SandboxSection(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    timeout_sec: float = Field(10.0, gt=0)
-    max_workers: int = Field(4, gt=0)
+    timeout_sec: float = Field(DEFAULT_SANDBOX_TIMEOUT_SEC, gt=0)
+    max_workers: int = Field(DEFAULT_SANDBOX_WORKERS, gt=0)
     # Recommended secure mode is container; subprocess remains local-dev default.
     runner: Literal["subprocess", "container", "microvm", "docker", "podman", "local", "dev"] = (
         "subprocess"
@@ -119,8 +143,8 @@ class CheckpointSection(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     enabled: bool = True
-    interval: int = Field(10, ge=0)
-    dir: str = "checkpoints"
+    interval: int = Field(DEFAULT_CHECKPOINT_INTERVAL, ge=0)
+    dir: str = DEFAULT_CHECKPOINT_DIR
     directory: Optional[str] = None  # CLI legacy alias
     save_archive: bool = True
     save_prompts: bool = True
@@ -138,7 +162,7 @@ class ArchiveSection(BaseModel):
     max_size: int = Field(10_000, ge=1)
     prune_threshold: int = Field(50, ge=1)
     embedder_model: str = "all-MiniLM-L6-v2"
-    dedupe_similarity: float = Field(0.98, ge=0.0, le=1.0)
+    dedupe_similarity: float = Field(DEFAULT_ARCHIVE_DEDUPE_SIMILARITY, ge=0.0, le=1.0)
 
 
 class BenchmarkSection(BaseModel):
@@ -258,6 +282,51 @@ class MutaLambdaConfig(BaseModel):
     # the merged view from config/optimization.yaml (optimization_flags.py);
     # an explicit `optimization:` block in the main YAML overrides it.
     optimization: Dict[str, Any] = Field(default_factory=_optimization_defaults)
+
+    @model_validator(mode="after")
+    def _validate_hfc_tiers(self) -> "MutaLambdaConfig":
+        """HFC league tiers must be strictly decreasing and positive.
+
+        `hfc` is an untyped dict, so these bounds were never checked: a config
+        with tier2 >= tier1 produced an engine that could never promote, with
+        no error anywhere.
+        """
+        hfc = self.hfc or {}
+        if not hfc.get("enabled", False):
+            return self
+        try:
+            tiers = [
+                int(hfc.get("tier1_size", DEFAULT_HFC_TIER1_SIZE)),
+                int(hfc.get("tier2_size", DEFAULT_HFC_TIER2_SIZE)),
+                int(hfc.get("tier3_size", DEFAULT_HFC_TIER3_SIZE)),
+            ]
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"hfc.tier*_size must be integers: {exc}") from exc
+        if any(t <= 0 for t in tiers):
+            raise ValueError(f"hfc tier sizes must all be > 0, got {tiers}")
+        if not (tiers[0] > tiers[1] > tiers[2]):
+            raise ValueError(
+                "hfc tier sizes must be strictly decreasing "
+                f"(tier1 > tier2 > tier3), got {tiers}"
+            )
+        if int(hfc.get("lambda_clones", 1)) <= 0:
+            raise ValueError("hfc.lambda_clones must be > 0")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_timeout_coherence(self) -> "MutaLambdaConfig":
+        """A sandbox evaluation must be able to outlast a single LLM call.
+
+        With llm.timeout_sec > sandbox.timeout_sec the generation step can
+        block longer than the evaluation it feeds; warn-level bounds only, so
+        we just reject the degenerate non-positive cases that Field() cannot
+        express across sections.
+        """
+        if self.llm.mutator_timeout_sec <= 0 or self.llm.timeout_sec <= 0:
+            raise ValueError("llm timeouts must be > 0")
+        if self.benchmark.warmups > 0 and self.benchmark.samples < 1:
+            raise ValueError("benchmark.samples must be >= 1 when warmups are configured")
+        return self
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "MutaLambdaConfig":

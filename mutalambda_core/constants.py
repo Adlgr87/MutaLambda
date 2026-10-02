@@ -32,3 +32,15 @@ DEFAULT_SANDBOX_TIMEOUT_SEC: Final[float] = 10.0
 DEFAULT_SANDBOX_WORKERS: Final[int] = 4
 DEFAULT_ARCHIVE_DEDUPE_SIMILARITY: Final[float] = 0.98
 DEFAULT_NOVELTY_ALPHA: Final[float] = 0.15
+DEFAULT_MIGRANTS_PER_ISLAND: Final[int] = 2
+DEFAULT_EARLY_STOP_PATIENCE: Final[int] = 15
+DEFAULT_EARLY_STOP_DELTA: Final[float] = 0.001
+DEFAULT_TOPOLOGY: Final[str] = "ring"
+DEFAULT_CHECKPOINT_DIR: Final[str] = "checkpoints"
+
+# HFC league tiers — must stay strictly decreasing (tier1 > tier2 > tier3);
+# enforced by MutaLambdaConfig._validate_hfc_tiers.
+DEFAULT_HFC_TIER1_SIZE: Final[int] = 100
+DEFAULT_HFC_TIER2_SIZE: Final[int] = 50
+DEFAULT_HFC_TIER3_SIZE: Final[int] = 10
+DEFAULT_HFC_LAMBDA_CLONES: Final[int] = 8
