@@ -68,3 +68,6 @@ coverage.xml
 
 # local audit environments
 .venv*/
+
+# audit workspace (local analysis scripts/reports, not part of the distribution)
+.audit/

@@ -54,6 +54,27 @@ class TestBaseInterface:
         assert StrengthReductionMutator().name() == "strength_reduction"
         assert NumericalStabilityMutator().name() == "numerical_stability"
 
+    def test_all_scientific_mutators_expose_string_names(self):
+        """Regression: `name = "..."` + `def name()` shadowed each other, so
+        ``name()`` returned the bound method instead of the identifier."""
+        from muta_ext.uast.mutators.scientific import (
+            LoopFissionMutator,
+            LoopFusionMutator,
+            SafeVectorizationMutator,
+        )
+
+        expected = {
+            LoopFusionMutator: "loop_fusion",
+            LoopFissionMutator: "loop_fission",
+            SafeVectorizationMutator: "safe_vectorization",
+            StrengthReductionMutator: "strength_reduction",
+            NumericalStabilityMutator: "numerical_stability",
+        }
+        for cls, label in expected.items():
+            got = cls().name()
+            assert isinstance(got, str), f"{cls.__name__}.name() must return str, got {got!r}"
+            assert got == label
+
     def test_tags(self):
         t = StrengthReductionMutator().domain_tags()
         assert t["domain"] == "scientific"

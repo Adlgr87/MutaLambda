@@ -1,6 +1,9 @@
 """
 MutaLambda Run Dashboard — Streamlit interface for inspecting completed runs.
 
+Post-mortem viewer for finished runs stored under ``checkpoints/``. For live
+human-in-the-loop control of a running agent use ``dashboard.py`` instead.
+
 Usage:
   streamlit run dashboard_run.py
 """
@@ -10,11 +13,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import streamlit as st
-
-# Streamlit is required for this dashboard
-if st is None:
-    raise ImportError("streamlit is required: pip install streamlit")
+try:
+    import streamlit as st
+except ImportError as exc:  # pragma: no cover - import-time guard
+    raise ImportError(
+        "streamlit is required for dashboard_run: pip install 'mutalambda[dashboard]'"
+    ) from exc
 
 CHECKPOINT_DIR = Path("checkpoints")
 
@@ -64,7 +68,7 @@ st.title("🧬 MutaLambda Run Dashboard")
 runs = list_runs()
 
 if not runs:
-    st.info("No runs found. Run `muta_lambda quick my_script.py` first.")
+    st.info("No runs found. Run `mutalambda quick my_script.py` first.")
     st.stop()
 
 # Sidebar: run selector

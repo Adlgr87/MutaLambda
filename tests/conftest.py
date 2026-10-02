@@ -30,7 +30,7 @@ def _reset_global_state():
     except Exception:
         pass
     try:
-        import hfc_tiers
+        from mutalambda_engines import hfc_tiers
 
         hfc_tiers.HFCLeagueEngine.clear_caches()
     except Exception:
@@ -49,7 +49,7 @@ def _reset_global_state():
     except Exception:
         pass
     try:
-        import hfc_tiers
+        from mutalambda_engines import hfc_tiers
 
         hfc_tiers.HFCLeagueEngine.clear_caches()
     except Exception:

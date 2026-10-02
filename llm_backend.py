@@ -58,7 +58,11 @@ def _normalize_model_key(model: str) -> str:
 
 
 def _estimate_tokens(text: str) -> int:
-    """Quick heuristic token estimator (4 chars/token — good enough for budgeting)."""
+    """Quick heuristic token estimator (4 chars/token — good enough for budgeting).
+
+    Empty text costs 0 tokens: a failed/empty completion must not be billed a
+    phantom token. Any non-empty text costs at least 1.
+    """
     if not text:
         return 0
     return max(1, len(text) // 4)

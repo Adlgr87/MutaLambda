@@ -153,10 +153,16 @@ def test_generation_failure_raises_llm_backend_error(monkeypatch):
 
 
 def test_estimate_tokens_approximate():
-    # Heuristic: ~4 chars per token, minimum 1.
+    # Heuristic: ~4 chars per token, minimum 1 for any *non-empty* text.
     assert _estimate_tokens("hello world") == max(1, len("hello world") // 4)
-    assert _estimate_tokens("") == 1
     assert _estimate_tokens("abcdefghijklmnopqrstuvwxyz") == 6  # 26 // 4 == 6
+    # Short-but-non-empty text is floored at 1 token.
+    assert _estimate_tokens("ab") == 1
+
+
+def test_estimate_tokens_empty_is_free():
+    """Empty text costs nothing: an empty completion must not be billed."""
+    assert _estimate_tokens("") == 0
 
 
 def test_lookup_pricing_known_model():

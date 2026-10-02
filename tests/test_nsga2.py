@@ -77,8 +77,11 @@ class TestNonDominatedSort:
         """Fase 4A regression guard: numpy fast path must match the pure-Python
         path exactly, including multi-level front assignment. The rewritten
         `processed`-mask loop previously regressed front-rank ordering."""
-        from mutalambda_engines.nsga2 import _non_dominated_sort_numpy, _NUMPY_FASTPATH_THRESHOLD
-        import nsga2 as _n
+        from mutalambda_engines import nsga2 as _n
+        from mutalambda_engines.nsga2 import (
+            _NUMPY_FASTPATH_THRESHOLD,
+            _non_dominated_sort_numpy,
+        )
 
         # Build a population large enough to exercise the numpy path, with a
         # clear multi-level dominance chain so a regression in frontier

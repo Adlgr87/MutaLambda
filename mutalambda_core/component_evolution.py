@@ -319,15 +319,10 @@ class ModuleExtractor:
         if extracted_node is None:
             return code
 
-        # Replace calls to the extracted function with a pass or stub
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                if isinstance(node.func, ast.Name) and node.func.id == candidate["name"]:
-                    # We'll just keep the call; the function will be defined elsewhere
-                    pass
+        # Calls to the extracted function are intentionally left untouched: the
+        # function is re-appended below, so every call site stays resolvable.
 
         # Append extracted function at the end (as a component)
-        extracted_code = ast.unparse(extracted_node)
         new_body.append(extracted_node)
 
         tree.body = new_body

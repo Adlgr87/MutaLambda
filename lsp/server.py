@@ -7,15 +7,18 @@ Supports VS Code and Neovim integration.
 """
 
 from __future__ import annotations
-import json
-import sys
 import argparse
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field, asdict
-from enum import Enum
-import asyncio
+import json
+import logging
+import sys
 import threading
+import time
+from dataclasses import asdict, dataclass
+from enum import Enum
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+log = logging.getLogger("mutalambda.lsp")
 
 
 # LSP Message types
@@ -141,12 +144,27 @@ class MutaLambdaLSPServer:
                 self._handle_did_change(lsp_msg)
             elif lsp_msg.method == LSPMethod.TEXT_DOCUMENT_DID_CLOSE:
                 self._handle_did_close(lsp_msg)
+            elif lsp_msg.method == LSPMethod.TEXT_DOCUMENT_CODE_ACTION:
+                self._handle_code_action(lsp_msg)
+            elif lsp_msg.method == LSPMethod.TEXT_DOCUMENT_INLAY_HINT:
+                self._handle_inlay_hint(lsp_msg)
+            elif lsp_msg.method == LSPMethod.HOVER:
+                self._handle_hover(lsp_msg)
+            elif lsp_msg.method == LSPMethod.COMPLETION:
+                self._handle_completion(lsp_msg)
             elif lsp_msg.method == LSPMethod.SHUTDOWN:
                 self._handle_shutdown(lsp_msg)
             elif lsp_msg.method == LSPMethod.EXIT:
                 self._handle_exit(lsp_msg)
+            elif lsp_msg.id is not None:
+                # Any *request* (it carries an id) must get a reply, otherwise
+                # the client blocks forever waiting for it.
+                log.debug("Unsupported LSP request %s", lsp_msg.method)
+                self._send(LSPMessage(id=lsp_msg.id, result=None))
         except json.JSONDecodeError:
-            pass
+            # A malformed frame must not kill the server loop, but silently
+            # dropping it made client/server desyncs undebuggable.
+            log.warning("Discarding malformed JSON-RPC frame: %.200r", line)
 
     def _handle_initialize(self, msg: LSPMessage):
         """Handle initialize request."""
@@ -208,6 +226,49 @@ class MutaLambdaLSPServer:
         params = msg.params or {}
         uri = params.get("textDocument", {}).get("uri", "")
         self.document_store.pop(uri, None)
+
+    def _handle_code_action(self, msg: LSPMessage):
+        """Return the optimization code actions advertised in `codeActionProvider`."""
+        params = msg.params or {}
+        uri = params.get("textDocument", {}).get("uri", "")
+        actions: List[Dict[str, Any]] = []
+        if uri in self.document_store:
+            actions = [
+                asdict(CodeAction(title="MutaLambda: Optimize this function", kind="quickfix")),
+                asdict(CodeAction(title="MutaLambda: Explain optimization", kind="refactor")),
+            ]
+        self._send(LSPMessage(id=msg.id, result=actions))
+
+    def _handle_inlay_hint(self, msg: LSPMessage):
+        """Inlay hints are advertised but currently produce no annotations."""
+        self._send(LSPMessage(id=msg.id, result=[]))
+
+    def _handle_hover(self, msg: LSPMessage):
+        """Hover summary for the analysed document."""
+        params = msg.params or {}
+        uri = params.get("textDocument", {}).get("uri", "")
+        if uri not in self.document_store:
+            self._send(LSPMessage(id=msg.id, result=None))
+            return
+        diagnostics = self._run_fast_analysis(
+            self.document_store[uri],
+            self._ext_to_language(Path(uri).suffix) or "python",
+        )
+        value = (
+            "\n".join(f"- `{d.code}` {d.message}" for d in diagnostics)
+            if diagnostics
+            else "No MutaLambda optimization hints for this document."
+        )
+        self._send(
+            LSPMessage(
+                id=msg.id,
+                result={"contents": {"kind": "markdown", "value": value}},
+            )
+        )
+
+    def _handle_completion(self, msg: LSPMessage):
+        """Completion is advertised but intentionally returns no items yet."""
+        self._send(LSPMessage(id=msg.id, result={"isIncomplete": False, "items": []}))
 
     def _handle_shutdown(self, msg: LSPMessage):
         """Handle shutdown request."""
@@ -321,9 +382,14 @@ def main():
     server = MutaLambdaLSPServer(config)
     server.start()
 
-    # Keep main thread alive
-    while server._running:
-        asyncio.sleep(0.1)
+    # Keep the main thread alive while the stdin worker runs. This used to call
+    # ``asyncio.sleep(0.1)`` outside an event loop, which only built a coroutine
+    # object (never awaited) and spun the CPU at 100%.
+    try:
+        while server._running:
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        server.stop()
 
 
 if __name__ == "__main__":

@@ -14,7 +14,6 @@ import ast
 import hashlib
 import json
 import logging
-import math
 import warnings
 import os
 import resource
@@ -26,8 +25,16 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
-from mutalambda_core.code_hash import stable_code_hash
-from comparison import COMPARATORS, compare_values, register_predicate
+# Re-exported on purpose: `sandbox.py` and other callers do
+# `from runners import compare_values, stable_code_hash`. Keep these imports
+# even though runners.py itself does not call them (the in-sandbox harness
+# carries its own inlined copy — see `_compare` in the generated wrapper).
+from mutalambda_core.code_hash import stable_code_hash  # noqa: F401
+from comparison import (  # noqa: F401
+    COMPARATORS,
+    compare_values,
+    register_predicate,
+)
 from mutalambda_engines.fitness_vector import FitnessVector
 from mutalambda_core.models import EvalResult
 
@@ -38,7 +45,6 @@ logger = logging.getLogger("MutaLambda")
 # not a real sandbox, unless the caller explicitly opts in via env var.
 _LOCAL_RUNNER_WARNED = False
 
-# compare_values / stable_code_hash: see comparison.py and code_hash.py
 
 
 def tests_hash(test_cases: List[Dict]) -> str:
@@ -63,8 +69,6 @@ def tests_hash(test_cases: List[Dict]) -> str:
 #   * f = exec ; f("...")                       (alias of a forbidden call)
 #   * chr(...) string reconstruction of dangerous call names
 #   * __import__("os"), importlib.import_module("os")
-
-from dataclasses import dataclass
 
 # Modules whose import would grant filesystem / network / process-control
 # capability. ``sys`` and ``json`` are intentionally allowed — candidates

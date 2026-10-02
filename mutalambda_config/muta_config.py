@@ -96,7 +96,10 @@ class PrivacySection(BaseModel):
 class LLMSection(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    enabled: bool = False  # Dead field - has NO effect. LLM usage is controlled at evolution level.
+    # Gates LLM-backed mutator *generation* (`mutalambda generate-mutator`,
+    # see cli/main.py::generate_mutator). It does NOT gate LLM usage during
+    # evolution, which is controlled at the evolution level.
+    enabled: bool = False
     provider: Literal["openai"] = "openai"  # Only openai supported (others documented but not implemented)
     mutator_model: str = "gpt-4o-mini"  # Used by LLM mutator (openai provider)
     mutator_temperature: float = Field(0.1, ge=0.0, le=2.0)

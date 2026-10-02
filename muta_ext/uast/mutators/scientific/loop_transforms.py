@@ -8,11 +8,11 @@ from muta_ext.uast.mutators.scientific.base_mutator import BaseScientificMutator
 
 class LoopFusionMutator(BaseScientificMutator):
     """Fusiona bucles adyacentes con el mismo rango."""
-    name = "loop_fusion"
+    _name = "loop_fusion"
     strength = 0.2
 
     def name(self) -> str:
-        return self.name
+        return self._name
 
     def mutate(self, uast: CoreUAST, rng_seed: Optional[int] = None) -> MutationResult:
         """Fusiona bucles adyacentes."""
@@ -76,11 +76,11 @@ class LoopFusionMutator(BaseScientificMutator):
 
 class LoopFissionMutator(BaseScientificMutator):
     """Divide bucles con múltiples estamentos."""
-    name = "loop_fission"
+    _name = "loop_fission"
     strength = 0.15
 
     def name(self) -> str:
-        return self.name
+        return self._name
 
     def mutate(self, uast: CoreUAST, rng_seed: Optional[int] = None) -> MutationResult:
         """Aplica fission a bucles."""

@@ -145,7 +145,7 @@ def bench_parse_cache(code: str, iters=20000, reps=3):
     baseline for both the 'before' and the 'no-cache' case. In the 'after' state
     we additionally measure the cached path.
     """
-    import code_hash
+    from mutalambda_core import code_hash
 
     has_cache = hasattr(code_hash, "cached_parse")
 

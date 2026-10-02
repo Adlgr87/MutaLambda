@@ -2,17 +2,24 @@
 """
 MutaLambda CLI — Interfaz de línea de comandos para evolución de código.
 
+Punto de entrada canónico. Tras ``pip install -e .`` el comando es
+``mutalambda``; desde un clon sin instalar, ``python mutalambda_cli.py``.
+
 Uso:
-    python cli.py run --config config.yaml --generations 50 --animation retro
-    python cli.py resume --checkpoint path/to/checkpoint.json
-    python cli.py config create --output config.yaml --template basic
-    python cli.py config validate --path config.yaml
-    python cli.py stats
-    python cli.py evaluate --results results.json
-    python cli.py mutate --target function.py --type prompt --strategy adaptive
-    python cli.py checkpoints
-    python cli.py migrate-checkpoints checkpoints/run_xxx --format msgpack
-    python cli.py interactive
+    mutalambda run --config config.yaml --generations 50 --animation retro
+    mutalambda resume --checkpoint path/to/checkpoint.json
+    mutalambda config create --output config.yaml --template basic
+    mutalambda config validate --path config.yaml
+    mutalambda stats
+    mutalambda evaluate --results results.json
+    mutalambda mutate prompt --target function.py --strategy adaptive
+    mutalambda checkpoints --list
+    mutalambda migrate-checkpoints checkpoints/run_xxx --format msgpack
+    mutalambda interactive
+    mutalambda doctor
+    mutalambda dashboard --text
+
+Ejecuta ``mutalambda --help`` para la lista completa de subcomandos.
 """
 
 import json

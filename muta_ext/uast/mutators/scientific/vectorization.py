@@ -8,11 +8,11 @@ from muta_ext.uast.mutators.scientific.base_mutator import BaseScientificMutator
 
 class SafeVectorizationMutator(BaseScientificMutator):
     """Mutador que vectoriza bucles simples a operaciones numpy."""
-    name = "safe_vectorization"
+    _name = "safe_vectorization"
     strength = 0.2
 
     def name(self) -> str:
-        return self.name
+        return self._name
 
     def mutate(self, uast: CoreUAST, rng_seed: Optional[int] = None) -> MutationResult:
         """Intenta vectorizar bucles simples."""

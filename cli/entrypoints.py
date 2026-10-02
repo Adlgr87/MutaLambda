@@ -44,7 +44,7 @@ def run_full_test_suite() -> bool:
             fn()
             passed.append(name)
             print(f"  [PASS] {name}")
-        except Exception as exc:
+        except Exception:
             tb = traceback.format_exc().splitlines()[-1]
             failed.append((name, tb))
             print(f"  [FAIL] {name} — {tb}")
@@ -222,9 +222,6 @@ def main() -> None:
 
     if args.config:
         config = EvolveConfig.from_yaml(args.config)
-        from mutalambda_config.config_loader import load_yaml  # noqa: F401
-
-        agent_kwargs = {"config": config}
     else:
         seed = (
             "def compute_sum(n):\n"
@@ -250,7 +247,6 @@ def main() -> None:
         )
         config.sandbox_timeout = 5.0
         config.sandbox_workers = 4
-        agent_kwargs = {"config": config}
 
     # MutaLambda 2.0 Progressive Pipeline
     if args.optimize:

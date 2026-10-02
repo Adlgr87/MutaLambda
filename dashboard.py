@@ -1,6 +1,8 @@
 """MutaLambda HITL Dashboard — Streamlit interface for Human-in-the-Loop.
 
-`dashboard.py` is the app module; `dashboard_run.py` is the launcher.
+Two Streamlit apps ship with MutaLambda and they are *not* duplicates:
+  • `dashboard.py`     — this module: live HITL control of a running agent.
+  • `dashboard_run.py` — post-mortem inspector for completed runs on disk.
 
 Features:
   • Real-time phylogenetic tree of island evolution

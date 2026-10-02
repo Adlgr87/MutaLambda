@@ -50,7 +50,9 @@ def _get_text(node: Any, source: bytes) -> str:
 class GoAdapter(BaseAdapter):
     """Go source to CoreUAST converter using tree-sitter."""
 
-    language = "go"
+    # NOTE: the language identifier is exposed through the ``language``
+    # property below (the base class declares it as a property). A plain
+    # class attribute here was dead — the property always shadowed it.
 
     def __init__(self):
         if not TREE_SITTER_AVAILABLE:
