@@ -40,7 +40,8 @@ from pathlib import Path
 # in the same commit.
 #
 #   2026-10-02  98  initial inventory (302 violations) minus evaluation_service
-BASELINE_ENTRIES = 98
+#   2026-10-02  97  -1 mutalambda_config/checkpoint_manager.py (tier 2, durability pass)
+BASELINE_ENTRIES = 97
 
 REPO = Path(__file__).resolve().parent.parent
 PYPROJECT = REPO / "pyproject.toml"

@@ -336,5 +336,5 @@ Cada lote es revertible por separado (`git revert <sha>`).
 python -m venv .venv
 .venv/bin/pip install -e ".[cli,dashboard,uast,dev]"
 .venv/bin/python -m pytest -q -m "not e2e"   # 1166 passed, 22 skipped, 0 failed
-./.audit/smoke_all.sh .venv/bin/python       # SMOKE: ALL GREEN
+./scripts/smoke_all.sh .venv/bin/python       # SMOKE: ALL GREEN
 ```

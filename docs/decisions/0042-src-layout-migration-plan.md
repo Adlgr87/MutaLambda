@@ -38,7 +38,7 @@ no se aplica en este cambio**. Las razones son concretas, no de prudencia genér
    recorrido deben poder revertirse sin arrastrar la reorganización, y viceversa.
 
 **Recomendación:** ejecutar este plan como PR independiente, un commit por fase,
-con la batería `.audit/smoke_all.sh` + suite completa verde entre fases.
+con la batería `scripts/smoke_all.sh` + suite completa verde entre fases.
 
 ---
 
@@ -143,7 +143,7 @@ benchmarks/, bench_*.py         # → tools/benchmarks/ (NO empaquetar)
 ### Fase 0 — Preparatoria (ya hecha en este recorrido)
 - [x] Ningún módulo interno importa los 21 shims raíz.
 - [x] `constants.py` es la única fuente de los defaults (test de deriva).
-- [x] Batería de humo repetible: `.audit/smoke_all.sh`.
+- [x] Batería de humo repetible: `scripts/smoke_all.sh`.
 - [x] Línea base de tests registrada: **1125 passed / 22 skipped / 0 failed**.
 
 ### Fase 1 — Esqueleto
@@ -219,7 +219,7 @@ está a `../../server.py`: pasa a depender de `mutalambda.server.path` o de
 python -m venv /tmp/v && /tmp/v/bin/pip install -e ".[cli,dashboard,uast,dev]"
 /tmp/v/bin/python .audit/import_all.py        # 88/88 módulos
 /tmp/v/bin/python -m pytest -q -m "not e2e"   # >= 1125 passed, 0 failed
-./.audit/smoke_all.sh /tmp/v/bin/python       # ALL GREEN
+./scripts/smoke_all.sh /tmp/v/bin/python       # ALL GREEN
 /tmp/v/bin/python -c "import runners, nsga2, dashboard"  # shims aún funcionan
 ```
 Si cualquiera falla → `git revert` de la fase y reporte.

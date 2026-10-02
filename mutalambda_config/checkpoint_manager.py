@@ -22,6 +22,7 @@ import hashlib
 import json
 import os
 import random
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -30,20 +31,101 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
+from mutalambda_core.constants import CORE_CHECKPOINT_FORMAT, CORE_CHECKPOINT_VERSION
 from muta_lambda import (
     EvolveConfig,
     Individual,
-    Island,
     LineageGraph,
     logger,
     MutaLambdaAgent,
-    SandboxEvaluator,
     SolutionArchive,
 )
 
 # Below this many total individuals, use JSON (fast, human-readable);
 # above it, msgpack is typically more compact and faster.
 MSGPACK_THRESHOLD: int = 256
+
+# How many checkpoint directories to keep. A corrupt or interrupted save must
+# never leave the run with nothing to fall back to.
+DEFAULT_CHECKPOINT_KEEP: int = 5
+
+
+class CheckpointCorruptError(RuntimeError):
+    """A checkpoint exists but cannot be read.
+
+    Raised instead of returning partial state: resuming from a truncated
+    checkpoint silently restarts evolution from a mangled population, which is
+    far worse than stopping and telling the operator which file is bad and
+    which earlier one is still good.
+    """
+
+
+class CheckpointSaveError(RuntimeError):
+    """A checkpoint could not be written. The previous checkpoints are intact."""
+
+
+def _atomic_write(path: Path, payload: bytes) -> None:
+    """Write ``payload`` to ``path`` atomically.
+
+    Writing straight to the final name means an interruption (Ctrl-C, OOM, a
+    full disk) leaves a truncated file sitting at the canonical path, which
+    ``--resume`` then picks up. Writing to a sibling temp file and renaming
+    makes the swap atomic on POSIX: readers see either the old file or the
+    complete new one, never a half-written one.
+
+    The fsync before the rename matters too - without it the rename can reach
+    disk before the data does, so a crash leaves a correctly-named empty file.
+    """
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with open(tmp, "wb") as fh:
+            fh.write(payload)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+        # Also fsync the directory so the rename itself is durable.
+        dir_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        except OSError:
+            pass  # not supported on every filesystem; the rename still applied
+        finally:
+            os.close(dir_fd)
+    except OSError as exc:
+        tmp.unlink(missing_ok=True)
+        raise CheckpointSaveError(f"Could not write checkpoint {path}: {exc}") from exc
+
+
+def prune_checkpoints(checkpoint_dir: Path, keep: int = DEFAULT_CHECKPOINT_KEEP) -> List[Path]:
+    """Delete all but the newest ``keep`` complete checkpoint directories.
+
+    Only directories holding a readable checkpoint are counted, so a corrupt
+    save can never evict a good one. Returns the directories removed.
+    """
+    if keep <= 0:
+        return []
+    checkpoint_dir = Path(checkpoint_dir)
+    if not checkpoint_dir.is_dir():
+        return []
+
+    complete = []
+    for d in checkpoint_dir.glob("chk_gen*"):
+        if not d.is_dir():
+            continue
+        if (d / "checkpoint.json").exists() or (d / "checkpoint.msgpack").exists():
+            complete.append(d)
+
+    complete.sort(key=lambda d: d.name)
+    removed = []
+    for stale in complete[:-keep]:
+        try:
+            shutil.rmtree(stale)
+            removed.append(stale)
+        except OSError as exc:
+            logger.warning("Could not prune old checkpoint %s: %s", stale, exc)
+    if removed:
+        logger.debug("Pruned %d old checkpoint(s), keeping the newest %d", len(removed), keep)
+    return removed
 
 
 @dataclass
@@ -256,31 +338,47 @@ def save_full_checkpoint(
         format_mode == "auto" and total_individuals > MSGPACK_THRESHOLD
     )
 
+    # Every branch below writes via _atomic_write: a half-written checkpoint
+    # must never appear at the canonical path, because --resume would load it.
+    serialised = _serialise_checkpoint(checkpoint)
+
     if use_msgpack:
         # msgpack for large/parallel populations (60-70% smaller, 2-3x faster)
         try:
             import msgpack
             import zlib
-
+        except ImportError:
+            logger.info("msgpack unavailable; saving checkpoint as JSON instead")
+            use_msgpack = False
+        else:
             ckpt_path = chk_dir / "checkpoint.msgpack"
-            serialised = _serialise_checkpoint(checkpoint)
-            packed = msgpack.packb(serialised, use_bin_type=True, default=_msgpack_default)
-            compressed = zlib.compress(packed, level=6)
-            ckpt_path.write_bytes(compressed)
+            try:
+                packed = msgpack.packb(serialised, use_bin_type=True, default=_msgpack_default)
+                compressed = zlib.compress(packed, level=6)
+            except (TypeError, ValueError) as exc:
+                # Unserialisable state is a bug, not a transient fault. Say which
+                # checkpoint failed rather than leaving a silent gap in the run.
+                raise CheckpointSaveError(
+                    f"Could not serialise checkpoint for generation {generation} "
+                    f"to msgpack: {exc}"
+                ) from exc
+            _atomic_write(ckpt_path, compressed)
             logger.debug(
                 "Saved compressed msgpack checkpoint: %s (%d bytes, %d individuals)",
                 ckpt_path,
                 len(compressed),
                 total_individuals,
             )
-        except ImportError:
-            # Fall back to JSON if msgpack unavailable
-            with open(ckpt_path, "w", encoding="utf-8") as f:
-                json.dump(_serialise_checkpoint(checkpoint), f, indent=2, ensure_ascii=False)
-    else:
+
+    if not use_msgpack:
         # JSON for small checkpoints (human-readable, fast)
-        with open(ckpt_path, "w", encoding="utf-8") as f:
-            json.dump(_serialise_checkpoint(checkpoint), f, indent=2, ensure_ascii=False)
+        try:
+            payload = json.dumps(serialised, indent=2, ensure_ascii=False).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise CheckpointSaveError(
+                f"Could not serialise checkpoint for generation {generation} to JSON: {exc}"
+            ) from exc
+        _atomic_write(ckpt_path, payload)
 
     logger.info(
         "Full checkpoint saved: %s (gen %d, %d islands, " "archive=%d, config_hash=%s, git=%s)",
@@ -291,6 +389,10 @@ def save_full_checkpoint(
         checkpoint.config_hash,
         checkpoint.git_commit,
     )
+
+    # Prune only after this save is durably on disk, so the newest good
+    # checkpoint is already in place before any old one is removed.
+    prune_checkpoints(Path(config.checkpoint_dir), getattr(config, "checkpoint_keep", DEFAULT_CHECKPOINT_KEEP))
 
     return str(chk_dir)
 
@@ -303,7 +405,15 @@ def _serialise_checkpoint(cp: CheckpointData) -> Dict[str, Any]:
         try:
             # Convert all elements to JSON-safe types recursively
             random_serialised = _to_json_safe(rs)
-        except Exception:
+        except (TypeError, ValueError, RecursionError, OverflowError) as exc:
+            # Dropping RNG state silently defeats the entire point of this
+            # module: the checkpoint would still load, and the resumed run
+            # would diverge from the original with no indication why.
+            logger.warning(
+                "Could not serialise Python RNG state (%s); the resumed run will "
+                "NOT be bit-reproducible from this checkpoint.",
+                exc,
+            )
             random_serialised = None
     else:
         random_serialised = None
@@ -356,8 +466,8 @@ def _serialise_checkpoint(cp: CheckpointData) -> Dict[str, Any]:
         "early_stop_no_improve": cp.early_stop_no_improve,
         "run_id": cp.run_id,
         "task": cp.task,
-        "format": "mutalambda-core-json",
-        "version": "4.0.0",
+        "format": CORE_CHECKPOINT_FORMAT,
+        "version": CORE_CHECKPOINT_VERSION,
     }
 
 
@@ -402,6 +512,62 @@ def _restore_state(state_data):
     return state_data
 
 
+def _previous_good_checkpoint(path: Path) -> Optional[Path]:
+    """Newest readable checkpoint older than ``path``, if any."""
+    run_dir = path.parent.parent if path.is_file() else path.parent
+    if not run_dir.is_dir():
+        return None
+    candidates = sorted(
+        (d for d in run_dir.glob("chk_gen*") if d.is_dir() and d.name < path.parent.name),
+        key=lambda d: d.name,
+        reverse=True,
+    )
+    for d in candidates:
+        for name in ("checkpoint.msgpack", "checkpoint.json"):
+            f = d / name
+            if f.exists() and f.stat().st_size > 0:
+                return f
+    return None
+
+
+def _corrupt_message(path: Path, reason: object) -> str:
+    msg = (
+        f"Checkpoint {path} is corrupt and cannot be loaded ({reason}). "
+        f"It was NOT repaired: guessing at truncated evolution state would "
+        f"silently resume from a mangled population."
+    )
+    prev = _previous_good_checkpoint(path)
+    if prev is not None:
+        msg += f" The newest intact checkpoint is {prev} - resume from that instead."
+    else:
+        msg += " No earlier intact checkpoint was found in this run."
+    return msg
+
+
+def _check_schema_version(path: Path, data: Dict[str, Any]) -> None:
+    """Reject checkpoints written by an incompatible schema.
+
+    The version was written on save but never read back, so a checkpoint from
+    any other schema loaded silently and simply lost the fields the reader did
+    not know about.
+    """
+    version = str(data.get("version", "")).strip()
+    if not version:
+        logger.warning(
+            "Checkpoint %s has no schema version (written before versioning). "
+            "Loading it on a best-effort basis.",
+            path,
+        )
+        return
+    expected_major = CORE_CHECKPOINT_VERSION.split(".")[0]
+    if version.split(".")[0] != expected_major:
+        raise CheckpointCorruptError(
+            f"Checkpoint {path} uses schema version {version}, but this build reads "
+            f"version {CORE_CHECKPOINT_VERSION}. Convert it first:\n"
+            f"    mutalambda migrate-checkpoints {path.parent}"
+        )
+
+
 def load_checkpoint(path: str | Path) -> CheckpointData:
     """Load a checkpoint from disk.
 
@@ -420,17 +586,36 @@ def load_checkpoint(path: str | Path) -> CheckpointData:
     if not path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {path}")
 
-    # Load based on format
+    # Load based on format. A corrupt checkpoint fails loudly and names the
+    # newest intact alternative: resuming from truncated state would restart
+    # evolution from a mangled population while reporting success.
     if path.suffix == ".msgpack":
-        import msgpack
-        import zlib
-
-        compressed = path.read_bytes()
-        packed = zlib.decompress(compressed)
-        data = msgpack.unpackb(packed, raw=False, strict_map_key=False)
+        try:
+            import msgpack
+            import zlib
+        except ImportError as exc:
+            raise CheckpointCorruptError(
+                f"{path} is a msgpack checkpoint but msgpack is not installed. "
+                f"Install it with: pip install 'mutalambda[archive]'"
+            ) from exc
+        try:
+            packed = zlib.decompress(path.read_bytes())
+            data = msgpack.unpackb(packed, raw=False, strict_map_key=False)
+        except (zlib.error, ValueError, OSError, msgpack.exceptions.UnpackException) as exc:
+            raise CheckpointCorruptError(_corrupt_message(path, exc)) from exc
     else:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError) as exc:
+            raise CheckpointCorruptError(_corrupt_message(path, exc)) from exc
+
+    if not isinstance(data, dict) or "generation" not in data:
+        raise CheckpointCorruptError(
+            _corrupt_message(path, "missing the required 'generation' field")
+        )
+
+    _check_schema_version(path, data)
 
     cp = CheckpointData(
         generation=data["generation"],
@@ -547,8 +732,16 @@ def resume_agent(
         if archive_file.with_suffix(".index").exists():
             try:
                 agent.archive = SolutionArchive.load(str(archive_file))
-            except Exception:
-                logger.warning("Could not restore archive from checkpoint", exc_info=True)
+            except Exception:  # noqa: BLE001 - optional subsystem; resume degrades, not dies
+                # The archive is an accelerator, not required state: evolution
+                # can continue without it, so a failure here must not abort a
+                # resume. Logged with the traceback so it is still diagnosable.
+                logger.warning(
+                    "Could not restore solution archive from %s; resuming with an "
+                    "empty archive",
+                    archive_file,
+                    exc_info=True,
+                )
 
     # Restore prompt evolver
     if cp.prompt_population and agent.prompt_evolver:
@@ -605,8 +798,12 @@ def resume_agent(
 
             agent._pattern_memory = PatternMemory.from_dict(cp.pattern_memory)
             agent.migration_bus.pattern_memory = agent._pattern_memory
-        except Exception:
-            logger.warning("Could not restore pattern memory", exc_info=True)
+        except Exception:  # noqa: BLE001 - optional subsystem; resume degrades, not dies
+            # Same rationale as the archive above: pattern memory is a
+            # heuristic cache, so losing it costs efficiency, not correctness.
+            logger.warning(
+                "Could not restore pattern memory; resuming without it", exc_info=True
+            )
 
     logger.info(
         "Agent resumed from checkpoint: gen_completed=%d current=%d, %d islands, "
