@@ -29,13 +29,12 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import numpy as np
 
-from mutalambda_engines.fitness_vector import FitnessVector
 from mutalambda_core.models import Individual
-from muta_lambda import logger
+from mutalambda_engines.fitness_vector import FitnessVector
 
 # Objectives used for Pareto dominance (correctness, latency, memory).
 # Latency and memory are negated so "greater is better" holds for all.
@@ -48,6 +47,19 @@ try:
     _numpy_available = True
 except NameError:  # pragma: no cover - numpy is a hard dep
     _numpy_available = False
+
+
+# FitnessVector dimensions iterated in crowding_distance().
+# Hoisted to module level as a tuple to eliminate per-call list allocation
+# in the hot path.
+_FITNESS_DIMS: tuple[str, ...] = (
+    "correctness",
+    "latency_p50",
+    "latency_p99",
+    "throughput",
+    "memory_peak_mb",
+    "parsimony",
+)
 
 
 @dataclass
@@ -307,16 +319,7 @@ def _crowding_distance(individuals: List[Individual]) -> List[float]:
     fitnesses: List[FitnessVector] = [_get_fitness(ind) for ind in individuals]
 
     # For each objective dimension
-    dims = [
-        "correctness",
-        "latency_p50",
-        "latency_p99",
-        "throughput",
-        "memory_peak_mb",
-        "parsimony",
-    ]
-
-    for dim in dims:
+    for dim in _FITNESS_DIMS:
         # Sort by this dimension
         values = [(i, getattr(fitnesses[i], dim, 0.0)) for i in range(n)]
         values.sort(key=lambda x: x[1])

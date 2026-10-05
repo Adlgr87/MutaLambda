@@ -1,9 +1,12 @@
 """Golden-master tests for fitness_cache — auto-opt verification."""
-import sys, tempfile
+import sys
+import tempfile
+
 sys.path.insert(0, ".")
 
 from mutalambda_engines.fitness_cache import FitnessCache
 from mutalambda_engines.fitness_vector import FitnessVector
+
 
 def _make_cache(max_entries=100):
     tmp = tempfile.mktemp(suffix=".db")

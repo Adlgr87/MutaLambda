@@ -1,9 +1,11 @@
 """Golden-master tests for checkpoint data model — auto-opt verification."""
 import sys
+
 sys.path.insert(0, ".")
 
 from mutalambda_config.checkpoint_manager import CheckpointData
 from mutalambda_engines.fitness_vector import FitnessVector
+
 
 def test_checkpoint_data_fields_preserved():
     chkpt = CheckpointData(

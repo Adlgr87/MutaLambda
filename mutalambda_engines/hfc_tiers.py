@@ -21,10 +21,10 @@ import random
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
-from mutalambda_core.evolution_engine import ASTMutator, CoreEvolutionEngine, ast_crossover
-from mutalambda_engines.fitness_vector import FitnessVector
 from mutalambda_core.code_hash import cached_parse
+from mutalambda_core.evolution_engine import ASTMutator, CoreEvolutionEngine, ast_crossover
 from mutalambda_core.models import EvalResult, Individual
+from mutalambda_engines.fitness_vector import FitnessVector
 
 logger = logging.getLogger("MutaLambda")
 
@@ -717,7 +717,7 @@ MODULE:
                             pruned.append(stmt)
                     return pruned
 
-                def visit_If(self, node: ast.If) -> ast.AST:  # noqa: N802
+                def visit_If(self, node: ast.If) -> ast.AST:
                     node = self.generic_visit(node)
                     if isinstance(node.test, ast.Constant) and node.test.value is True:
                         return node.body
@@ -740,7 +740,7 @@ MODULE:
             tree = copy.deepcopy(cached_parse(code))
 
             class MemoryOptimizer(ast.NodeTransformer):
-                def visit_Call(self, node: ast.Call) -> ast.AST:  # noqa: N802
+                def visit_Call(self, node: ast.Call) -> ast.AST:
                     node = self.generic_visit(node)
                     if not node.args or not isinstance(node.args[0], ast.ListComp):
                         return node
@@ -769,7 +769,7 @@ MODULE:
             tree = copy.deepcopy(cached_parse(code))
 
             class LoopUnroller(ast.NodeTransformer):
-                def visit_For(self, node: ast.For) -> ast.AST:  # noqa: N802
+                def visit_For(self, node: ast.For) -> ast.AST:
                     if (
                         isinstance(node.iter, ast.Call)
                         and isinstance(node.iter.func, ast.Name)
@@ -795,7 +795,7 @@ MODULE:
             tree = copy.deepcopy(cached_parse(code))
 
             class TypeHintInferer(ast.NodeTransformer):
-                def visit_Assign(self, node: ast.Assign) -> ast.AST:  # noqa: N802
+                def visit_Assign(self, node: ast.Assign) -> ast.AST:
                     if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
                         return node
                     annotation_name = None
@@ -828,7 +828,7 @@ MODULE:
             tree = copy.deepcopy(cached_parse(code))
 
             class ForToWhile(ast.NodeTransformer):
-                def visit_For(self, node: ast.For) -> ast.AST:  # noqa: N802
+                def visit_For(self, node: ast.For) -> ast.AST:
                     if not (
                         isinstance(node.iter, ast.Call)
                         and isinstance(node.iter.func, ast.Name)
