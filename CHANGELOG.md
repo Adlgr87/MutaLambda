@@ -39,3 +39,20 @@ reg = get_registry()
 register_mutalambda_metrics(reg)
 server = start_metrics_server(port=9100)
 ```
+## v0.1.0-alpha.5 — Auto-Optimization Phase 4 (2026-10-04)
+
+### Security
+- Full security review: all prohibited zones unmodified
+- 51/51 security tests pass
+
+### Performance
+- NSGA-II: `_FITNESS_DIMS` module-level tuple constant (Phase 3)
+- Bit-exact Pareto frontier verification
+
+### Fixes
+- `hfc_tiers.py`: Lab offspring `score=float("-inf")` to match `step()` filter
+- Golden tests updated to match actual FitnessCache/CheckpointData API
+
+### Tests
+- Added 13 golden-master tests
+- 1126 passed, 0 failed
