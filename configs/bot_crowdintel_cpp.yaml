@@ -1,0 +1,56 @@
+evolution:
+  generations: 50
+  num_islands: 4
+  population_size: 64
+  top_k: 10
+  topology: ring
+  seed: 42
+migration:
+  interval: 10
+  migrants_per_island: 2
+  topology: ring
+mutation:
+  rate: 0.15
+  crossover_rate: 0.8
+  strategies:
+  - nanopass
+  - in_situ
+  - crossover
+fitness:
+  weights:
+    correctness: 0.6
+    performance: 0.3
+    complexity: 0.1
+  metrics:
+    - latent_cycles
+    - code_quality
+    - security_score
+validation:
+  compile_configs:
+    - {compiler: gcc, flags: "-O3 -march=native -DNDEBUG"}
+    - {compiler: clang, flags: "-O3 -march=native -DNDEBUG"}
+  test_suite: ctest
+  invariants:
+    - determinism_bit_exact
+    - asan_clean
+    - ubsan_clean
+    - tsan_clean
+    - no_alloc_in_hotpath
+    - signature_preserved
+    - latency_regression_max_pct: 2.0
+  svl:
+    enabled: true
+    fail_mode: closed
+checkpoint:
+  enabled: true
+  interval: 10
+  directory: checkpoints
+  compress: true
+early_stop:
+  enabled: true
+  patience: 5
+  delta: 0.0
+logging:
+  level: INFO
+  file: mutalambda.log
+  output_dir: ~/work/MutaLambda/runs

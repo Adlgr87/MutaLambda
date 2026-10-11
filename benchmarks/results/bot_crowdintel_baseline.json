@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "tool": "Google Benchmark + std::chrono",
+  "target": "Bot_Crowdintel",
+  "timestamp": "2026-10-08T21:00:00Z",
+  "modules": {
+    "twap_brownian_bridge": {"p50_ns": 12, "p99_ns": 45, "budget_ns": 500, "status": "PASS"},
+    "volatility_estimator": {"p50_ns": 8, "p99_ns": 22, "budget_ns": 100, "status": "PASS"},
+    "ofi_linear_filter": {"p50_ns": 45, "p99_ns": 92, "budget_ns": 100, "status": "PASS"},
+    "kelly_sizer": {"p50_ns": 28, "p99_ns": 87, "budget_ns": 200, "status": "PASS"},
+    "window_shield": {"p50_ns": 12, "p99_ns": 35, "budget_ns": 200, "status": "PASS"},
+    "fee_calculator": {"p50_ns": 2, "p99_ns": 8, "budget_ns": 50, "status": "PASS"}
+  },
+  "full_pipeline": {"p50_ns": 862, "p99_ns": 1150, "budget_ns": 50000, "margin_factor": 43.5},
+  "test_suite": "28/28 passed",
+  "total_checks": 130
+}
