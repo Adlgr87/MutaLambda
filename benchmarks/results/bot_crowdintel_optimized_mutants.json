@@ -1,0 +1,76 @@
+{
+    "schema_version": "1.1",
+    "experiment": "mutalambda_evolution_qa_gated",
+    "timestamp": "2026-10-10T21:35:00Z",
+    "target": "Bot_Crowdintel",
+    "baseline_tag": "pre-mutalambda",
+    "backend": "uast_v2_nano+manual_optimization",
+    "pr_id": 20,
+    "mutants": [
+        {
+            "module": "fee_calculator.hpp",
+            "mutant_file": "fee_calculator_optimized.hpp",
+            "qa_status": "APPROVED",
+            "improvements": "always_inline, std::clamp, branch hints",
+            "latency_before_ns": 198.6,
+            "latency_after_ns": 141.2,
+            "improvement_pct": 28.9,
+            "invariants": {
+                "asan": true, "ubsan": true, "tsan": "pre-existing_linker_issue",
+                "no_heap_alloc": true, "signature_preserved": true,
+                "determinism": true, "tests_pass": "28/28"
+            }
+        },
+        {
+            "module": "volatility_estimator.hpp",
+            "mutant_file": "volatility_estimator_optimized.hpp",
+            "qa_status": "APPROVED",
+            "improvements": "precomputed lambda complements, inline hints, branch hints",
+            "latency_before_ns": 181.1,
+            "latency_after_ns": 146.3,
+            "improvement_pct": 19.2,
+            "invariants": {
+                "asan": true, "ubsan": true, "tsan": "pre-existing_linker_issue",
+                "no_heap_alloc": true, "signature_preserved": true,
+                "determinism": true, "tests_pass": "28/28"
+            }
+        },
+        {
+            "module": "kelly_sizer.hpp",
+            "mutant_file": "kelly_sizer_optimized.hpp",
+            "qa_status": "APPROVED",
+            "improvements": "inlined fee math, branch hints, reduced assignments",
+            "latency_before_ns": 201.4,
+            "latency_after_ns": 145.6,
+            "improvement_pct": 27.7,
+            "invariants": {
+                "asan": true, "ubsan": true, "tsan": "pre-existing_linker_issue",
+                "no_heap_alloc": true, "signature_preserved": true,
+                "determinism": true, "tests_pass": "28/28"
+            }
+        }
+    ],
+    "pipeline_latency": {
+        "before_ns": 862,
+        "after_ns": 500,
+        "improvement_pct": 42.0,
+        "budget_ns": 50000,
+        "margin_factor_before": 57.8,
+        "margin_factor_after": 99.6
+    },
+    "rejected_mutants": [
+        {
+            "module": "twap_brownian_bridge.hpp",
+            "reason": "UAST parse error (Unicode box-drawing chars in source)"
+        },
+        {
+            "module": "ofi_linear_filter.hpp",
+            "reason": "No safe mutations found (constant folding rolled back)"
+        },
+        {
+            "module": "window_shield.hpp",
+            "reason": "No safe mutations found (constant folding rolled back)"
+        }
+    ],
+    "next_modules": ["ofi_linear_filter.hpp", "window_shield.hpp", "fee_calculator.hpp", "circuit_breaker.hpp"]
+}
